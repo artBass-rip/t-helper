@@ -1,0 +1,69 @@
+{
+  "system_settings": {
+    "app_name": "t-helper",
+    "version": "1.0.0",
+    "mode": "server"
+  },
+  "database": {
+    "database_type": "badger",
+    "database_path": "./database"
+  },
+  "external_databases": {
+    "enabled": true,
+    "provider": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "username": "dC1oZWxwZXItZGF0YWJhc2UK",
+    "password": "secure_password",
+    "database_name": "t_helper"
+  },
+  "scanning": {
+    "global_scann": [
+      {
+        "name": "Example 1",
+        "root_path": "/Users/artbass/work/git/gitlab.foodtech.team/devops_only/example_1",
+        "schedule": true,
+        "frequency": "daily"
+      },
+      {
+        "name": "Example 2",
+        "root_path": "/Users/artbass/work/git/gitlab.foodtech.team/devops_only/example_2",
+        "schedule": true,
+        "frequency": "weekly"
+      }
+    ],
+    "security_scan": {
+      "modules": [
+        "trivy",
+        "gitleaks",
+        "checkov",
+        "opa",
+        "conftest"
+      ]
+    }
+  },
+  "security": {
+    "active_rule_set_id": null
+  },
+  "api": {
+    "listen_address": "127.0.0.1:8080"
+  },
+  "auth": {
+    "local_enabled": true
+  },
+  "modules": {
+    "enabled": [
+      "global-scanner",
+      "project-scanner",
+      "security-validator",
+      "repository-manager",
+      "auth",
+      "web"
+    ]
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "log_path": "/var/log/t-helper/"
+  }
+}
