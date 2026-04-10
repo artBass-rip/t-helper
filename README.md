@@ -35,6 +35,7 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - [`docs/traceability.md`](docs/traceability.md) - трассировка требований к API, модели данных, permissions, этапам и приёмке.
 - [`docs/test-plan.md`](docs/test-plan.md) - mapping MVP acceptance к API, storage, authorization и runtime checks.
 - [`docs/roadmap.md`](docs/roadmap.md) - этапы реализации, критерии приёмки и открытые вопросы.
+- [`docs/project-structure.md`](docs/project-structure.md) - стартовый каркас репозитория для этапа Foundation и последующих модулей.
 - [`config.example.json`](config.example.json) - валидный пример входного `config.json` для `thelper-ctl -reconfigure`.
 
 ## Границы MVP
@@ -61,3 +62,19 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - `GUI` и `Web UI` используют единый backend API;
 - `GUI` работает только локально;
 - findings и исходный код не отправляются во внешние сервисы.
+
+## Стартовый каркас репозитория
+
+В репозитории создан базовый layout для начала реализации:
+
+- `cmd/` - точки входа `thelper` и `thelper-ctl`;
+- `internal/app/` - assembly/runtime wiring для API и CLI;
+- `internal/modules/` - изолированные runtime-модули по архитектурной декомпозиции;
+- `internal/domain/` - доменные сущности и use case boundaries;
+- `internal/platform/` - storage, jobs, logging, HTTP, locking и runtime infrastructure;
+- `internal/contracts/` - API DTO и versioned payload contracts;
+- `web/` и `ui/` - заготовки под `Web UI` и локальный `GUI`;
+- `deploy/` - инфраструктурные артефакты доставки;
+- `configs/`, `scripts/`, `test/`, `build/` - конфигурация, служебные скрипты, тесты и build assets.
+
+Подробное описание структуры и её связи с документацией вынесено в [`docs/project-structure.md`](docs/project-structure.md).
