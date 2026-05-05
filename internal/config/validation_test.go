@@ -24,6 +24,20 @@ func TestValidateImportShapeRejectsGlobalScanAliases(t *testing.T) {
 	}
 }
 
+func TestValidateImportShapeRejectsUnknownTopLevelKeys(t *testing.T) {
+	payload := `{"scan_roots":[]}`
+	if err := ValidateImportShape(strings.NewReader(payload)); err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestValidateImportShapeRejectsUnknownScanningKeys(t *testing.T) {
+	payload := `{"scanning":{"custom_roots":[]}}`
+	if err := ValidateImportShape(strings.NewReader(payload)); err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
 func TestValidateImportShapeRejectsSensitiveLiterals(t *testing.T) {
 	payload := `{"external_databases":{"username":"admin","password":"secret"}}`
 	if err := ValidateImportShape(strings.NewReader(payload)); err == nil {

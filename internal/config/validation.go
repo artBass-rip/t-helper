@@ -7,6 +7,26 @@ import (
 	"strings"
 )
 
+var allowedTopLevelKeys = map[string]struct{}{
+	"system_settings":    {},
+	"database":           {},
+	"external_databases": {},
+	"scanning":           {},
+	"repositories":       {},
+	"security":           {},
+	"api":                {},
+	"auth":               {},
+	"workers":            {},
+	"modules":            {},
+	"logging":            {},
+}
+
+var allowedScanningKeys = map[string]struct{}{
+	"global_scan":   {},
+	"security_scan": {},
+	"toolchain":     {},
+}
+
 var rejectedGlobalScanAliases = map[string]struct{}{
 	"global_scann":      {},
 	"globalScan":        {},
@@ -21,14 +41,22 @@ func ValidateImportShape(r io.Reader) error {
 	if err := decoder.Decode(&root); err != nil {
 		return fmt.Errorf("decode config: %w", err)
 	}
+	for key := range root {
+		if _, ok := allowedTopLevelKeys[key]; !ok {
+			return fmt.Errorf("%s: unknown top-level config key", key)
+		}
+	}
 	if scanningRaw, ok := root["scanning"]; ok {
 		scanning, ok := scanningRaw.(map[string]any)
 		if !ok {
 			return fmt.Errorf("scanning: expected object")
 		}
-		for alias := range rejectedGlobalScanAliases {
-			if _, ok := scanning[alias]; ok {
-				return fmt.Errorf("scanning.%s: unknown key; use scanning.global_scan", alias)
+		for key := range scanning {
+			if _, ok := rejectedGlobalScanAliases[key]; ok {
+				return fmt.Errorf("scanning.%s: unknown key; use scanning.global_scan", key)
+			}
+			if _, ok := allowedScanningKeys[key]; !ok {
+				return fmt.Errorf("scanning.%s: unknown config key", key)
 			}
 		}
 	}

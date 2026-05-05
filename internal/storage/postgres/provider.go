@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/artBass-rip/t-helper/internal/storage"
 	"github.com/artBass-rip/t-helper/internal/storage/migrations"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -33,10 +35,19 @@ func (Provider) Open(ctx context.Context, cfg storage.Config) (*storage.Handle, 
 		_ = db.Close()
 		return nil, err
 	}
+	connConfig, err := pgconn.ParseConfig(dsn)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	port := ""
+	if connConfig.Port != 0 {
+		port = fmt.Sprintf("%d", connConfig.Port)
+	}
 	return &storage.Handle{
 		Provider:    "postgres",
 		DB:          db,
-		Fingerprint: storage.Fingerprint("postgres", dsn),
+		Fingerprint: storage.Fingerprint("postgres", connConfig.Host, port, connConfig.Database),
 	}, nil
 }
 

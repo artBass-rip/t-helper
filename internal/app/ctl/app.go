@@ -17,6 +17,15 @@ func New(out io.Writer, registry *storage.Registry) *App {
 	return &App{out: out, registry: registry}
 }
 
+func (a *App) RunCommand(ctx context.Context, command string) error {
+	switch command {
+	case "", "providers":
+		return a.Providers(ctx)
+	default:
+		return fmt.Errorf("unknown command %q", command)
+	}
+}
+
 func (a *App) Providers(ctx context.Context) error {
 	_ = ctx
 	for _, provider := range a.registry.Providers() {

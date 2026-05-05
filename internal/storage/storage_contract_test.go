@@ -3,8 +3,10 @@ package storage_test
 import (
 	"context"
 	"database/sql"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/artBass-rip/t-helper/internal/app/storageproviders"
@@ -21,6 +23,7 @@ func TestStorageContractPostgres(t *testing.T) {
 	if dsn == "" {
 		t.Skip("THELPER_POSTGRES_DSN is not set")
 	}
+	requirePostgresTestDatabase(t, dsn)
 	runStorageContract(t, storage.Config{Provider: "postgres", DSN: dsn})
 }
 
@@ -46,6 +49,22 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	if handle.Fingerprint == "" {
 		t.Fatal("expected non-empty database fingerprint")
 	}
+}
+
+func requirePostgresTestDatabase(t *testing.T, dsn string) {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse THELPER_POSTGRES_DSN: %v", err)
+	}
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if strings.HasSuffix(dbName, "_test") || strings.Contains(dbName, "test") {
+		return
+	}
+	if os.Getenv("THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS") == "1" {
+		return
+	}
+	t.Fatalf("refusing destructive storage contract test against database %q; use a test database or set THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1", dbName)
 }
 
 func resetStage01Tables(t *testing.T, db *sql.DB) {

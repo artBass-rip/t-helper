@@ -19,12 +19,7 @@ func main() {
 	}
 
 	app := ctl.New(os.Stdout, storageproviders.MVPRegistry())
-	switch command {
-	case "providers":
-		if err := app.Providers(context.Background()); err != nil {
-			stdlog.Fatal(fmt.Errorf("thelper-ctl providers: %w", err))
-		}
-	default:
-		stdlog.Fatalf("unknown command %q", command)
+	if err := app.RunCommand(context.Background(), command); err != nil {
+		stdlog.Fatal(fmt.Errorf("thelper-ctl: %w", err))
 	}
 }

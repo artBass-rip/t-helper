@@ -41,6 +41,8 @@ func (Provider) Open(ctx context.Context, cfg storage.Config) (*storage.Handle, 
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -59,10 +61,19 @@ func (Provider) Open(ctx context.Context, cfg storage.Config) (*storage.Handle, 
 		_ = db.Close()
 		return nil, err
 	}
+	fingerprintPath := path
+	if fingerprintPath != ":memory:" {
+		absPath, err := filepath.Abs(fingerprintPath)
+		if err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("normalize sqlite path: %w", err)
+		}
+		fingerprintPath = filepath.Clean(absPath)
+	}
 	return &storage.Handle{
 		Provider:    "sqlite",
 		DB:          db,
-		Fingerprint: storage.Fingerprint("sqlite", dsn),
+		Fingerprint: storage.Fingerprint("sqlite", fingerprintPath),
 	}, nil
 }
 

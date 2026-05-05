@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -41,9 +42,18 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	}
 
-	instanceID, err := runtime.NewInstanceID()
+	api, err := a.BuildHandler(ctx, handle)
 	if err != nil {
 		return err
+	}
+	return a.Serve(ctx, a.cfg.ListenAddress, api)
+}
+
+func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle) (http.Handler, error) {
+	_ = ctx
+	instanceID, err := runtime.NewInstanceID()
+	if err != nil {
+		return nil, err
 	}
 	health := runtime.NewHealthService(
 		instanceID,
@@ -51,17 +61,29 @@ func (a *App) Run(ctx context.Context) error {
 		time.Now().UTC(),
 		runtime.NewStorageHealthSource(handle),
 	)
-	api := httpapi.New(httpapi.NewHealthHandler(health))
+	return httpapi.New(httpapi.NewHealthHandler(health)), nil
+}
+
+func (a *App) Serve(ctx context.Context, listenAddress string, handler http.Handler) error {
+	listener, err := net.Listen("tcp", listenAddress)
+	if err != nil {
+		return err
+	}
+	return a.ServeListener(ctx, listener, handler)
+}
+
+func (a *App) ServeListener(ctx context.Context, listener net.Listener, handler http.Handler) error {
+	defer listener.Close()
+
 	srv := &http.Server{
-		Addr:              a.cfg.ListenAddress,
-		Handler:           api,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		a.logger.Info("thelper listening", "address", a.cfg.ListenAddress, "mode", a.cfg.Mode, "provider", handle.Provider)
-		errCh <- srv.ListenAndServe()
+		a.logger.Info("thelper listening", "address", listener.Addr().String(), "mode", a.cfg.Mode)
+		errCh <- srv.Serve(listener)
 	}()
 
 	select {
