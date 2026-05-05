@@ -296,6 +296,8 @@ func reloadableKeys(keys []string) []string {
 	reloadable := map[string]struct{}{
 		"scanning.global_scan":               {},
 		"scanning.security_scan.modules":     {},
+		"scanning.toolchain.profile_paths":   {},
+		"scanning.toolchain.version_policy":  {},
 		"repositories.default_auth_type":     {},
 		"repositories.poll_interval_default": {},
 		"repositories.auto_sync_default":     {},

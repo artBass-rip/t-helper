@@ -49,12 +49,16 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	correlationID := CorrelationIDFromContext(r.Context())
+	if correlationID == "" {
+		correlationID = r.Header.Get(CorrelationIDHeader)
+	}
 	writeJSON(w, status, map[string]any{
 		"error": map[string]any{
 			"code":           code,
 			"message":        message,
 			"details":        map[string]any{},
-			"correlation_id": r.Header.Get(CorrelationIDHeader),
+			"correlation_id": correlationID,
 		},
 	})
 }

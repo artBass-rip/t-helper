@@ -204,13 +204,27 @@ func Decode(r io.Reader) (RuntimeConfig, error) {
 	if err := decoder.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("decode config: %w", err)
 	}
+	cfg = Normalize(cfg)
 	if err := Validate(cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
 }
 
+func Normalize(cfg RuntimeConfig) RuntimeConfig {
+	cfg.Database.DatabasePath = cleanPath(cfg.Database.DatabasePath)
+	cfg.Logging.LogPath = cleanPath(cfg.Logging.LogPath)
+	if cfg.Scanning.Toolchain.VersionPolicy == "" {
+		cfg.Scanning.Toolchain.VersionPolicy = "certified_only"
+	}
+	for i, path := range cfg.Scanning.Toolchain.ProfilePaths {
+		cfg.Scanning.Toolchain.ProfilePaths[i] = cleanPath(path)
+	}
+	return cfg
+}
+
 func Validate(cfg RuntimeConfig) error {
+	cfg = Normalize(cfg)
 	if strings.TrimSpace(cfg.SystemSettings.AppName) == "" {
 		return fmt.Errorf("system_settings.app_name: required")
 	}
@@ -257,9 +271,6 @@ func Validate(cfg RuntimeConfig) error {
 			return fmt.Errorf("scanning.security_scan.modules: duplicate module %q", module)
 		}
 		seen[module] = struct{}{}
-	}
-	if cfg.Scanning.Toolchain.VersionPolicy == "" {
-		cfg.Scanning.Toolchain.VersionPolicy = "certified_only"
 	}
 	if !oneOf(cfg.Scanning.Toolchain.VersionPolicy, "certified_only", "compatible_range", "latest_best_effort") {
 		return fmt.Errorf("scanning.toolchain.version_policy: unsupported policy")
@@ -324,6 +335,7 @@ func InitialModuleNames() map[string]struct{} {
 }
 
 func Flatten(cfg RuntimeConfig) ([]Entry, error) {
+	cfg = Normalize(cfg)
 	entries := []Entry{
 		stringEntry("system_settings.app_name", cfg.SystemSettings.AppName),
 		stringEntry("system_settings.version", cfg.SystemSettings.Version),
@@ -340,6 +352,8 @@ func Flatten(cfg RuntimeConfig) ([]Entry, error) {
 		stringEntry("external_databases.database_name", cfg.ExternalDatabase.DatabaseName),
 		jsonEntry("scanning.global_scan", cfg.Scanning.GlobalScan),
 		jsonEntry("scanning.security_scan.modules", cfg.Scanning.Security.Modules),
+		jsonEntry("scanning.toolchain.profile_paths", cfg.Scanning.Toolchain.ProfilePaths),
+		stringEntry("scanning.toolchain.version_policy", cfg.Scanning.Toolchain.VersionPolicy),
 		stringEntry("repositories.default_auth_type", cfg.Repositories.DefaultAuthType),
 		stringEntry("repositories.poll_interval_default", cfg.Repositories.PollInterval),
 		boolEntry("repositories.auto_sync_default", cfg.Repositories.AutoSyncDefault),
