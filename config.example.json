@@ -1,0 +1,84 @@
+{
+  "system_settings": {
+    "app_name": "t-helper",
+    "version": "1.0.0",
+    "mode": "server"
+  },
+  "database": {
+    "database_type": "sqlite",
+    "database_path": "/var/lib/t-helper/t-helper.db"
+  },
+  "external_databases": {
+    "enabled": false,
+    "provider": "postgresql",
+    "engine_flavor": "standard",
+    "host": "postgres.example.internal",
+    "port": 5432,
+    "username": "secretref://env/THELPER_POSTGRES_USER",
+    "password": "secretref://env/THELPER_POSTGRES_PASSWORD",
+    "database_name": "t_helper"
+  },
+  "scanning": {
+    "global_scan": [
+      {
+        "name": "Platform Terraform",
+        "root_path": "/srv/t-helper/scan-roots/platform",
+        "schedule": true,
+        "frequency": "daily"
+      },
+      {
+        "name": "Application Terraform",
+        "root_path": "/srv/t-helper/scan-roots/applications",
+        "schedule": true,
+        "frequency": "weekly"
+      }
+    ],
+    "security_scan": {
+      "modules": [
+        "trivy"
+      ]
+    },
+    "toolchain": {
+      "version_policy": "certified_only",
+      "profile_paths": []
+    }
+  },
+  "security": {
+    "active_rule_set_id": null
+  },
+  "repositories": {
+    "default_auth_type": "ssh",
+    "poll_interval_default": "15m",
+    "auto_sync_default": false
+  },
+  "api": {
+    "listen_address": "127.0.0.1:8080"
+  },
+  "auth": {
+    "local_enabled": true
+  },
+  "workers": {
+    "enabled": true,
+    "concurrency": 1
+  },
+  "modules": {
+    "enabled": [
+      "core",
+      "worker-runtime",
+      "config-manager",
+      "module-runtime",
+      "status-monitor",
+      "global-scanner",
+      "project-scanner",
+      "security-validator",
+      "repository-manager",
+      "auth",
+      "web"
+    ]
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "log_path": "/var/log/t-helper"
+  }
+}
