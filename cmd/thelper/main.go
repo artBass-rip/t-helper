@@ -22,6 +22,7 @@ func main() {
 	flag.StringVar(&cfg.StorageProvider, "storage-provider", cfg.StorageProvider, "storage provider")
 	flag.StringVar(&cfg.StorageDSN, "storage-dsn", cfg.StorageDSN, "storage DSN or sqlite path")
 	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "log level")
+	flag.StringVar(&cfg.RuntimeLockPath, "runtime-lock", cfg.RuntimeLockPath, "runtime lock file path")
 	flag.BoolVar(&cfg.MigrateOnly, "migrate-only", false, "apply migrations and exit")
 	flag.Parse()
 

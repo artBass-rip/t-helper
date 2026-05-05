@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"time"
 
+	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/httpapi"
+	"github.com/artBass-rip/t-helper/internal/modules"
 	"github.com/artBass-rip/t-helper/internal/runtime"
 	"github.com/artBass-rip/t-helper/internal/storage"
 )
@@ -25,6 +27,10 @@ func New(cfg Config, registry *storage.Registry, logger *slog.Logger) *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	instanceID, err := runtime.NewInstanceID()
+	if err != nil {
+		return err
+	}
 	handle, err := a.registry.Open(ctx, storage.Config{
 		Provider: a.cfg.StorageProvider,
 		DSN:      a.cfg.StorageDSN,
@@ -42,18 +48,35 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	}
 
-	api, err := a.BuildHandler(ctx, handle)
+	lock, err := runtime.AcquireLock(a.cfg.RuntimeLockPath, runtime.LockMetadata{
+		InstanceID:                instanceID,
+		APIListenAddress:          a.cfg.ListenAddress,
+		ConfigDatabaseFingerprint: handle.Fingerprint,
+	})
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	api, err := a.BuildHandler(ctx, handle, instanceID)
 	if err != nil {
 		return err
 	}
 	return a.Serve(ctx, a.cfg.ListenAddress, api)
 }
 
-func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle) (http.Handler, error) {
+func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instanceIDOverride ...string) (http.Handler, error) {
 	_ = ctx
-	instanceID, err := runtime.NewInstanceID()
-	if err != nil {
-		return nil, err
+	instanceID := ""
+	if len(instanceIDOverride) > 0 {
+		instanceID = instanceIDOverride[0]
+	}
+	if instanceID == "" {
+		var err error
+		instanceID, err = runtime.NewInstanceID()
+		if err != nil {
+			return nil, err
+		}
 	}
 	health := runtime.NewHealthService(
 		instanceID,
@@ -61,7 +84,16 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle) (http.Ha
 		time.Now().UTC(),
 		runtime.NewStorageHealthSource(handle),
 	)
-	return httpapi.New(httpapi.NewHealthHandler(health)), nil
+	configStore := appconfig.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		return nil, err
+	}
+	return httpapi.New(
+		httpapi.NewHealthHandler(health),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+	), nil
 }
 
 func (a *App) Serve(ctx context.Context, listenAddress string, handler http.Handler) error {

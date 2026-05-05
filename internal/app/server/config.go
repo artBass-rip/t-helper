@@ -7,6 +7,7 @@ type Config struct {
 	StorageDSN      string
 	LogLevel        string
 	MigrateOnly     bool
+	RuntimeLockPath string
 }
 
 func DefaultConfig() Config {
@@ -16,5 +17,6 @@ func DefaultConfig() Config {
 		StorageProvider: "sqlite",
 		StorageDSN:      ".artifacts/dev/sqlite/t-helper.db",
 		LogLevel:        "info",
+		RuntimeLockPath: ".artifacts/runtime/thelper-runtime.lock",
 	}
 }
