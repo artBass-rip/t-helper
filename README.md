@@ -41,6 +41,7 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - [`docs/traceability.md`](docs/traceability.md) - трассировка требований к API, модели данных, permissions, этапам и приёмке.
 - [`docs/test-plan.md`](docs/test-plan.md) - mapping MVP acceptance к API, storage, authorization и runtime checks.
 - [`docs/roadmap.md`](docs/roadmap.md) - этапы реализации, критерии приёмки и статусы открытых решений.
+- [`docs/stage-00-delivery-contract.md`](docs/stage-00-delivery-contract.md) - принятый Stage 00 delivery contract, Stage 01 checklist и backlog Stage 01-03.
 - [`config.example.json`](config.example.json) - валидный пример входного `config.json` для `thelper-ctl -reconfigure`.
 
 ## Технологический стек
