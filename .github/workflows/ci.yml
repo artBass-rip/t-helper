@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: t_helper_test
+          POSTGRES_USER: t_helper
+          POSTGRES_PASSWORD: local_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U t_helper -d t_helper_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      THELPER_POSTGRES_DSN: postgres://t_helper:local_password@127.0.0.1:5432/t_helper_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+      - run: gofmt -w $(find . -name '*.go')
+      - run: git diff --exit-code
+      - run: go test ./...
+      - run: go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
