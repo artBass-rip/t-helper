@@ -66,6 +66,9 @@
 ### `health_status`
 
 Confirmed MVP behavior: `GET /api/health` is intentionally safe for unauthenticated local discovery. It must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details.
+`database_fingerprint` is an opaque safe fingerprint of the active database
+target and must not be derived from raw secret-bearing DSNs or reveal filesystem
+paths, usernames, passwords or userinfo.
 
 ```json
 {

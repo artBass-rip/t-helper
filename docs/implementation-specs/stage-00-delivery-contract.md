@@ -63,7 +63,7 @@ implementation are owned by Stage 01.
 
 | Decision | Status | Resolution |
 | --- | --- | --- |
-| Current repository state | Accepted | Проект сейчас documentation-only/documentation-first; реализация ещё не начата, поэтому Stage 01 is the first code scaffolding stage. |
+| Current repository state | Accepted | Historical Stage 00 baseline: проект был documentation-only/documentation-first; реализация ещё не была начата, поэтому Stage 01 was the first code scaffolding stage. Current repository state is updated by the Stage 01 completion record. |
 | Stage 00 delivery boundary | Accepted | Stage 00 is complete as a documentation/decision contract. Repository layout, style guide and CI are specified by ADRs/docs; executable scaffolding, actual CI files and test harnesses are Stage 01 implementation deliverables. |
 | MVP breadth | Accepted | MVP intentionally remains a broad platform slice through Stage 08: backend, storage, jobs/workers, scanner, repository manager, tool profiles, local scanners, auth/RBAC, audit, Web UI and local GUI. This is an accepted delivery trade-off to avoid temporary contracts between stages; teams must manage it through strict stage ownership and acceptance tests rather than by shrinking the documented MVP. |
 | `terragrunt.hcl` support | Deferred | Не входит в MVP; extension point допускается без discovery/scan behavior. |

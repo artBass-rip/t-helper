@@ -363,6 +363,8 @@ plan.
 - старая DB configuration не удаляется после переключения и остаётся historical/rollback metadata;
 - `config_payload` хранит normalized storage settings and secret refs only, not resolved secrets;
 - `database_fingerprint` не должен раскрывать DSN, path, credentials или userinfo.
+  Stage 01 derives the health fingerprint from safe storage locator components
+  and exposes only the opaque fingerprint through `GET /api/health`.
 
 ### `storage_provider_settings`
 

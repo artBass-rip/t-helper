@@ -79,9 +79,9 @@ Recommended profiles:
 | `offline` | Run tests with no external network assumptions. |
 | `os-matrix` | Run Linux OS-family compatibility test containers. |
 
-Compose commands should be wrapped by `thelper-ctl` or project scripts only
-after Stage 01 scaffolding exists. Until then, these names are the contract for
-future implementation.
+Stage 01 provides the first executable scaffold and test runner. Compose
+commands may now be used directly for the Stage 01 `postgres` and `test-runner`
+services; later product containers are still introduced by their owning stages.
 
 ## Product Containers
 
@@ -190,7 +190,7 @@ Run on every local developer test invocation:
 - secret masking tests;
 - frontend unit tests after Stage 08.
 
-Expected command shape after scaffolding:
+Expected command:
 
 ```text
 go test ./...
@@ -200,7 +200,7 @@ go test ./...
 
 Run through `docker-compose.test.yml` in `t-helper-dev`:
 
-- PostgreSQL storage contract suite;
+- PostgreSQL storage contract suite - implemented in Stage 01;
 - migration tests from empty databases;
 - API contract tests against `thelper`;
 - worker claim, lease, heartbeat and retry tests;
@@ -344,7 +344,7 @@ Artifact directories must be ignored by version control.
 
 ## Required Health Gates
 
-A local stack is ready for tests only when:
+A full local stack is ready for tests only when:
 
 - `postgres` accepts connections, when the PostgreSQL profile is enabled;
 - `thelper` returns `health_status.v1` from `GET /api/health`;
@@ -354,11 +354,19 @@ A local stack is ready for tests only when:
 - dependency mocks are reachable by Docker DNS name;
 - manual profile host ports, if enabled, are bound to `127.0.0.1`.
 
+For Stage 01-only validation, the required gates are reduced to:
+
+- `postgres` accepts connections when PostgreSQL tests are enabled;
+- Stage 01 migrations complete successfully;
+- `GET /api/health` returns `health_status.v1`;
+- storage contract tests pass for SQLite and PostgreSQL.
+
 ## Stage Ownership
 
 Environment implementation is stage-owned like migrations:
 
-- Stage 01 adds base product images, `postgres`, test runner and storage tests.
+- Stage 01 adds `postgres`, test runner and storage tests. Product images are
+  expanded by the owning runtime/frontend stages.
 - Stage 02 adds config import, module registry and singleton runtime smoke tests.
 - Stage 03 adds worker/status integration tests.
 - Stage 04 adds scanner fixtures and global scan tests.

@@ -2,7 +2,11 @@
 
 `t-helper` - on-premise платформа для обнаружения Terraform-проектов, учёта репозиториев, локального security-анализа и централизованного управления конфигурацией, доступом и модулями.
 
-Репозиторий находится в documentation-only / documentation-first состоянии: требования и технические решения разнесены по каноническим документам, а реализация ещё не начата. Следующий этап code scaffolding должен опираться на согласованный контракт.
+Репозиторий перешёл из documentation-only состояния в Stage 01 executable
+scaffold: backend entrypoints, storage foundation, migrations, health endpoint,
+tests and CI are implemented. Product/domain behavior for config, jobs,
+scanner, repository manager, auth and frontend remains stage-owned by later
+roadmap stages.
 
 ## License
 
@@ -22,6 +26,12 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - `thelper` - backend runtime и service process
 - `thelper-worker` - отдельный worker process для выполнения background jobs
 - `thelper-ctl` - административный CLI
+
+Stage 01 реализует минимальные executable skeletons. `thelper` starts the HTTP
+runtime, applies Stage 01 migrations and exposes `GET /api/health`.
+`thelper-worker` is a buildable scaffold; job execution starts in Stage 03.
+`thelper-ctl` currently includes Stage 01 provider diagnostics, while
+configuration/lifecycle commands start in Stage 02.
 
 ## Карта документации
 
@@ -44,6 +54,30 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - [`docs/stage-00-delivery-contract.md`](docs/stage-00-delivery-contract.md) - принятый Stage 00 delivery contract, Stage 01 checklist и backlog Stage 01-03.
 - [`config.example.json`](config.example.json) - валидный пример входного `config.json` для `thelper-ctl -reconfigure`.
 
+## Текущий executable baseline
+
+- Go module: `github.com/artBass-rip/t-helper`, Go `1.23`.
+- Entrypoints: `cmd/thelper`, `cmd/thelper-worker`, `cmd/thelper-ctl`.
+- HTTP: `net/http` + `chi`, correlation IDs, unauthenticated safe
+  `GET /api/health` returning `health_status.v1`.
+- Storage: pluggable registry with `sqlite` and `postgres` MVP adapters;
+  external provider name `postgresql` is normalized to internal `postgres`.
+- Migrations: `goose` runner with dialect-specific synchronized migrations
+  under `internal/storage/migrations/{sqlite,postgres}`; `mysql` and `mssql`
+  directories are reserved for Stage 10.
+- Stage 01 schema ownership: only `system_metadata` plus migration metadata.
+  Later-stage tables are intentionally not created.
+- CI: GitHub Actions `ci / go` runs format check, `go test ./...` with
+  PostgreSQL service and build checks for all three entrypoints.
+
+Recommended local checks:
+
+```text
+go test ./...
+go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
+docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
+```
+
 ## Технологический стек
 
 - Backend: `Go`.
@@ -56,7 +90,7 @@ Use, copying, modification, distribution, and access outside the authorized orga
 ## Stage внедрения MVP
 
 - Stage 00: delivery contract, Definition of Done и закрытие открытых продуктовых решений.
-- Stage 01: backend skeleton, `thelper`, `thelper-worker`, `thelper-ctl`, storage abstraction, `SQLite`, `PostgreSQL`, migrations и HTTP skeleton.
+- Stage 01: completed backend skeleton, `thelper`, `thelper-worker`, `thelper-ctl`, storage abstraction, `SQLite`, `PostgreSQL`, migrations и HTTP skeleton.
 - Stage 02: runtime configuration, `config_entries`, module lifecycle, reload/restart и singleton runtime policy.
 - Stage 03: jobs framework, worker execution model, leases, `job_locks`, `job_events` и базовый `status-monitor`.
 - Stage 04: `global-scanner`, `root_paths`, ignore rules, Terraform project discovery, background `project_discovery`, registry `projects`/`project_links`/`repositories`, `environments`/`workspaces` backend API.

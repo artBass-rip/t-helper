@@ -17,11 +17,14 @@ the delivery decisions and documentation contracts are accepted.
 
 ### Stage 01. Backend storage foundation
 
-- создать Go-модули `thelper`, `thelper-worker`, `thelper-ctl`;
-- реализовать HTTP adapter skeleton на `net/http`/`chi`;
-- реализовать storage abstraction и миграционный каркас;
-- поддержать `SQLite` и `PostgreSQL` для stage-owned системных таблиц Stage 01;
-- добавить базовое логирование, correlation IDs и health endpoint.
+Status: completed.
+
+- создан Go module and executable entrypoints `thelper`, `thelper-worker`, `thelper-ctl`;
+- реализован HTTP adapter skeleton на `net/http`/`chi`;
+- реализованы storage abstraction, provider registry и миграционный каркас;
+- поддержаны `SQLite` и `PostgreSQL` для stage-owned системных таблиц Stage 01;
+- добавлены базовое логирование, correlation IDs и `GET /api/health`;
+- добавлены SQLite/PostgreSQL storage contract tests and GitHub Actions CI gate.
 
 ### Stage 02. Config, modules and runtime lifecycle
 
