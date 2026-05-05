@@ -213,6 +213,18 @@
 - Проверить, что Aurora MySQL tests используют InnoDB-compatible schema assumptions.
 - Проверить, что Babelfish for Aurora PostgreSQL не проходит как `mssql` adapter target без отдельного compatibility decision.
 
+Stage 01 implemented coverage:
+
+- shared storage contract tests run for SQLite in every `go test ./...` run;
+- the same storage contract suite runs for PostgreSQL when
+  `THELPER_POSTGRES_DSN` is set, including the Docker `offline` test runner and
+  GitHub Actions;
+- PostgreSQL storage tests guard destructive cleanup and require a test database
+  name unless `THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1` is set;
+- tests assert that Stage 01 migrations do not create later-stage tables;
+- tests assert synchronized logical migration versions for SQLite/PostgreSQL;
+- tests assert idempotent Stage 01 migration application.
+
 ### Worker execution
 
 - Проверить, что API/CLI создают jobs в статусе `queued`, но не выполняют long-running operations inline.
