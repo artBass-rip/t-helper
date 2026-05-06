@@ -7,7 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +37,7 @@ type ImportResult struct {
 }
 
 type ReloadResult struct {
+	AcceptedKeys        []string `json:"accepted_keys"`
 	AppliedKeys         []string `json:"applied_keys"`
 	RestartRequiredKeys []string `json:"restart_required_keys"`
 	FailedKeys          []string `json:"failed_keys"`
@@ -116,8 +121,10 @@ func (s *Store) Import(ctx context.Context, cfg RuntimeConfig, ignore []string, 
 	if err := s.upsertStorageProviderSettings(ctx, tx, slot, provider, now); err != nil {
 		return ImportResult{}, err
 	}
-	if err := s.replaceIgnoreRules(ctx, tx, ignore, now); err != nil {
-		return ImportResult{}, err
+	if ignore != nil {
+		if err := s.replaceIgnoreRules(ctx, tx, ignore, now); err != nil {
+			return ImportResult{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return ImportResult{}, err
@@ -185,7 +192,14 @@ func (p StorageProfileRecord) StorageConfig() (storage.Config, error) {
 		if err != nil {
 			return storage.Config{}, err
 		}
-		dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", username, password, cfg.Host, cfg.Port, cfg.DatabaseName)
+		dsnURL := url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(username, password),
+			Host:     net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
+			Path:     "/" + cfg.DatabaseName,
+			RawQuery: "sslmode=disable",
+		}
+		dsn := dsnURL.String()
 		return storage.Config{Provider: "postgres", DSN: dsn}, nil
 	default:
 		return storage.Config{}, fmt.Errorf("storage migration provider %q is not supported by this build", p.Provider)
@@ -249,6 +263,7 @@ func (s *Store) RuntimeSettings(ctx context.Context) (RuntimeSettings, error) {
 }
 
 func (s *Store) Reload(ctx context.Context, keys []string) (ReloadResult, error) {
+	explicitKeys := len(keys) > 0
 	if len(keys) == 0 {
 		loaded, err := s.configKeys(ctx)
 		if err != nil {
@@ -256,8 +271,21 @@ func (s *Store) Reload(ctx context.Context, keys []string) (ReloadResult, error)
 		}
 		keys = loaded
 	}
+	if explicitKeys {
+		if failed := unknownReloadKeys(keys); len(failed) > 0 {
+			return ReloadResult{
+				AcceptedKeys:        []string{},
+				AppliedKeys:         []string{},
+				RestartRequiredKeys: restartRequiredKeys(keys),
+				FailedKeys:          failed,
+				SchemaVersion:       "config_reload.result.v1",
+			}, nil
+		}
+	}
+	accepted := reloadableKeys(keys)
 	return ReloadResult{
-		AppliedKeys:         reloadableKeys(keys),
+		AcceptedKeys:        accepted,
+		AppliedKeys:         []string{},
 		RestartRequiredKeys: restartRequiredKeys(keys),
 		FailedKeys:          []string{},
 		SchemaVersion:       "config_reload.result.v1",
@@ -282,10 +310,12 @@ func (s *Store) MigrateDB(ctx context.Context, registry *storage.Registry) (Migr
 	}
 	targetCfg, err := migration.StorageConfig()
 	if err != nil {
+		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, err
 	}
 	target, err := registry.Open(ctx, targetCfg)
 	if err != nil {
+		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, err
 	}
 	defer target.Close()
@@ -335,10 +365,10 @@ func (s *Store) copyStage02Data(ctx context.Context, target *storage.Handle, cur
 	if err := insertHistoricalProfile(ctx, tx, target.Provider, current, now); err != nil {
 		return err
 	}
-	if err := insertProfile(ctx, tx, target.Provider, stableID("storage-profile", "current"), "current", migration.Provider, migration.EngineFlavor, "active", migration.ConfigPayload, migration.DatabaseFingerprint, current.ID, now); err != nil {
+	if err := insertProfile(ctx, tx, target.Provider, migration.ID, "current", migration.Provider, migration.EngineFlavor, "active", migration.ConfigPayload, migration.DatabaseFingerprint, current.ID, now); err != nil {
 		return err
 	}
-	if err := (&Store{handle: target}).upsertStorageProviderSettings(ctx, tx, "current", migration.Provider, now); err != nil {
+	if err := (&Store{handle: target}).upsertStorageProviderSettingsForProfile(ctx, tx, migration.ID, migration.Provider, now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -595,6 +625,10 @@ ON CONFLICT (id) DO UPDATE SET provider = excluded.provider, engine_flavor = exc
 
 func (s *Store) upsertStorageProviderSettings(ctx context.Context, tx *sql.Tx, slot, provider, now string) error {
 	profileID := stableID("storage-profile", slot)
+	return s.upsertStorageProviderSettingsForProfile(ctx, tx, profileID, provider, now)
+}
+
+func (s *Store) upsertStorageProviderSettingsForProfile(ctx context.Context, tx *sql.Tx, profileID, provider, now string) error {
 	id := stableID("storage-provider-settings", profileID, provider)
 	if provider == "sqlite" {
 		return s.upsertProviderSettingsRow(ctx, tx, id, profileID, provider, 1, 1, "5s", "30s", "10s", "WAL", true, now)
@@ -711,10 +745,39 @@ func restartRequiredKeys(keys []string) []string {
 	return filterKeys(keys, restartRequired)
 }
 
+func unknownReloadKeys(keys []string) []string {
+	known := map[string]struct{}{}
+	for _, key := range reloadableKeys(keys) {
+		known[key] = struct{}{}
+	}
+	for _, key := range restartRequiredKeys(keys) {
+		known[key] = struct{}{}
+	}
+	failed := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, key := range keys {
+		if _, ok := known[key]; ok {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		failed = append(failed, key)
+	}
+	sort.Strings(failed)
+	return failed
+}
+
 func filterKeys(keys []string, allowed map[string]struct{}) []string {
 	out := make([]string, 0, len(keys))
+	seen := map[string]struct{}{}
 	for _, key := range keys {
 		if _, ok := allowed[key]; ok {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
 			out = append(out, key)
 		}
 	}

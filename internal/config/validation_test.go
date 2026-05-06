@@ -44,3 +44,31 @@ func TestValidateImportShapeRejectsSensitiveLiterals(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestValidateImportShapeRejectsTrailingPayload(t *testing.T) {
+	data, err := os.ReadFile("../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateImportShape(strings.NewReader(string(data) + ` {}`)); err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestValidateRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
+	file, err := os.Open("../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	cfg, err := Decode(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	if err := Validate(cfg); err == nil {
+		t.Fatal("expected validation error")
+	}
+}

@@ -25,7 +25,7 @@ func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConfigHandler) Put(w http.ResponseWriter, r *http.Request) {
-	cfg, err := appconfig.Decode(r.Body)
+	cfg, err := appconfig.DecodeStrict(r.Body)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
 		return

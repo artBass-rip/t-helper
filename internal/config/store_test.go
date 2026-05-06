@@ -58,6 +58,52 @@ func TestStoreImportPersistsConfigAndMasksSecrets(t *testing.T) {
 	}
 }
 
+func TestStoreImportNilIgnoreRulesPreservesExistingRules(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, []string{".terraform/", "!keep"}, "test"); err != nil {
+		t.Fatalf("initial import: %v", err)
+	}
+	next := cfg
+	next.Logging.Level = "debug"
+	if _, err := store.Import(ctx, next, nil, "api"); err != nil {
+		t.Fatalf("config-only import: %v", err)
+	}
+
+	var rules int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM ignore_rules WHERE origin = 'config_import'").Scan(&rules); err != nil {
+		t.Fatal(err)
+	}
+	if rules != 2 {
+		t.Fatalf("ignore rules = %d, want preserved 2", rules)
+	}
+}
+
+func TestStoreImportRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	if _, err := appconfig.NewStore(handle).Import(ctx, cfg, nil, "test"); err == nil {
+		t.Fatal("expected sensitive literal import to fail")
+	}
+	var entries int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM config_entries").Scan(&entries); err != nil {
+		t.Fatal(err)
+	}
+	if entries != 0 {
+		t.Fatalf("config entries after rejected import = %d, want 0", entries)
+	}
+}
+
 func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -161,12 +207,81 @@ func TestMigrateDBFailureDoesNotChangeCurrentProfile(t *testing.T) {
 	if _, err := store.MigrateDB(ctx, storageproviders.MVPRegistry()); err == nil {
 		t.Fatal("expected unsupported migration provider error")
 	}
+	var failed int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM storage_profiles WHERE slot = 'migration' AND status = 'migration_failed'").Scan(&failed); err != nil {
+		t.Fatal(err)
+	}
+	if failed != 1 {
+		t.Fatalf("failed migration profiles = %d, want 1", failed)
+	}
 	currentAfter, err := store.CurrentStorageProfile(ctx)
 	if err != nil {
 		t.Fatalf("current after: %v", err)
 	}
 	if currentAfter.ID != currentBefore.ID || currentAfter.DatabaseFingerprint != currentBefore.DatabaseFingerprint {
 		t.Fatalf("current changed after failed migration: before=%+v after=%+v", currentBefore, currentAfter)
+	}
+}
+
+func TestStorageProfilePostgresDSNEscapesCredentials(t *testing.T) {
+	profile := appconfig.StorageProfileRecord{
+		Provider: "postgres",
+		ConfigPayload: `{
+			"enabled": true,
+			"provider": "postgresql",
+			"engine_flavor": "standard",
+			"host": "postgres.example.internal",
+			"port": 5432,
+			"username": "secretref://env/STAGE02_DSN_USER",
+			"password": "secretref://env/STAGE02_DSN_PASSWORD",
+			"database_name": "t_helper"
+		}`,
+	}
+	t.Setenv("STAGE02_DSN_USER", "user:name")
+	t.Setenv("STAGE02_DSN_PASSWORD", "p@ss/w:rd?#")
+	cfg, err := profile.StorageConfig()
+	if err != nil {
+		t.Fatalf("storage config: %v", err)
+	}
+	parsed, err := url.Parse(cfg.DSN)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	password, _ := parsed.User.Password()
+	if parsed.User.Username() != "user:name" || password != "p@ss/w:rd?#" {
+		t.Fatalf("credentials not preserved after escaping: %s", cfg.DSN)
+	}
+	if parsed.Host != "postgres.example.internal:5432" || parsed.Path != "/t_helper" || parsed.Query().Get("sslmode") != "disable" {
+		t.Fatalf("unexpected postgres dsn: %s", cfg.DSN)
+	}
+}
+
+func TestStorageProfilePostgresDSNUsesJoinHostPortForIPv6(t *testing.T) {
+	profile := appconfig.StorageProfileRecord{
+		Provider: "postgres",
+		ConfigPayload: `{
+			"enabled": true,
+			"provider": "postgresql",
+			"engine_flavor": "standard",
+			"host": "::1",
+			"port": 5432,
+			"username": "secretref://env/STAGE02_DSN_USER",
+			"password": "secretref://env/STAGE02_DSN_PASSWORD",
+			"database_name": "t_helper"
+		}`,
+	}
+	t.Setenv("STAGE02_DSN_USER", "user")
+	t.Setenv("STAGE02_DSN_PASSWORD", "password")
+	cfg, err := profile.StorageConfig()
+	if err != nil {
+		t.Fatalf("storage config: %v", err)
+	}
+	parsed, err := url.Parse(cfg.DSN)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	if parsed.Host != "[::1]:5432" {
+		t.Fatalf("host = %q, want IPv6 join host/port in %s", parsed.Host, cfg.DSN)
 	}
 }
 

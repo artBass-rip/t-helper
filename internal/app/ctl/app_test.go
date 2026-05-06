@@ -76,7 +76,7 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &reload); err != nil {
 		t.Fatalf("decode reload output: %v", err)
 	}
-	if reload.SchemaVersion != "config_reload.result.v1" || len(reload.AppliedKeys) == 0 || len(reload.FailedKeys) != 0 {
+	if reload.SchemaVersion != "config_reload.result.v1" || len(reload.AcceptedKeys) == 0 || len(reload.AppliedKeys) != 1 || reload.AppliedKeys[0] != "modules.enabled" || len(reload.FailedKeys) != 0 {
 		t.Fatalf("unexpected reload result: %+v", reload)
 	}
 
@@ -95,6 +95,58 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	out.Reset()
 	if err := app.Run(ctx, Command{Name: "restart", StorageProvider: "sqlite", StorageDSN: dbPath, ModuleName: "global-scanner"}); err == nil {
 		t.Fatal("expected unavailable module restart to fail")
+	}
+}
+
+func TestStage02CLIReconfigureRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "stage02-cli.db")
+	file, err := os.Open("../../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := appconfig.Decode(file)
+	_ = file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "literal-secrets.json")
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	app := New(&out, storageproviders.MVPRegistry())
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: dbPath, ConfigPath: configPath}); err == nil {
+		t.Fatal("expected sensitive literal reconfigure to fail")
+	}
+}
+
+func TestStage02CLIReconfigureRejectsTrailingConfigPayload(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "stage02-cli.db")
+	data, err := os.ReadFile("../../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "trailing.json")
+	if err := os.WriteFile(configPath, append(data, []byte(` {}`)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	app := New(&out, storageproviders.MVPRegistry())
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: dbPath, ConfigPath: configPath}); err == nil {
+		t.Fatal("expected trailing config payload to fail")
 	}
 }
 

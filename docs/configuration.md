@@ -276,17 +276,30 @@ Reloadable без полного рестарта:
 `migration` slot. Переключение active database выполняется только через
 `thelper-ctl -migrate-db`.
 
-`thelper-ctl -reload` должен явно вернуть список применённых параметров и список параметров, требующих `thelper-ctl -restart <module>` или полного service restart.
+`thelper-ctl -reload` должен явно вернуть список принятых reloadable
+параметров, список фактически применённых в Stage 02 параметров и список
+параметров, требующих `thelper-ctl -restart <module>` или полного service
+restart. Reloadable key не должен попадать в `applied_keys`, если текущий
+runtime ещё не реализует его применение без restart.
+Explicit unknown reload keys возвращаются в `failed_keys` и не должны
+молчаливо считаться применёнными.
 
 ## Валидация
 
 `thelper-ctl -reconfigure` и `PUT /api/config` используют строгий schema contract:
 
 - unknown top-level или nested keys должны возвращать `validation_error`;
+- malformed JSON, trailing payload после первого JSON object и `null` вместо
+  config object должны возвращать `validation_error`;
 - deprecated/legacy aliases не принимаются;
 - `scanning.global_scan` является единственным допустимым ключом для global scan roots;
 - `scanning.global_scann`, `globalScan`, `global_scan_roots`, `scan_roots` и любые другие aliases должны отклоняться как unknown keys;
-- validation errors не должны частично изменять `config_entries`, `root_paths`, `ignore_rules` или runtime state.
+- validation errors не должны частично изменять `config_entries`,
+  `ignore_rules` или runtime state;
+- `PUT /api/config` не принимает `.t-helper.ignore` payload и поэтому не
+  удаляет ранее imported system `ignore_rules`; очистка rules выполняется через
+  существующий empty `.t-helper.ignore` при `thelper-ctl -reconfigure` или через
+  Stage 04 ignore-rules API.
 
 Минимальные правила:
 

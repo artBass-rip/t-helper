@@ -79,9 +79,10 @@ Recommended profiles:
 | `offline` | Run tests with no external network assumptions. |
 | `os-matrix` | Run Linux OS-family compatibility test containers. |
 
-Stage 01 provides the first executable scaffold and test runner. Compose
-commands may now be used directly for the Stage 01 `postgres` and `test-runner`
-services; later product containers are still introduced by their owning stages.
+Stage 02 provides the current executable backend baseline and test runner.
+Compose commands may now be used directly for the `postgres` and `test-runner`
+services, including config/module/runtime checks; later product containers are
+still introduced by their owning stages.
 
 ## Product Containers
 
@@ -354,7 +355,7 @@ A full local stack is ready for tests only when:
 - dependency mocks are reachable by Docker DNS name;
 - manual profile host ports, if enabled, are bound to `127.0.0.1`.
 
-For Stage 01-only validation, the required gates are reduced to:
+For historical Stage 01-only validation, the required gates are reduced to:
 
 - `postgres` accepts connections when PostgreSQL tests are enabled;
 - Stage 01 migrations complete successfully;
@@ -367,7 +368,7 @@ Environment implementation is stage-owned like migrations:
 
 - Stage 01 adds `postgres`, test runner and storage tests. Product images are
   expanded by the owning runtime/frontend stages.
-- Stage 02 adds config import, module registry and singleton runtime smoke tests.
+- Stage 02 added config import, module registry and singleton runtime smoke tests.
 - Stage 03 adds worker/status integration tests.
 - Stage 04 adds scanner fixtures and global scan tests.
 - Stage 05 adds Git/repository/provider mock services.

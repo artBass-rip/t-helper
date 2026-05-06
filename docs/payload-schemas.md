@@ -232,6 +232,9 @@ Used by `repo_clone`, `repo_pull` and `repo_sync`.
 
 ### `jobs.config_reload.payload.v1`
 
+Stage 03 job-backed config reload payload. Stage 02 uses the synchronous
+`config_reload.result.v1` response shape below without creating a `jobs` row.
+
 ```json
 {
   "schema_version": "jobs.config_reload.payload.v1",
@@ -245,13 +248,63 @@ Used by `repo_clone`, `repo_pull` and `repo_sync`.
 ```json
 {
   "schema_version": "jobs.config_reload.result.v1",
-  "applied_keys": ["logging.level"],
+  "accepted_keys": ["logging.level"],
+  "applied_keys": [],
   "restart_required_keys": ["api.listen_address"],
   "failed_keys": []
 }
 ```
 
+### `config_import.result.v1`
+
+Stage 02 synchronous config import result.
+
+```json
+{
+  "schema_version": "config_import.result.v1",
+  "applied_keys": ["logging.level", "modules.enabled"],
+  "restart_required_keys": ["api.listen_address"],
+  "ignore_rules": [
+    {
+      "scope_type": "system",
+      "pattern": ".terraform/",
+      "origin": "config_import"
+    }
+  ]
+}
+```
+
+### `config_reload.result.v1`
+
+Stage 02 synchronous config reload result.
+
+```json
+{
+  "schema_version": "config_reload.result.v1",
+  "accepted_keys": ["logging.level", "modules.enabled"],
+  "applied_keys": ["modules.enabled"],
+  "restart_required_keys": ["api.listen_address"],
+  "failed_keys": []
+}
+```
+
+For an explicit request with unknown keys:
+
+```json
+{
+  "schema_version": "config_reload.result.v1",
+  "accepted_keys": [],
+  "applied_keys": [],
+  "restart_required_keys": [],
+  "failed_keys": ["logging.levl"]
+}
+```
+
 ### `jobs.module_restart.payload.v1`
+
+Stage 03 job-backed module restart payload. Stage 02 uses synchronous
+`module_restart.result.v1` and `module_reload.result.v1` response shapes without
+creating a `jobs` row.
 
 ```json
 {
@@ -269,6 +322,46 @@ Used by `repo_clone`, `repo_pull` and `repo_sync`.
   "module_name": "global-scanner",
   "previous_state": "running",
   "new_state": "running"
+}
+```
+
+### `module_restart.result.v1`
+
+Stage 02 synchronous module restart result.
+
+```json
+{
+  "schema_version": "module_restart.result.v1",
+  "module_name": "config-manager",
+  "previous_state": "running",
+  "new_state": "running"
+}
+```
+
+### `module_reload.result.v1`
+
+Stage 02 synchronous module reload result.
+
+```json
+{
+  "schema_version": "module_reload.result.v1",
+  "module_name": "core",
+  "previous_state": "running",
+  "new_state": "running"
+}
+```
+
+### `storage_migration.result.v1`
+
+Stage 02 synchronous controlled storage migration result.
+
+```json
+{
+  "schema_version": "storage_migration.result.v1",
+  "status": "migration_succeeded",
+  "previous_current_profile_id": "storage_profile_opaque_id",
+  "new_current_profile_id": "storage_profile_opaque_id",
+  "current_profile_unchanged": false
 }
 ```
 

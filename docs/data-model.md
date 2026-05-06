@@ -15,10 +15,12 @@ Expected migration ownership:
   version support and only the minimal system tables required by the backend
   skeleton.
 - Stage 02: `config_entries`, `storage_profiles`,
-  `storage_provider_settings`, `module_states` and runtime lifecycle state.
+  `storage_provider_settings`, `module_states`, imported system
+  `ignore_rules` and runtime lifecycle state.
 - Stage 03: `jobs`, `job_locks`, `job_events`, `workflow_statuses`.
-- Stage 04: `root_paths`, `ignore_rules`, `projects`, `project_links`,
-  minimal `repositories`, `environments`, `workspaces`.
+- Stage 04: `root_paths`, project-scoped/runtime scanner `ignore_rules`
+  behavior, `projects`, `project_links`, minimal `repositories`,
+  `environments`, `workspaces`.
 - Stage 05: full repository model, `repository_provider_instances`,
   `repository_credentials`, repository enrichment/supersede fields and
   repository-operation indexes.
@@ -240,6 +242,10 @@ plan.
 - repository operations must validate that selected `credential_id` belongs to the same provider instance and supports the required usage.
 
 ### `ignore_rules`
+
+Stage 02 creates this table for imported system-level `.t-helper.ignore` rules
+from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
+`root_path` and `project` scopes.
 
 - `id`
 - `scope_type`

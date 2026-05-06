@@ -77,7 +77,7 @@ func (a *App) Reconfigure(ctx context.Context, cmd Command) error {
 		return fmt.Errorf("open config: %w", err)
 	}
 	defer file.Close()
-	cfg, err := appconfig.Decode(file)
+	cfg, err := appconfig.DecodeStrict(file)
 	if err != nil {
 		return err
 	}
@@ -101,6 +101,16 @@ func (a *App) Reload(ctx context.Context, cmd Command) error {
 	result, err := appconfig.NewStore(handle).Reload(ctx, nil)
 	if err != nil {
 		return err
+	}
+	settings, err := appconfig.NewStore(handle).RuntimeSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if err := modules.NewStore(handle).Seed(ctx, settings.EnabledModules); err != nil {
+		return err
+	}
+	if containsKey(result.AcceptedKeys, "modules.enabled") {
+		result.AppliedKeys = append(result.AppliedKeys, "modules.enabled")
 	}
 	return writeJSON(a.out, result)
 }
@@ -162,4 +172,13 @@ func writeJSON(out io.Writer, value any) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(value)
+}
+
+func containsKey(keys []string, wanted string) bool {
+	for _, key := range keys {
+		if key == wanted {
+			return true
+		}
+	}
+	return false
 }

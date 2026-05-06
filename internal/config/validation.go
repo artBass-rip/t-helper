@@ -47,11 +47,18 @@ func ValidateImportShape(r io.Reader) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 	var root map[string]any
-	decoder := json.NewDecoder(r)
-	decoder = json.NewDecoder(bytes.NewReader(data))
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&root); err != nil {
 		return fmt.Errorf("decode config: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != nil {
+		if err != io.EOF {
+			return fmt.Errorf("decode config: %w", err)
+		}
+	} else {
+		return fmt.Errorf("decode config: request body must contain a single JSON object")
 	}
 	for key := range root {
 		if _, ok := allowedTopLevelKeys[key]; !ok {
@@ -75,7 +82,7 @@ func ValidateImportShape(r io.Reader) error {
 	if err := validateSecretRefs(root); err != nil {
 		return err
 	}
-	_, err = Decode(bytes.NewReader(data))
+	_, err = DecodeStrict(bytes.NewReader(data))
 	return err
 }
 
@@ -93,9 +100,22 @@ func validateSecretRefs(root map[string]any) error {
 		if !ok {
 			return fmt.Errorf("external_databases.%s: expected secret reference string", key)
 		}
-		if !strings.HasPrefix(str, "secretref://env/") {
-			return fmt.Errorf("external_databases.%s: sensitive values must use secretref://env/...", key)
+		if err := validateSecretRefValue("external_databases."+key, str, false); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+func validateSecretRefValue(path, value string, required bool) error {
+	if value == "" {
+		if required {
+			return fmt.Errorf("%s: required secret reference string", path)
+		}
+		return nil
+	}
+	if !strings.HasPrefix(value, "secretref://env/") {
+		return fmt.Errorf("%s: sensitive values must use secretref://env/...", path)
 	}
 	return nil
 }
@@ -198,11 +218,29 @@ type Entry struct {
 }
 
 func Decode(r io.Reader) (RuntimeConfig, error) {
+	return decode(r, false)
+}
+
+func DecodeStrict(r io.Reader) (RuntimeConfig, error) {
+	return decode(r, true)
+}
+
+func decode(r io.Reader, rejectTrailing bool) (RuntimeConfig, error) {
 	var cfg RuntimeConfig
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("decode config: %w", err)
+	}
+	if rejectTrailing {
+		var extra any
+		if err := decoder.Decode(&extra); err != nil {
+			if err != io.EOF {
+				return cfg, fmt.Errorf("decode config: %w", err)
+			}
+		} else {
+			return cfg, fmt.Errorf("decode config: request body must contain a single JSON object")
+		}
 	}
 	cfg = Normalize(cfg)
 	if err := Validate(cfg); err != nil {
@@ -244,9 +282,12 @@ func Validate(cfg RuntimeConfig) error {
 		if cfg.ExternalDatabase.Host == "" || cfg.ExternalDatabase.Port <= 0 || cfg.ExternalDatabase.Port > 65535 || cfg.ExternalDatabase.DatabaseName == "" {
 			return fmt.Errorf("external_databases: host, port and database_name are required")
 		}
-		if !strings.HasPrefix(cfg.ExternalDatabase.Username, "secretref://env/") || !strings.HasPrefix(cfg.ExternalDatabase.Password, "secretref://env/") {
-			return fmt.Errorf("external_databases: username and password must use secretref://env/...")
-		}
+	}
+	if err := validateSecretRefValue("external_databases.username", cfg.ExternalDatabase.Username, cfg.ExternalDatabase.Enabled); err != nil {
+		return err
+	}
+	if err := validateSecretRefValue("external_databases.password", cfg.ExternalDatabase.Password, cfg.ExternalDatabase.Enabled); err != nil {
+		return err
 	}
 	if cfg.ExternalDatabase.EngineFlavor != "" && !oneOf(cfg.ExternalDatabase.EngineFlavor, "standard", "aurora") {
 		return fmt.Errorf("external_databases.engine_flavor: unsupported engine flavor")

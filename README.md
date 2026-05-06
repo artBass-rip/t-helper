@@ -2,11 +2,11 @@
 
 `t-helper` - on-premise платформа для обнаружения Terraform-проектов, учёта репозиториев, локального security-анализа и централизованного управления конфигурацией, доступом и модулями.
 
-Репозиторий перешёл из documentation-only состояния в Stage 01 executable
-scaffold: backend entrypoints, storage foundation, migrations, health endpoint,
-tests and CI are implemented. Product/domain behavior for config, jobs,
-scanner, repository manager, auth and frontend remains stage-owned by later
-roadmap stages.
+Репозиторий находится на Stage 02 executable baseline: backend entrypoints,
+storage foundation, migrations, health endpoint, persisted runtime
+configuration, module lifecycle, singleton runtime lock, tests and CI are
+implemented. Jobs/workers execution, scanner, repository manager, auth and
+frontend remain stage-owned by later roadmap stages.
 
 ## License
 
@@ -27,11 +27,13 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - `thelper-worker` - отдельный worker process для выполнения background jobs
 - `thelper-ctl` - административный CLI
 
-Stage 01 реализует минимальные executable skeletons. `thelper` starts the HTTP
-runtime, applies Stage 01 migrations and exposes `GET /api/health`.
+Stage 02 реализует executable backend baseline. `thelper` starts the HTTP
+runtime, applies Stage 01-02 migrations and exposes `GET /api/health`,
+`GET/PUT /api/config`, `GET /api/modules`, `POST /api/modules/reload` and
+`POST /api/modules/restart`.
 `thelper-worker` is a buildable scaffold; job execution starts in Stage 03.
-`thelper-ctl` currently includes Stage 01 provider diagnostics, while
-configuration/lifecycle commands start in Stage 02.
+`thelper-ctl` includes provider diagnostics, config import, synchronous reload,
+module restart and controlled storage migration commands.
 
 ## Карта документации
 
@@ -59,14 +61,17 @@ configuration/lifecycle commands start in Stage 02.
 - Go module: `github.com/artBass-rip/t-helper`, Go `1.23`.
 - Entrypoints: `cmd/thelper`, `cmd/thelper-worker`, `cmd/thelper-ctl`.
 - HTTP: `net/http` + `chi`, correlation IDs, unauthenticated safe
-  `GET /api/health` returning `health_status.v1`.
+  `GET /api/health` returning `health_status.v1`; Stage 02 config/modules API.
 - Storage: pluggable registry with `sqlite` and `postgres` MVP adapters;
   external provider name `postgresql` is normalized to internal `postgres`.
 - Migrations: `goose` runner with dialect-specific synchronized migrations
   under `internal/storage/migrations/{sqlite,postgres}`; `mysql` and `mssql`
   directories are reserved for Stage 10.
-- Stage 01 schema ownership: only `system_metadata` plus migration metadata.
-  Later-stage tables are intentionally not created.
+- Stage 01 schema ownership: `system_metadata` plus migration metadata.
+- Stage 02 schema ownership: `config_entries`, `storage_profiles`,
+  `storage_provider_settings`, `module_states` and imported system
+  `ignore_rules`.
+- Stage 03+ product tables are intentionally not created yet.
 - CI: GitHub Actions `ci / go` runs format check, `go test ./...` with
   PostgreSQL service and build checks for all three entrypoints.
 
@@ -91,7 +96,7 @@ docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 
 - Stage 00: delivery contract, Definition of Done и закрытие открытых продуктовых решений.
 - Stage 01: completed backend skeleton, `thelper`, `thelper-worker`, `thelper-ctl`, storage abstraction, `SQLite`, `PostgreSQL`, migrations и HTTP skeleton.
-- Stage 02: runtime configuration, `config_entries`, module lifecycle, reload/restart и singleton runtime policy.
+- Stage 02: completed runtime configuration, `config_entries`, module lifecycle, reload/restart и singleton runtime policy.
 - Stage 03: jobs framework, worker execution model, leases, `job_locks`, `job_events` и базовый `status-monitor`.
 - Stage 04: `global-scanner`, `root_paths`, ignore rules, Terraform project discovery, background `project_discovery`, registry `projects`/`project_links`/`repositories`, `environments`/`workspaces` backend API.
 - Stage 05: repository manager MVP, generic Git + GitLab/GitHub single-repository `clone`/`pull`/`sync`, target path safety, credentials и serialization через `job_locks`.
