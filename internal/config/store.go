@@ -116,8 +116,10 @@ func (s *Store) Import(ctx context.Context, cfg RuntimeConfig, ignore []string, 
 	if err := s.upsertStorageProviderSettings(ctx, tx, slot, provider, now); err != nil {
 		return ImportResult{}, err
 	}
-	if err := s.replaceIgnoreRules(ctx, tx, ignore, now); err != nil {
-		return ImportResult{}, err
+	if ignore != nil {
+		if err := s.replaceIgnoreRules(ctx, tx, ignore, now); err != nil {
+			return ImportResult{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return ImportResult{}, err

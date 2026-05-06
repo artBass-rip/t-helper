@@ -7,7 +7,16 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
-- No unreleased product changes are recorded after Stage 02 on `master`.
+- Stage 02 hardening: `PUT /api/config` now preserves imported system
+  `ignore_rules` because `.t-helper.ignore` is not part of the HTTP config
+  payload.
+- Stage 02 hardening: `POST /api/modules/reload` now rejects malformed JSON
+  with `validation_error` instead of silently reloading all keys.
+- Stage 02 hardening: config reload applies `modules.enabled` changes to
+  persisted `module_states`.
+- Documentation was aligned with the completed Stage 02 baseline, including
+  synchronous config/module result DTOs and Stage 02 ownership of system
+  `ignore_rules`.
 - Next planned implementation stage: Stage 03 jobs, workers and status
   foundation.
 

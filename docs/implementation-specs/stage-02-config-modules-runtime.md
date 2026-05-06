@@ -59,6 +59,8 @@ persist runtime observability in `module_states`.
 ## Definition of Done
 
 - `thelper-ctl -reconfigure` атомарно импортирует config и ignore rules;
+- `PUT /api/config` imports config atomically without clearing imported system
+  `ignore_rules`, because `.t-helper.ignore` is not part of the HTTP payload;
 - unknown config keys and deprecated aliases are rejected with `validation_error`;
 - only `scanning.global_scan` is accepted for global scan roots;
 - storage profile slots `current` and `migration` are implemented fully;
@@ -112,6 +114,8 @@ Covered Stage 02 checks:
 - unavailable modules are returned as `unavailable`;
 - module restart/reload uses lifecycle `stop/start/reload/health` hooks and
   returns controlled errors for unavailable modules;
+- config reload validates request JSON and applies `modules.enabled` changes to
+  persisted `module_states`;
 - singleton lock writes `config_database_fingerprint` matching `/api/health`
   `database_fingerprint` and fails closed on ambiguous live PID/health state.
 
@@ -124,7 +128,9 @@ Covered Stage 02 checks:
 - Roadmap: Stage 02.
 - Acceptance: `ACC-MVP-007`, `ACC-MVP-008`, `ACC-MVP-009`, `ACC-MVP-010`.
 - API: `GET/PUT /api/config`, `GET /api/modules`, `POST /api/modules/reload`, `POST /api/modules/restart`.
-- Data model: `config_entries`, `module_states`.
+- Data model: `config_entries`, `storage_profiles`,
+  `storage_provider_settings`, `module_states`, imported system
+  `ignore_rules`.
 - ADR: `0004`, `0008`, `0009`, `0010`.
 
 ## Риски

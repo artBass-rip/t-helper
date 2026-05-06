@@ -286,7 +286,12 @@ Reloadable без полного рестарта:
 - deprecated/legacy aliases не принимаются;
 - `scanning.global_scan` является единственным допустимым ключом для global scan roots;
 - `scanning.global_scann`, `globalScan`, `global_scan_roots`, `scan_roots` и любые другие aliases должны отклоняться как unknown keys;
-- validation errors не должны частично изменять `config_entries`, `root_paths`, `ignore_rules` или runtime state.
+- validation errors не должны частично изменять `config_entries`,
+  `ignore_rules` или runtime state;
+- `PUT /api/config` не принимает `.t-helper.ignore` payload и поэтому не
+  удаляет ранее imported system `ignore_rules`; очистка rules выполняется через
+  существующий empty `.t-helper.ignore` при `thelper-ctl -reconfigure` или через
+  Stage 04 ignore-rules API.
 
 Минимальные правила:
 

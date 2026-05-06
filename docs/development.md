@@ -2,13 +2,15 @@
 
 ## Purpose
 
-This document defines the local development contract for Stage 01 scaffolding and storage tests.
+This document defines the local development contract for the current Stage 02
+backend baseline and storage tests.
 
 The Docker-based developer environment, product/dependency containers, manual
 testing profile and OS-family test matrix are defined in
 [`local-dev-environment.md`](local-dev-environment.md).
 
-Stage 01 has delivered the initial executable scaffold. The current local
+Stage 02 has delivered the executable backend scaffold, persisted runtime
+configuration, module lifecycle and singleton runtime policy. The current local
 baseline is:
 
 - `go test ./...`;
@@ -68,33 +70,55 @@ internal/storage/migrations/
 
 The same logical migration number must exist in every dialect directory supported by the current release line. Contract tests verify behavior parity across adapters.
 
-Stage 01 currently ships synchronized SQLite/PostgreSQL migration version
-`000001_create_system_tables.sql`. The `mysql` and `mssql` directories are
-reserved for Stage 10 adapter expansion and contain no Stage 01 SQL migrations.
+The current release line ships synchronized SQLite/PostgreSQL logical
+migration versions:
+
+- `000001_create_system_tables.sql` for Stage 01 system metadata;
+- `000002_stage02_config_modules_runtime.sql` for Stage 02 config, storage
+  profiles, module state and imported system ignore rules.
+
+The `mysql` and `mssql` directories are reserved for Stage 10 adapter expansion
+and contain no current SQL migrations.
 
 Stage 01 migrations create only:
 
 - `system_metadata`;
 - migration metadata managed by the migration framework.
 
-They must not create later-stage tables such as `config_entries`,
-`module_states`, `jobs`, `root_paths`, `projects`, `repositories` or `users`.
+Stage 02 migrations create:
 
-## Stage 01 runtime behavior
+- `config_entries`;
+- `storage_profiles`;
+- `storage_provider_settings`;
+- `module_states`;
+- imported system `ignore_rules`.
 
-- `cmd/thelper` applies Stage 01 migrations, starts the HTTP runtime and exposes
-  `GET /api/health`.
+They must not create later-stage tables such as `jobs`, `root_paths`,
+`projects`, `repositories` or `users`.
+
+## Stage 02 runtime behavior
+
+- `cmd/thelper` applies Stage 01-02 migrations, starts the HTTP runtime and
+  exposes `GET /api/health`, `GET/PUT /api/config`, `GET /api/modules`,
+  `POST /api/modules/reload` and `POST /api/modules/restart`.
 - `GET /api/health` returns `health_status.v1` with `instance_id`, `mode`,
   safe `database_fingerprint`, `started_at`, `readiness` and `schema_version`.
 - `database_fingerprint` is derived from safe storage locator components and
   must not expose DSNs, filesystem paths, usernames, passwords or userinfo.
-- SQLite runs through a single open DB connection in Stage 01 so connection
+- SQLite runs through a single open DB connection so connection
   local PRAGMA settings remain effective. Stage 01 sets foreign keys, busy
   timeout and WAL for file-backed SQLite databases.
 - `cmd/thelper-worker` is a buildable scaffold only; job execution starts in
   Stage 03.
 - `cmd/thelper-ctl providers` lists the registered Stage 01 storage providers.
-  Config import/reload/restart commands start in Stage 02.
+- `cmd/thelper-ctl -reconfigure` imports `config.json` and `.t-helper.ignore`
+  into Stage 02-owned tables.
+- `cmd/thelper-ctl -reload` applies reloadable keys synchronously and updates
+  `module_states` when `modules.enabled` changes.
+- `cmd/thelper-ctl -restart <module>` restarts one available module
+  synchronously and returns a Stage 02 result DTO.
+- `cmd/thelper-ctl -migrate-db` promotes a prepared `migration` storage profile
+  only after successful schema/data copy.
 
 ## Secret references in development
 

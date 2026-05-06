@@ -28,11 +28,17 @@ Status: completed.
 
 ### Stage 02. Config, modules and runtime lifecycle
 
-- реализовать `config_entries`, `module_states`, import через `thelper-ctl -reconfigure`;
-- реализовать reloadability matrix и `thelper-ctl -reload`;
-- реализовать module registry с lifecycle `start`, `stop`, `reload`, `health`;
-- реализовать `thelper-ctl -restart <module>`;
-- зафиксировать singleton runtime lock/health mechanism для локального режима.
+Status: completed.
+
+- реализованы `config_entries`, `storage_profiles`,
+  `storage_provider_settings`, `module_states` и imported system
+  `ignore_rules`;
+- реализован import через `thelper-ctl -reconfigure`;
+- реализованы reloadability matrix и synchronous `thelper-ctl -reload` без
+  Stage 03 `jobs` dependency;
+- реализован module registry с lifecycle `start`, `stop`, `reload`, `health`;
+- реализованы `thelper-ctl -restart <module>` и Stage 02 sync result DTOs;
+- зафиксирован singleton runtime lock/health mechanism для локального режима.
 
 ### Stage 03. Jobs, workers and status foundation
 

@@ -102,6 +102,13 @@ func (a *App) Reload(ctx context.Context, cmd Command) error {
 	if err != nil {
 		return err
 	}
+	settings, err := appconfig.NewStore(handle).RuntimeSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if err := modules.NewStore(handle).Seed(ctx, settings.EnabledModules); err != nil {
+		return err
+	}
 	return writeJSON(a.out, result)
 }
 

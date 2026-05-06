@@ -13,6 +13,7 @@ Frontend stack для `Web UI` и локального `GUI` зафиксиро�
 - `thelper-ctl -reconfigure`
 - `thelper-ctl -reload`
 - `thelper-ctl -restart <module>`
+- `thelper-ctl -migrate-db`
 
 ## Рекомендуемые команды
 
@@ -29,7 +30,18 @@ Frontend stack для `Web UI` и локального `GUI` зафиксиро�
 - `thelper-ctl tool-profiles analyze <samples_path> --baseline <profile_id>`
 - `thelper-ctl modules list`
 
-## Минимальный backend API
+## Current implemented backend API
+
+Current Stage 02 executable API:
+
+- `GET /api/health`
+- `GET /api/config`
+- `PUT /api/config`
+- `GET /api/modules`
+- `POST /api/modules/reload`
+- `POST /api/modules/restart`
+
+## Target MVP backend API
 
 HTTP conventions, response schemas и endpoint skeleton описаны в [`api.md`](api.md).
 
@@ -108,7 +120,7 @@ HTTP conventions, response schemas и endpoint skeleton описаны в [`api.
 - Отдельный `/api/security/scans` не вводится, чтобы не дублировать `project_scans` в модели данных.
 - `GET /api/health` является confirmed safe unauthenticated endpoint для локального discovery singleton runtime и не раскрывает config, paths, DSN, secrets, users или object-scoped details.
 - Runtime auth endpoints (`login`, `logout`, `session`, password reset/change) отделены от administrative auth endpoints (`users`, `groups`, `roles`, `role-bindings`, `SCIM`).
-- Write endpoints, которые запускают фоновые операции, создают `jobs` и возвращают `job_id`.
+- Write endpoints, которые запускают фоновые операции, создают `jobs` и возвращают `job_id`. Stage 02 config/module lifecycle endpoints are explicit synchronous exceptions until Stage 03 job-backed handlers are introduced.
 - Write endpoints, которые меняют справочники или конфигурацию, обновляют сущности идемпотентно там, где это применимо.
 - Confirmed MVP behavior: bulk `PUT` endpoints are non-destructive idempotent upserts by stable identity or `id`; omitted records are not deleted.
 - Confirmed MVP behavior: public `DELETE` endpoints are out of scope for MVP even though delete permissions are seeded for future lifecycle expansion.

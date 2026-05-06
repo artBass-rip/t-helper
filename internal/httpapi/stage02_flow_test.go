@@ -84,6 +84,12 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid reload JSON status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{"module_name":"global-scanner","reason":"test"}`))))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("unavailable module reload status = %d body = %s", rec.Code, rec.Body.String())
@@ -126,6 +132,12 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	}
 	if apiErr.Error.Code != "module_unavailable" || apiErr.Error.CorrelationID == "" {
 		t.Fatalf("unexpected api error: %+v", apiErr)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/restart", bytes.NewReader([]byte(`{"reason":"test"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing module restart status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

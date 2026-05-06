@@ -58,6 +58,31 @@ func TestStoreImportPersistsConfigAndMasksSecrets(t *testing.T) {
 	}
 }
 
+func TestStoreImportNilIgnoreRulesPreservesExistingRules(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, []string{".terraform/", "!keep"}, "test"); err != nil {
+		t.Fatalf("initial import: %v", err)
+	}
+	next := cfg
+	next.Logging.Level = "debug"
+	if _, err := store.Import(ctx, next, nil, "api"); err != nil {
+		t.Fatalf("config-only import: %v", err)
+	}
+
+	var rules int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM ignore_rules WHERE origin = 'config_import'").Scan(&rules); err != nil {
+		t.Fatal(err)
+	}
+	if rules != 2 {
+		t.Fatalf("ignore rules = %d, want preserved 2", rules)
+	}
+}
+
 func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

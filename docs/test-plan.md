@@ -52,10 +52,14 @@
 - Проверить, что `config.example.json` использует `scanning.global_scan`.
 - Импортировать config with unknown top-level key; ожидание: `validation_error` без частичного применения.
 - Импортировать config with unknown nested key; ожидание: `validation_error` без частичного применения.
-- Импортировать конфигурацию с `scanning.global_scan`; ожидание: `root_paths` созданы или обновлены, а `GET /api/config` возвращает `scanning.global_scan`.
+- Импортировать конфигурацию с `scanning.global_scan`; Stage 02 expectation:
+  `config_entries` stores the canonical key and `GET /api/config` returns
+  `scanning.global_scan`. Stage 04 materializes scan roots into `root_paths`.
 - Импортировать конфигурацию с legacy/alias key `scanning.global_scann`; ожидание: `validation_error` без частичного применения.
 - Импортировать конфигурацию с любым другим alias для global scan roots, например `globalScan` или `scan_roots`; ожидание: `validation_error` без частичного применения.
 - Проверить, что reload request/result использует ключи вида `scanning.global_scan` и возвращает sync result без Stage 03 `jobs` dependency.
+- Проверить, что `PUT /api/config` не удаляет imported system
+  `ignore_rules`, так как `.t-helper.ignore` не входит в HTTP config payload.
 - Проверить, что storage/API/read models используют `repository_id` для связи project -> repository и не требуют поле `repo_id`.
 - Проверить, что `modules.enabled` принимает только registered modules из initial module registry.
 - Импортировать конфигурацию с unknown module в `modules.enabled`; ожидание: `validation_error` без частичного применения.
