@@ -67,6 +67,10 @@ persist runtime observability in `module_states`.
 - only `scanning.global_scan` is accepted for global scan roots;
 - storage profile slots `current` and `migration` are implemented fully;
 - active database switches only through successful `thelper-ctl -migrate-db`;
+- initial import with `external_databases.enabled = true` stages the external
+  database as `migration` target while keeping `database` as active `current`;
+- later storage target imports after a successful migration do not overwrite the
+  active `current` profile before the next successful `thelper-ctl -migrate-db`;
 - failed DB migration does not change the active `current` profile;
 - SQLite -> PostgreSQL `thelper-ctl -migrate-db` is covered end-to-end for
   Stage 02-owned tables using `secretref://env/...` credentials;
@@ -107,6 +111,10 @@ Covered Stage 02 checks:
 - `thelper-ctl -reconfigure` imports config and ignore rules atomically;
 - storage target changes update `migration` profile without changing active
   `current`;
+- initial external database import on an empty bootstrap store keeps SQLite as
+  `current` and stages PostgreSQL as `migration`;
+- repeated SQLite target migrations after a successful promotion keep active
+  `current` stable until the next successful `migrate-db`;
 - `thelper-ctl -migrate-db` switches active database only after successful
   target migration/copy;
 - failed migration leaves active `current` unchanged;
