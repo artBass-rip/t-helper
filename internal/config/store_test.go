@@ -83,6 +83,27 @@ func TestStoreImportNilIgnoreRulesPreservesExistingRules(t *testing.T) {
 	}
 }
 
+func TestStoreImportRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	if _, err := appconfig.NewStore(handle).Import(ctx, cfg, nil, "test"); err == nil {
+		t.Fatal("expected sensitive literal import to fail")
+	}
+	var entries int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM config_entries").Scan(&entries); err != nil {
+		t.Fatal(err)
+	}
+	if entries != 0 {
+		t.Fatalf("config entries after rejected import = %d, want 0", entries)
+	}
+}
+
 func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

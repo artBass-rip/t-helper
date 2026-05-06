@@ -207,6 +207,29 @@ func TestStage02HTTPRejectsInvalidConfigAtomically(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("config entries after rejected import = %d, want 0", count)
 	}
+
+	cfg, err := config.Decode(bytes.NewReader(readFile(t, "../../config.example.json")))
+	if err != nil {
+		t.Fatalf("decode example: %v", err)
+	}
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	sensitiveBody, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal sensitive config: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(sensitiveBody)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("sensitive literal PUT status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM config_entries").Scan(&count); err != nil {
+		t.Fatalf("count config entries: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("config entries after rejected sensitive import = %d, want 0", count)
+	}
 }
 
 func TestStage02HTTPRejectsTrailingConfigPayloadAndNullModuleReload(t *testing.T) {

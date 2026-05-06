@@ -98,6 +98,38 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	}
 }
 
+func TestStage02CLIReconfigureRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "stage02-cli.db")
+	file, err := os.Open("../../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := appconfig.Decode(file)
+	_ = file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ExternalDatabase.Enabled = false
+	cfg.ExternalDatabase.Username = "admin"
+	cfg.ExternalDatabase.Password = "secret"
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "literal-secrets.json")
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	app := New(&out, storageproviders.MVPRegistry())
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: dbPath, ConfigPath: configPath}); err == nil {
+		t.Fatal("expected sensitive literal reconfigure to fail")
+	}
+}
+
 func TestStage02CLIMigrateDBPromotesMigrationTarget(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

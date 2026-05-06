@@ -5,10 +5,24 @@ import (
 	"path/filepath"
 	"testing"
 
+	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/modules"
 	"github.com/artBass-rip/t-helper/internal/storage"
 	"github.com/artBass-rip/t-helper/internal/storage/sqlite"
 )
+
+func TestConfigInitialModuleNamesMatchRuntimeRegistry(t *testing.T) {
+	configNames := appconfig.InitialModuleNames()
+	for _, def := range modules.InitialRegistry() {
+		if _, ok := configNames[def.Name]; !ok {
+			t.Fatalf("runtime module %q is missing from config validation", def.Name)
+		}
+		delete(configNames, def.Name)
+	}
+	if len(configNames) != 0 {
+		t.Fatalf("config validation has modules missing from runtime registry: %v", configNames)
+	}
+}
 
 func TestSeedListsUnavailableModulesAndRestartsAvailableModule(t *testing.T) {
 	ctx := context.Background()

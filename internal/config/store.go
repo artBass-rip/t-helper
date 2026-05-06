@@ -769,8 +769,13 @@ func unknownReloadKeys(keys []string) []string {
 
 func filterKeys(keys []string, allowed map[string]struct{}) []string {
 	out := make([]string, 0, len(keys))
+	seen := map[string]struct{}{}
 	for _, key := range keys {
 		if _, ok := allowed[key]; ok {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
 			out = append(out, key)
 		}
 	}
