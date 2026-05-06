@@ -248,7 +248,8 @@ Stage 03 job-backed config reload payload. Stage 02 uses the synchronous
 ```json
 {
   "schema_version": "jobs.config_reload.result.v1",
-  "applied_keys": ["logging.level"],
+  "accepted_keys": ["logging.level"],
+  "applied_keys": [],
   "restart_required_keys": ["api.listen_address"],
   "failed_keys": []
 }
@@ -280,9 +281,22 @@ Stage 02 synchronous config reload result.
 ```json
 {
   "schema_version": "config_reload.result.v1",
-  "applied_keys": ["logging.level", "modules.enabled"],
+  "accepted_keys": ["logging.level", "modules.enabled"],
+  "applied_keys": ["modules.enabled"],
   "restart_required_keys": ["api.listen_address"],
   "failed_keys": []
+}
+```
+
+For an explicit request with unknown keys:
+
+```json
+{
+  "schema_version": "config_reload.result.v1",
+  "accepted_keys": [],
+  "applied_keys": [],
+  "restart_required_keys": [],
+  "failed_keys": ["logging.levl"]
 }
 ```
 

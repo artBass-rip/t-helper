@@ -138,6 +138,26 @@ func TestAppResolvesPromotedCurrentStorageProfile(t *testing.T) {
 	}
 }
 
+func TestAppReturnsCurrentStorageProfileReadErrors(t *testing.T) {
+	ctx := context.Background()
+	registry := storageproviders.MVPRegistry()
+	handle, err := registry.Open(ctx, storage.Config{Provider: "sqlite", DSN: filepath.Join(t.TempDir(), "closed.db")})
+	if err != nil {
+		t.Fatalf("open storage: %v", err)
+	}
+	if err := registry.Migrate(ctx, handle); err != nil {
+		t.Fatalf("migrate storage: %v", err)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("close storage: %v", err)
+	}
+
+	app := New(DefaultConfig(), registry, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if _, err := app.resolveCurrentProfileHandle(ctx, handle); err == nil {
+		t.Fatal("expected current profile read error")
+	}
+}
+
 func TestAppAppliesPersistedRuntimeConfigAndModuleEnablement(t *testing.T) {
 	ctx := context.Background()
 	registry := storageproviders.MVPRegistry()

@@ -1,10 +1,13 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/modules"
@@ -34,13 +37,9 @@ func (h *ModulesHandler) Reload(w http.ResponseWriter, r *http.Request) {
 		ModuleName string   `json:"module_name"`
 		Reason     string   `json:"reason"`
 	}
-	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			if !errors.Is(err, io.EOF) {
-				writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
-				return
-			}
-		}
+	if err := decodeStrictJSON(r, &req, true); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
 	}
 	if req.ModuleName != "" {
 		result, err := h.moduleStore.Reload(r.Context(), req.ModuleName, req.Reason)
@@ -56,7 +55,7 @@ func (h *ModulesHandler) Reload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	if containsKey(result.AppliedKeys, "modules.enabled") {
+	if containsKey(result.AcceptedKeys, "modules.enabled") {
 		settings, err := h.configStore.RuntimeSettings(r.Context())
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
@@ -66,6 +65,7 @@ func (h *ModulesHandler) Reload(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusInternalServerError, "module_reload_failed", err.Error())
 			return
 		}
+		result.AppliedKeys = append(result.AppliedKeys, "modules.enabled")
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -75,7 +75,7 @@ func (h *ModulesHandler) Restart(w http.ResponseWriter, r *http.Request) {
 		ModuleName string `json:"module_name"`
 		Reason     string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeStrictJSON(r, &req, false); err != nil {
 		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
 		return
 	}
@@ -98,4 +98,40 @@ func containsKey(keys []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func decodeStrictJSON(r *http.Request, dst any, allowEmpty bool) error {
+	if r.Body == nil {
+		if allowEmpty {
+			return nil
+		}
+		return io.EOF
+	}
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		if allowEmpty {
+			return nil
+		}
+		return io.EOF
+	}
+	if trimmed == "null" {
+		return fmt.Errorf("request body must contain a JSON object")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	return errors.New("request body must contain a single JSON object")
 }

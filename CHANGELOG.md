@@ -7,18 +7,67 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
-- Stage 02 hardening: `PUT /api/config` now preserves imported system
-  `ignore_rules` because `.t-helper.ignore` is not part of the HTTP config
-  payload.
-- Stage 02 hardening: `POST /api/modules/reload` now rejects malformed JSON
-  with `validation_error` instead of silently reloading all keys.
-- Stage 02 hardening: config reload applies `modules.enabled` changes to
-  persisted `module_states`.
-- Documentation was aligned with the completed Stage 02 baseline, including
-  synchronous config/module result DTOs and Stage 02 ownership of system
-  `ignore_rules`.
+- Stage 02 reload results now distinguish `accepted_keys` from actually
+  `applied_keys`; accepted-but-not-applied reloadable keys are no longer
+  reported as applied.
+- Stage 02 module lifecycle failures now persist `state = failed` with
+  `last_error` in `module_states.details`.
+- Runtime startup now fails closed on unexpected `current` storage profile read
+  errors instead of silently falling back to bootstrap storage.
+- PostgreSQL storage profile DSNs are now built with URL-escaped credentials.
+- Module reload/restart JSON payloads now reject unknown fields and trailing
+  payloads.
+- `PUT /api/config` now rejects trailing JSON payload after the config object.
+- Explicit unknown reload keys are now reported in `failed_keys`.
+- Module reload/restart JSON payloads now reject `null` instead of treating it
+  as an empty request.
+- PostgreSQL storage profile DSNs now use `net.JoinHostPort` for IPv6-safe host
+  formatting.
+- Module lifecycle errors are now joined with failed-state persistence errors
+  when persisting `state = failed` also fails.
 - Next planned implementation stage: Stage 03 jobs, workers and status
   foundation.
+
+## Stage 02 Hardening and Documentation Alignment - 2026-05-06
+
+Commit: `0b5996e` (`Stage02: preserve ignore_rules and sync reload`).
+
+### Fixed
+
+- Fixed `PUT /api/config` semantics so HTTP config imports preserve existing
+  imported system `ignore_rules`; `.t-helper.ignore` remains owned by
+  `thelper-ctl -reconfigure` and later ignore-rules APIs.
+- Fixed `POST /api/modules/reload` request handling so malformed JSON returns
+  `validation_error` instead of silently falling back to an all-key reload.
+- Fixed `POST /api/modules/restart` validation so an empty `module_name`
+  returns `validation_error`.
+- Fixed config reload behavior so reloads that include `modules.enabled`
+  re-seed persisted `module_states` from the active runtime config.
+- Fixed `thelper-ctl -reload` to apply the same persisted module-state refresh
+  path as the HTTP reload flow.
+
+### Added
+
+- Added tests for preserving imported `ignore_rules` during config-only import.
+- Added HTTP tests for malformed module reload JSON and missing restart
+  `module_name`.
+- Added Stage 02 synchronous result schemas to payload documentation:
+  - `config_import.result.v1`
+  - `config_reload.result.v1`
+  - `module_reload.result.v1`
+  - `module_restart.result.v1`
+  - `storage_migration.result.v1`
+
+### Changed
+
+- Aligned README, roadmap, development docs and local environment docs with the
+  completed Stage 02 executable baseline.
+- Clarified that Stage 02 config/module lifecycle endpoints are synchronous and
+  do not create Stage 03 `jobs`.
+- Clarified Stage 02 ownership of imported system `ignore_rules`, while Stage
+  04 owns scanner/API behavior for root-path and project ignore rules.
+- Updated API, traceability, data model, test plan and Stage 02 implementation
+  spec to match the code-level Stage 02 contract.
 
 ## Stage 02: Config, Modules and Runtime Lifecycle - 2026-05-06
 

@@ -195,6 +195,68 @@ func TestMigrateDBFailureDoesNotChangeCurrentProfile(t *testing.T) {
 	}
 }
 
+func TestStorageProfilePostgresDSNEscapesCredentials(t *testing.T) {
+	profile := appconfig.StorageProfileRecord{
+		Provider: "postgres",
+		ConfigPayload: `{
+			"enabled": true,
+			"provider": "postgresql",
+			"engine_flavor": "standard",
+			"host": "postgres.example.internal",
+			"port": 5432,
+			"username": "secretref://env/STAGE02_DSN_USER",
+			"password": "secretref://env/STAGE02_DSN_PASSWORD",
+			"database_name": "t_helper"
+		}`,
+	}
+	t.Setenv("STAGE02_DSN_USER", "user:name")
+	t.Setenv("STAGE02_DSN_PASSWORD", "p@ss/w:rd?#")
+	cfg, err := profile.StorageConfig()
+	if err != nil {
+		t.Fatalf("storage config: %v", err)
+	}
+	parsed, err := url.Parse(cfg.DSN)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	password, _ := parsed.User.Password()
+	if parsed.User.Username() != "user:name" || password != "p@ss/w:rd?#" {
+		t.Fatalf("credentials not preserved after escaping: %s", cfg.DSN)
+	}
+	if parsed.Host != "postgres.example.internal:5432" || parsed.Path != "/t_helper" || parsed.Query().Get("sslmode") != "disable" {
+		t.Fatalf("unexpected postgres dsn: %s", cfg.DSN)
+	}
+}
+
+func TestStorageProfilePostgresDSNUsesJoinHostPortForIPv6(t *testing.T) {
+	profile := appconfig.StorageProfileRecord{
+		Provider: "postgres",
+		ConfigPayload: `{
+			"enabled": true,
+			"provider": "postgresql",
+			"engine_flavor": "standard",
+			"host": "::1",
+			"port": 5432,
+			"username": "secretref://env/STAGE02_DSN_USER",
+			"password": "secretref://env/STAGE02_DSN_PASSWORD",
+			"database_name": "t_helper"
+		}`,
+	}
+	t.Setenv("STAGE02_DSN_USER", "user")
+	t.Setenv("STAGE02_DSN_PASSWORD", "password")
+	cfg, err := profile.StorageConfig()
+	if err != nil {
+		t.Fatalf("storage config: %v", err)
+	}
+	parsed, err := url.Parse(cfg.DSN)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	if parsed.Host != "[::1]:5432" {
+		t.Fatalf("host = %q, want IPv6 join host/port in %s", parsed.Host, cfg.DSN)
+	}
+}
+
 func TestMigrateDBSQLiteToPostgresWithEnvSecretRefs(t *testing.T) {
 	postgresDSN := os.Getenv("THELPER_POSTGRES_DSN")
 	if postgresDSN == "" {

@@ -62,6 +62,8 @@ persist runtime observability in `module_states`.
 - `PUT /api/config` imports config atomically without clearing imported system
   `ignore_rules`, because `.t-helper.ignore` is not part of the HTTP payload;
 - unknown config keys and deprecated aliases are rejected with `validation_error`;
+- config/module HTTP JSON payloads reject malformed JSON, unknown fields where
+  strict request structs are used, `null` object payloads and trailing payload;
 - only `scanning.global_scan` is accepted for global scan roots;
 - storage profile slots `current` and `migration` are implemented fully;
 - active database switches only through successful `thelper-ctl -migrate-db`;
@@ -69,7 +71,9 @@ persist runtime observability in `module_states`.
 - SQLite -> PostgreSQL `thelper-ctl -migrate-db` is covered end-to-end for
   Stage 02-owned tables using `secretref://env/...` credentials;
 - runtime читает конфигурацию из БД, а не из файлов;
-- reload возвращает applied keys и restart-required keys;
+- reload returns accepted keys, actually applied Stage 02 keys and
+  restart-required keys; accepted-but-not-applied reloadable keys must not be
+  misreported as applied;
 - module restart обновляет `module_states`;
 - `modules.enabled` отклоняет unknown module names;
 - registered but unavailable modules возвращаются в `GET /api/modules` со state `unavailable`;
@@ -116,6 +120,14 @@ Covered Stage 02 checks:
   returns controlled errors for unavailable modules;
 - config reload validates request JSON and applies `modules.enabled` changes to
   persisted `module_states`;
+- explicit unknown reload keys are returned in `failed_keys` and are not
+  reported as accepted or applied;
+- module lifecycle failures persist `state = failed` with `last_error` in
+  `module_states.details`;
+- PostgreSQL storage profile DSNs are built with URL-escaped credentials and
+  `net.JoinHostPort` host formatting;
+- runtime startup fails closed on unexpected `current` storage profile read
+  errors and only falls back to bootstrap storage when no current profile exists;
 - singleton lock writes `config_database_fingerprint` matching `/api/health`
   `database_fingerprint` and fails closed on ambiguous live PID/health state.
 

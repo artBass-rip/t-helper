@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -100,7 +101,10 @@ func (a *App) applyPersistedRuntimeConfig(ctx context.Context, handle *storage.H
 func (a *App) resolveCurrentProfileHandle(ctx context.Context, bootstrap *storage.Handle) (*storage.Handle, error) {
 	profile, err := appconfig.NewStore(bootstrap).CurrentStorageProfile(ctx)
 	if err != nil {
-		return bootstrap, nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return bootstrap, nil
+		}
+		return nil, fmt.Errorf("read current storage profile: %w", err)
 	}
 	if profile.DatabaseFingerprint == bootstrap.Fingerprint {
 		return bootstrap, nil

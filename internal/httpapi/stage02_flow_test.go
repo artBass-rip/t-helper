@@ -79,7 +79,7 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&reload); err != nil {
 		t.Fatalf("decode reload result: %v", err)
 	}
-	if len(reload.AppliedKeys) != 1 || reload.AppliedKeys[0] != "logging.level" || len(reload.RestartRequiredKeys) != 1 || reload.RestartRequiredKeys[0] != "api.listen_address" {
+	if len(reload.AcceptedKeys) != 1 || reload.AcceptedKeys[0] != "logging.level" || len(reload.AppliedKeys) != 0 || len(reload.RestartRequiredKeys) != 1 || reload.RestartRequiredKeys[0] != "api.listen_address" {
 		t.Fatalf("unexpected reload result: %+v", reload)
 	}
 
@@ -87,6 +87,25 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{`))))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid reload JSON status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{"keys":["logging.level"],"unknown":true}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown reload field status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{"keys":["logging.levl"],"reason":"test"}`))))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unknown reload key status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var failedReload config.ReloadResult
+	if err := json.NewDecoder(rec.Body).Decode(&failedReload); err != nil {
+		t.Fatalf("decode failed reload result: %v", err)
+	}
+	if len(failedReload.FailedKeys) != 1 || failedReload.FailedKeys[0] != "logging.levl" {
+		t.Fatalf("unexpected failed reload result: %+v", failedReload)
 	}
 
 	rec = httptest.NewRecorder()
@@ -141,6 +160,12 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/restart", bytes.NewReader([]byte(`{"module_name":"config-manager"} {}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("trailing restart payload status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/restart", bytes.NewReader([]byte(`{"module_name":"config-manager","reason":"test"}`))))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("available restart status = %d body = %s", rec.Code, rec.Body.String())
@@ -181,6 +206,35 @@ func TestStage02HTTPRejectsInvalidConfigAtomically(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("config entries after rejected import = %d, want 0", count)
+	}
+}
+
+func TestStage02HTTPRejectsTrailingConfigPayloadAndNullModuleReload(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	configStore := config.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+	)
+
+	payload := append(readFile(t, "../../config.example.json"), []byte(` {}`)...)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewReader(payload)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("trailing config payload status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`null`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("null module reload status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
 

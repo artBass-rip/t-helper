@@ -76,7 +76,7 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &reload); err != nil {
 		t.Fatalf("decode reload output: %v", err)
 	}
-	if reload.SchemaVersion != "config_reload.result.v1" || len(reload.AppliedKeys) == 0 || len(reload.FailedKeys) != 0 {
+	if reload.SchemaVersion != "config_reload.result.v1" || len(reload.AcceptedKeys) == 0 || len(reload.AppliedKeys) != 1 || reload.AppliedKeys[0] != "modules.enabled" || len(reload.FailedKeys) != 0 {
 		t.Fatalf("unexpected reload result: %+v", reload)
 	}
 

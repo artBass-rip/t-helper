@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -25,6 +26,7 @@ const (
 	StateRestarting  State = "restarting"
 	StateReloading   State = "reloading"
 	StateStopped     State = "stopped"
+	StateFailed      State = "failed"
 )
 
 type Definition struct {
@@ -123,6 +125,10 @@ func (s *Store) Seed(ctx context.Context, enabledModules ...[]string) error {
 			}
 			if err := def.Lifecycle.Health(ctx); err != nil {
 				state = StateStopped
+				if err := s.upsert(ctx, def.Name, state, pidPtr, host, details(string(state), err, now), now); err != nil {
+					return err
+				}
+				continue
 			}
 			pidPtr = &pid
 		} else if def.Available {
@@ -194,13 +200,13 @@ func (s *Store) Restart(ctx context.Context, name, reason string) (RestartResult
 		return RestartResult{}, err
 	}
 	if err := def.Lifecycle.Stop(ctx); err != nil {
-		return RestartResult{}, err
+		return RestartResult{}, s.markFailedOrJoin(ctx, name, &pid, host, err)
 	}
 	if err := def.Lifecycle.Start(ctx); err != nil {
-		return RestartResult{}, err
+		return RestartResult{}, s.markFailedOrJoin(ctx, name, &pid, host, err)
 	}
 	if err := def.Lifecycle.Health(ctx); err != nil {
-		return RestartResult{}, err
+		return RestartResult{}, s.markFailedOrJoin(ctx, name, &pid, host, err)
 	}
 	if err := s.upsert(ctx, name, StateRunning, &pid, host, details("running", nil, now), now); err != nil {
 		return RestartResult{}, err
@@ -232,10 +238,10 @@ func (s *Store) Reload(ctx context.Context, name, reason string) (RestartResult,
 		return RestartResult{}, err
 	}
 	if err := def.Lifecycle.Reload(ctx); err != nil {
-		return RestartResult{}, err
+		return RestartResult{}, s.markFailedOrJoin(ctx, name, &pid, host, err)
 	}
 	if err := def.Lifecycle.Health(ctx); err != nil {
-		return RestartResult{}, err
+		return RestartResult{}, s.markFailedOrJoin(ctx, name, &pid, host, err)
 	}
 	if err := s.upsert(ctx, name, StateRunning, &pid, host, details("running", nil, now), now); err != nil {
 		return RestartResult{}, err
@@ -246,6 +252,18 @@ func (s *Store) Reload(ctx context.Context, name, reason string) (RestartResult,
 		NewState:      StateRunning,
 		SchemaVersion: "module_reload.result.v1",
 	}, nil
+}
+
+func (s *Store) markFailed(ctx context.Context, name string, pid *int, host string, cause error) error {
+	now := time.Now().UTC()
+	return s.upsert(ctx, name, StateFailed, pid, host, details("failed", cause, now), now)
+}
+
+func (s *Store) markFailedOrJoin(ctx context.Context, name string, pid *int, host string, cause error) error {
+	if err := s.markFailed(ctx, name, pid, host, cause); err != nil {
+		return errors.Join(cause, fmt.Errorf("persist failed module state: %w", err))
+	}
+	return cause
 }
 
 func (s *Store) get(ctx context.Context, name string) (ModuleState, error) {

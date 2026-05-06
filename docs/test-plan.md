@@ -23,7 +23,7 @@
 | `ACC-MVP-006` | Project-level scan определяет providers, required auth и quality через `terraform validate` и `TFLint`, а security/validation scan сохраняет findings через `Trivy` как обязательный локальный scanner. | Настроить `PUT /api/projects/{id}/scan-settings`, запустить `POST /api/project-scans`; проверить parent `jobs.job_type = project_scan`, child `jobs.job_type = security_validation_scan` с тем же `job_group_id`, `project_scans.result_payload`, `workflow_statuses` и `security_findings` для `Trivy`. |
 | `ACC-MVP-007` | Runtime-конфигурация хранится в БД. | Импортировать config; проверить `config_entries` и `GET /api/config`. |
 | `ACC-MVP-008` | `thelper-ctl -reconfigure` импортирует конфигурацию и ignore rules. | Запустить CLI command; проверить `config_entries`, `ignore_rules`, отсутствие service restart side effect. |
-| `ACC-MVP-009` | `thelper-ctl -reload` применяет reloadable-конфигурацию. | Изменить `logging.level` или `scanning.global_scan`; проверить sync reload result с `applied_keys`, `restart_required_keys`, `failed_keys` и отсутствие Stage 03 `jobs` dependency. |
+| `ACC-MVP-009` | `thelper-ctl -reload` применяет reloadable-конфигурацию. | Изменить `modules.enabled`, `logging.level` или `scanning.global_scan`; проверить sync reload result с `accepted_keys`, `applied_keys`, `restart_required_keys`, `failed_keys`, отсутствие Stage 03 `jobs` dependency and honest distinction between accepted and actually applied Stage 02 keys. |
 | `ACC-MVP-010` | `thelper-ctl -restart <module>` работает для любого доступного отдельного модуля, а unavailable modules дают controlled error. | Перезапустить доступный module, например `config-manager`; проверить `module_states` transition и `module_restart.result.v1`; restart/reload `global-scanner` до Stage 04 должен вернуть controlled `module_unavailable`. |
 | `ACC-MVP-011` | `GUI` и `Web UI` используют единый backend API и покрывают MVP read/operate сценарии. | Контрактный тест: оба frontend clients используют только documented backend API. |
 | `ACC-MVP-012` | `GUI` работает только локально. | Проверить bind policy/config и отказ удалённого GUI access. |
@@ -52,12 +52,17 @@
 - Проверить, что `config.example.json` использует `scanning.global_scan`.
 - Импортировать config with unknown top-level key; ожидание: `validation_error` без частичного применения.
 - Импортировать config with unknown nested key; ожидание: `validation_error` без частичного применения.
+- Импортировать config with trailing JSON payload after a valid config object;
+  ожидание: `validation_error` без частичного применения.
 - Импортировать конфигурацию с `scanning.global_scan`; Stage 02 expectation:
   `config_entries` stores the canonical key and `GET /api/config` returns
   `scanning.global_scan`. Stage 04 materializes scan roots into `root_paths`.
 - Импортировать конфигурацию с legacy/alias key `scanning.global_scann`; ожидание: `validation_error` без частичного применения.
 - Импортировать конфигурацию с любым другим alias для global scan roots, например `globalScan` или `scan_roots`; ожидание: `validation_error` без частичного применения.
 - Проверить, что reload request/result использует ключи вида `scanning.global_scan` и возвращает sync result без Stage 03 `jobs` dependency.
+- Отправить reload request с explicit unknown key, например `logging.levl`;
+  ожидание: key отражён в `failed_keys`, а не в `accepted_keys` или
+  `applied_keys`.
 - Проверить, что `PUT /api/config` не удаляет imported system
   `ignore_rules`, так как `.t-helper.ignore` не входит в HTTP config payload.
 - Проверить, что storage/API/read models используют `repository_id` для связи project -> repository и не требуют поле `repo_id`.

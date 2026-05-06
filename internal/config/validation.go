@@ -198,11 +198,29 @@ type Entry struct {
 }
 
 func Decode(r io.Reader) (RuntimeConfig, error) {
+	return decode(r, false)
+}
+
+func DecodeStrict(r io.Reader) (RuntimeConfig, error) {
+	return decode(r, true)
+}
+
+func decode(r io.Reader, rejectTrailing bool) (RuntimeConfig, error) {
 	var cfg RuntimeConfig
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("decode config: %w", err)
+	}
+	if rejectTrailing {
+		var extra any
+		if err := decoder.Decode(&extra); err != nil {
+			if err != io.EOF {
+				return cfg, fmt.Errorf("decode config: %w", err)
+			}
+		} else {
+			return cfg, fmt.Errorf("decode config: request body must contain a single JSON object")
+		}
 	}
 	cfg = Normalize(cfg)
 	if err := Validate(cfg); err != nil {
