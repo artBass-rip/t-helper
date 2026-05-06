@@ -11,6 +11,7 @@ import (
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/httpapi"
+	applog "github.com/artBass-rip/t-helper/internal/log"
 	"github.com/artBass-rip/t-helper/internal/modules"
 	"github.com/artBass-rip/t-helper/internal/runtime"
 	"github.com/artBass-rip/t-helper/internal/storage"
@@ -38,11 +39,21 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer handle.Close()
 
 	if err := a.registry.Migrate(ctx, handle); err != nil {
+		_ = handle.Close()
 		return fmt.Errorf("apply migrations: %w", err)
 	}
+	handle, err = a.resolveCurrentProfileHandle(ctx, handle)
+	if err != nil {
+		_ = handle.Close()
+		return err
+	}
+	if err := a.applyPersistedRuntimeConfig(ctx, handle); err != nil {
+		_ = handle.Close()
+		return err
+	}
+	defer handle.Close()
 	if a.cfg.MigrateOnly {
 		a.logger.Info("migrations applied", "provider", handle.Provider)
 		return nil
@@ -63,6 +74,58 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	return a.Serve(ctx, a.cfg.ListenAddress, api)
+}
+
+func (a *App) applyPersistedRuntimeConfig(ctx context.Context, handle *storage.Handle) error {
+	settings, err := appconfig.NewStore(handle).RuntimeSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if !settings.Loaded {
+		return nil
+	}
+	if settings.ListenAddress != "" {
+		a.cfg.ListenAddress = settings.ListenAddress
+	}
+	if settings.Mode != "" {
+		a.cfg.Mode = settings.Mode
+	}
+	if settings.LogLevel != "" {
+		a.cfg.LogLevel = settings.LogLevel
+		a.logger = applog.New(settings.LogLevel)
+	}
+	return nil
+}
+
+func (a *App) resolveCurrentProfileHandle(ctx context.Context, bootstrap *storage.Handle) (*storage.Handle, error) {
+	profile, err := appconfig.NewStore(bootstrap).CurrentStorageProfile(ctx)
+	if err != nil {
+		return bootstrap, nil
+	}
+	if profile.DatabaseFingerprint == bootstrap.Fingerprint {
+		return bootstrap, nil
+	}
+	cfg, err := profile.StorageConfig()
+	if err != nil {
+		return nil, err
+	}
+	active, err := a.registry.Open(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.registry.Migrate(ctx, active); err != nil {
+		_ = active.Close()
+		return nil, fmt.Errorf("apply active profile migrations: %w", err)
+	}
+	if active.Fingerprint != profile.DatabaseFingerprint {
+		_ = active.Close()
+		return nil, fmt.Errorf("active storage profile fingerprint mismatch")
+	}
+	if err := bootstrap.Close(); err != nil {
+		_ = active.Close()
+		return nil, err
+	}
+	return active, nil
 }
 
 func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instanceIDOverride ...string) (http.Handler, error) {
@@ -86,7 +149,11 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 	)
 	configStore := appconfig.NewStore(handle)
 	moduleStore := modules.NewStore(handle)
-	if err := moduleStore.Seed(ctx); err != nil {
+	settings, err := configStore.RuntimeSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := moduleStore.Seed(ctx, settings.EnabledModules); err != nil {
 		return nil, err
 	}
 	return httpapi.New(

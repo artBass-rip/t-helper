@@ -47,6 +47,42 @@ func TestSeedListsUnavailableModulesAndRestartsAvailableModule(t *testing.T) {
 	}
 }
 
+func TestSeedUsesEnabledModulesAndReloadsAvailableModule(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	store := modules.NewStore(handle)
+	if err := store.Seed(ctx, []string{"core"}); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	states, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("list modules: %v", err)
+	}
+	var core, configManager modules.ModuleState
+	for _, state := range states {
+		switch state.ModuleName {
+		case "core":
+			core = state
+		case "config-manager":
+			configManager = state
+		}
+	}
+	if core.State != modules.StateRunning {
+		t.Fatalf("core state = %q, want running", core.State)
+	}
+	if configManager.State != modules.StateStopped {
+		t.Fatalf("config-manager state = %q, want stopped", configManager.State)
+	}
+	if _, err := store.Reload(ctx, "global-scanner", "test"); err == nil {
+		t.Fatal("expected unavailable module reload to fail")
+	}
+	if _, err := store.Reload(ctx, "core", "test"); err != nil {
+		t.Fatalf("reload core: %v", err)
+	}
+}
+
 func openMigratedSQLite(t *testing.T) *storage.Handle {
 	t.Helper()
 	provider := sqlite.NewProvider()

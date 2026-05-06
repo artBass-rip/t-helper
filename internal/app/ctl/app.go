@@ -131,8 +131,11 @@ func (a *App) MigrateDB(ctx context.Context, cmd Command) error {
 		return err
 	}
 	defer handle.Close()
-	_, err = fmt.Fprintln(a.out, `{"schema_version":"storage_migration.result.v1","status":"no_migration_target","current_profile_unchanged":true}`)
-	return err
+	result, err := appconfig.NewStore(handle).MigrateDB(ctx, a.registry)
+	if err != nil {
+		return err
+	}
+	return writeJSON(a.out, result)
 }
 
 func (a *App) openMigrated(ctx context.Context, cmd Command) (*storage.Handle, error) {

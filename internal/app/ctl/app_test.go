@@ -97,3 +97,56 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 		t.Fatal("expected unavailable module restart to fail")
 	}
 }
+
+func TestStage02CLIMigrateDBPromotesMigrationTarget(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sourcePath := filepath.Join(dir, "source.db")
+	targetPath := filepath.Join(dir, "target.db")
+	currentConfig := writeConfig(t, dir, "current.json", sourcePath)
+	targetConfig := writeConfig(t, dir, "target.json", targetPath)
+
+	var out bytes.Buffer
+	app := New(&out, storageproviders.MVPRegistry())
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: sourcePath, ConfigPath: currentConfig}); err != nil {
+		t.Fatalf("initial reconfigure: %v", err)
+	}
+	out.Reset()
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: sourcePath, ConfigPath: targetConfig}); err != nil {
+		t.Fatalf("target reconfigure: %v", err)
+	}
+	out.Reset()
+	if err := app.Run(ctx, Command{Name: "migrate-db", StorageProvider: "sqlite", StorageDSN: sourcePath}); err != nil {
+		t.Fatalf("migrate-db: %v", err)
+	}
+	var result appconfig.MigrationResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("decode migrate output: %v", err)
+	}
+	if result.Status != "migration_succeeded" || result.CurrentProfileUnchanged {
+		t.Fatalf("unexpected migrate result: %+v", result)
+	}
+}
+
+func writeConfig(t *testing.T, dir, name, dbPath string) string {
+	t.Helper()
+	file, err := os.Open("../../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	cfg, err := appconfig.Decode(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Database.DatabasePath = dbPath
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}

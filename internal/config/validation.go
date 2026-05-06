@@ -373,7 +373,7 @@ func Flatten(cfg RuntimeConfig) ([]Entry, error) {
 
 func StorageProfile(cfg RuntimeConfig) (provider, engineFlavor, payload, fingerprint string, err error) {
 	if cfg.ExternalDatabase.Enabled {
-		provider = cfg.ExternalDatabase.Provider
+		provider = normalizeProviderName(cfg.ExternalDatabase.Provider)
 		engineFlavor = cfg.ExternalDatabase.EngineFlavor
 		payloadBytes, marshalErr := json.Marshal(cfg.ExternalDatabase)
 		if marshalErr != nil {

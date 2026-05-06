@@ -28,11 +28,21 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *ModulesHandler) Reload(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Keys   []string `json:"keys"`
-		Reason string   `json:"reason"`
+		Keys       []string `json:"keys"`
+		ModuleName string   `json:"module_name"`
+		Reason     string   `json:"reason"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.ModuleName != "" {
+		result, err := h.moduleStore.Reload(r.Context(), req.ModuleName, req.Reason)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "module_unavailable", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
 	}
 	result, err := h.configStore.Reload(r.Context(), req.Keys)
 	if err != nil {

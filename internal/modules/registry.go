@@ -23,11 +23,43 @@ const (
 	StateRunning     State = "running"
 	StateUnavailable State = "unavailable"
 	StateRestarting  State = "restarting"
+	StateReloading   State = "reloading"
+	StateStopped     State = "stopped"
 )
 
 type Definition struct {
 	Name      string
 	Available bool
+	Lifecycle Lifecycle
+}
+
+type Lifecycle interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	Reload(ctx context.Context) error
+	Health(ctx context.Context) error
+}
+
+type NoopLifecycle struct{}
+
+func (NoopLifecycle) Start(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (NoopLifecycle) Stop(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (NoopLifecycle) Reload(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (NoopLifecycle) Health(ctx context.Context) error {
+	_ = ctx
+	return nil
 }
 
 type ModuleState struct {
@@ -53,12 +85,13 @@ type Store struct {
 }
 
 func InitialRegistry() []Definition {
+	noop := NoopLifecycle{}
 	return []Definition{
-		{Name: "core", Available: true},
-		{Name: "worker-runtime", Available: true},
-		{Name: "config-manager", Available: true},
-		{Name: "module-runtime", Available: true},
-		{Name: "status-monitor", Available: true},
+		{Name: "core", Available: true, Lifecycle: noop},
+		{Name: "worker-runtime", Available: true, Lifecycle: noop},
+		{Name: "config-manager", Available: true, Lifecycle: noop},
+		{Name: "module-runtime", Available: true, Lifecycle: noop},
+		{Name: "status-monitor", Available: true, Lifecycle: noop},
 		{Name: "global-scanner", Available: false},
 		{Name: "repository-manager", Available: false},
 		{Name: "project-scanner", Available: false},
@@ -76,15 +109,27 @@ func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle, registry: registry}
 }
 
-func (s *Store) Seed(ctx context.Context) error {
+func (s *Store) Seed(ctx context.Context, enabledModules ...[]string) error {
 	now := time.Now().UTC()
 	host, _ := os.Hostname()
+	enabled := enabledSet(enabledModules...)
 	for _, def := range InitialRegistry() {
 		state := StateRunning
 		pid := os.Getpid()
 		var pidPtr *int
-		if def.Available {
+		if def.Available && enabled[def.Name] {
+			if err := def.Lifecycle.Start(ctx); err != nil {
+				return err
+			}
+			if err := def.Lifecycle.Health(ctx); err != nil {
+				state = StateStopped
+			}
 			pidPtr = &pid
+		} else if def.Available {
+			if err := def.Lifecycle.Stop(ctx); err != nil {
+				return err
+			}
+			state = StateStopped
 		} else {
 			state = StateUnavailable
 		}
@@ -93,6 +138,20 @@ func (s *Store) Seed(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func enabledSet(enabledModules ...[]string) map[string]bool {
+	out := map[string]bool{}
+	if len(enabledModules) == 0 || enabledModules[0] == nil {
+		for _, def := range InitialRegistry() {
+			out[def.Name] = true
+		}
+		return out
+	}
+	for _, name := range enabledModules[0] {
+		out[name] = true
+	}
+	return out
 }
 
 func (s *Store) List(ctx context.Context) ([]ModuleState, error) {
@@ -134,6 +193,15 @@ func (s *Store) Restart(ctx context.Context, name, reason string) (RestartResult
 	if err := s.upsert(ctx, name, StateRestarting, &pid, host, details("restarting", nil, now), now); err != nil {
 		return RestartResult{}, err
 	}
+	if err := def.Lifecycle.Stop(ctx); err != nil {
+		return RestartResult{}, err
+	}
+	if err := def.Lifecycle.Start(ctx); err != nil {
+		return RestartResult{}, err
+	}
+	if err := def.Lifecycle.Health(ctx); err != nil {
+		return RestartResult{}, err
+	}
 	if err := s.upsert(ctx, name, StateRunning, &pid, host, details("running", nil, now), now); err != nil {
 		return RestartResult{}, err
 	}
@@ -142,6 +210,41 @@ func (s *Store) Restart(ctx context.Context, name, reason string) (RestartResult
 		PreviousState: current.State,
 		NewState:      StateRunning,
 		SchemaVersion: "module_restart.result.v1",
+	}, nil
+}
+
+func (s *Store) Reload(ctx context.Context, name, reason string) (RestartResult, error) {
+	def, ok := s.registry[name]
+	if !ok {
+		return RestartResult{}, fmt.Errorf("module %q is not registered", name)
+	}
+	current, err := s.get(ctx, name)
+	if err != nil {
+		return RestartResult{}, err
+	}
+	if !def.Available || current.State == StateUnavailable {
+		return RestartResult{}, fmt.Errorf("module %q is unavailable", name)
+	}
+	now := time.Now().UTC()
+	host, _ := os.Hostname()
+	pid := os.Getpid()
+	if err := s.upsert(ctx, name, StateReloading, &pid, host, details("reloading", nil, now), now); err != nil {
+		return RestartResult{}, err
+	}
+	if err := def.Lifecycle.Reload(ctx); err != nil {
+		return RestartResult{}, err
+	}
+	if err := def.Lifecycle.Health(ctx); err != nil {
+		return RestartResult{}, err
+	}
+	if err := s.upsert(ctx, name, StateRunning, &pid, host, details("running", nil, now), now); err != nil {
+		return RestartResult{}, err
+	}
+	return RestartResult{
+		ModuleName:    name,
+		PreviousState: current.State,
+		NewState:      StateRunning,
+		SchemaVersion: "module_reload.result.v1",
 	}, nil
 }
 

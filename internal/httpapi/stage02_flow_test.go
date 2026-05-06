@@ -84,6 +84,18 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{"module_name":"global-scanner","reason":"test"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unavailable module reload status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/reload", bytes.NewReader([]byte(`{"module_name":"config-manager","reason":"test"}`))))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("available module reload status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/modules", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/modules status = %d body = %s", rec.Code, rec.Body.String())
