@@ -93,7 +93,14 @@ func (s *Store) Import(ctx context.Context, cfg RuntimeConfig, ignore []string, 
 	if currentErr != nil && currentErr != sql.ErrNoRows {
 		return ImportResult{}, currentErr
 	}
-	storageChanged := currentErr == nil && currentProfile.DatabaseFingerprint != fingerprint
+	bootstrapExternalTarget := currentErr == sql.ErrNoRows && cfg.ExternalDatabase.Enabled
+	if bootstrapExternalTarget {
+		currentProfile, err = currentStorageProfile(cfg, time.Now().UTC().Format(time.RFC3339Nano))
+		if err != nil {
+			return ImportResult{}, err
+		}
+	}
+	storageChanged := (currentErr == nil && currentProfile.DatabaseFingerprint != fingerprint) || bootstrapExternalTarget
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -109,17 +116,47 @@ func (s *Store) Import(ctx context.Context, cfg RuntimeConfig, ignore []string, 
 			return ImportResult{}, err
 		}
 	}
-	slot := "current"
-	status := "active"
 	if storageChanged {
-		slot = "migration"
-		status = "migration_target"
-	}
-	if err := s.upsertStorageProfile(ctx, tx, slot, provider, engineFlavor, payload, fingerprint, status, "", now); err != nil {
-		return ImportResult{}, err
-	}
-	if err := s.upsertStorageProviderSettings(ctx, tx, slot, provider, now); err != nil {
-		return ImportResult{}, err
+		currentEntries, err := storageEntriesFromProfile(currentProfile)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		for _, entry := range currentEntries {
+			if err := s.upsertConfigEntry(ctx, tx, entry, now, updatedBy); err != nil {
+				return ImportResult{}, err
+			}
+		}
+		if bootstrapExternalTarget {
+			currentID, err := s.upsertStorageProfile(ctx, tx, currentProfile.ID, "current", currentProfile.Provider, currentProfile.EngineFlavor, currentProfile.ConfigPayload, currentProfile.DatabaseFingerprint, "active", "", now)
+			if err != nil {
+				return ImportResult{}, err
+			}
+			if err := s.upsertStorageProviderSettingsForProfile(ctx, tx, currentID, currentProfile.Provider, now); err != nil {
+				return ImportResult{}, err
+			}
+		}
+		if err := s.retireMigrationProfiles(ctx, tx, now); err != nil {
+			return ImportResult{}, err
+		}
+		migrationID, err := s.upsertStorageProfile(ctx, tx, storageProfileID("migration", fingerprint), "migration", provider, engineFlavor, payload, fingerprint, "migration_target", "", now)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		if err := s.upsertStorageProviderSettingsForProfile(ctx, tx, migrationID, provider, now); err != nil {
+			return ImportResult{}, err
+		}
+	} else {
+		currentID := storageProfileID("current", fingerprint)
+		if currentErr == nil {
+			currentID = currentProfile.ID
+		}
+		currentID, err = s.upsertStorageProfile(ctx, tx, currentID, "current", provider, engineFlavor, payload, fingerprint, "active", "", now)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		if err := s.upsertStorageProviderSettingsForProfile(ctx, tx, currentID, provider, now); err != nil {
+			return ImportResult{}, err
+		}
 	}
 	if ignore != nil {
 		if err := s.replaceIgnoreRules(ctx, tx, ignore, now); err != nil {
@@ -607,25 +644,31 @@ ON CONFLICT (key, scope) DO UPDATE SET value = excluded.value, value_type = excl
 	return err
 }
 
-func (s *Store) upsertStorageProfile(ctx context.Context, tx *sql.Tx, slot, provider, engineFlavor, payload, fingerprint, status, lastMigratedFromProfileID, now string) error {
-	id := stableID("storage-profile", slot)
+func (s *Store) upsertStorageProfile(ctx context.Context, tx *sql.Tx, id, slot, provider, engineFlavor, payload, fingerprint, status, lastMigratedFromProfileID, now string) (string, error) {
+	if id == "" {
+		id = storageProfileID(slot, fingerprint)
+	}
 	if s.handle.Provider == "postgres" {
 		_, err := tx.ExecContext(ctx, `INSERT INTO storage_profiles (id, slot, provider, engine_flavor, status, config_payload, database_fingerprint, last_migrated_from_profile_id, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 ON CONFLICT (id) DO UPDATE SET provider = EXCLUDED.provider, engine_flavor = EXCLUDED.engine_flavor, status = EXCLUDED.status, config_payload = EXCLUDED.config_payload, database_fingerprint = EXCLUDED.database_fingerprint, last_migrated_from_profile_id = EXCLUDED.last_migrated_from_profile_id, updated_at = EXCLUDED.updated_at`,
 			id, slot, provider, nullEmpty(engineFlavor), status, payload, fingerprint, nullEmpty(lastMigratedFromProfileID), now)
-		return err
+		return id, err
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO storage_profiles (id, slot, provider, engine_flavor, status, config_payload, database_fingerprint, last_migrated_from_profile_id, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET provider = excluded.provider, engine_flavor = excluded.engine_flavor, status = excluded.status, config_payload = excluded.config_payload, database_fingerprint = excluded.database_fingerprint, last_migrated_from_profile_id = excluded.last_migrated_from_profile_id, updated_at = excluded.updated_at`,
 		id, slot, provider, nullEmpty(engineFlavor), status, payload, fingerprint, nullEmpty(lastMigratedFromProfileID), now, now)
-	return err
+	return id, err
 }
 
-func (s *Store) upsertStorageProviderSettings(ctx context.Context, tx *sql.Tx, slot, provider, now string) error {
-	profileID := stableID("storage-profile", slot)
-	return s.upsertStorageProviderSettingsForProfile(ctx, tx, profileID, provider, now)
+func (s *Store) retireMigrationProfiles(ctx context.Context, tx *sql.Tx, now string) error {
+	if s.handle.Provider == "postgres" {
+		_, err := tx.ExecContext(ctx, `UPDATE storage_profiles SET slot = 'historical', status = 'superseded', updated_at = $1 WHERE slot = 'migration'`, now)
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE storage_profiles SET slot = 'historical', status = 'superseded', updated_at = ? WHERE slot = 'migration'`, now)
+	return err
 }
 
 func (s *Store) upsertStorageProviderSettingsForProfile(ctx context.Context, tx *sql.Tx, profileID, provider, now string) error {
@@ -797,6 +840,13 @@ func stableID(parts ...string) string {
 	return "stg02_" + hex.EncodeToString(hash[:16])
 }
 
+func storageProfileID(slot, fingerprint string) string {
+	if slot == "migration" {
+		return stableID("storage-profile", slot, fingerprint)
+	}
+	return stableID("storage-profile", slot)
+}
+
 func nullEmpty(value string) any {
 	if value == "" {
 		return nil
@@ -849,6 +899,26 @@ func storageEntriesFromProfile(profile StorageProfileRecord) ([]Entry, error) {
 	default:
 		return nil, fmt.Errorf("unsupported storage profile provider %q", profile.Provider)
 	}
+}
+
+func currentStorageProfile(cfg RuntimeConfig, now string) (StorageProfileRecord, error) {
+	current := cfg
+	current.ExternalDatabase = ExternalDatabase{}
+	provider, engineFlavor, payload, fingerprint, err := StorageProfile(current)
+	if err != nil {
+		return StorageProfileRecord{}, err
+	}
+	return StorageProfileRecord{
+		ID:                  storageProfileID("current", fingerprint),
+		Slot:                "current",
+		Provider:            provider,
+		EngineFlavor:        engineFlavor,
+		Status:              "active",
+		ConfigPayload:       payload,
+		DatabaseFingerprint: fingerprint,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}, nil
 }
 
 func normalizeProviderName(provider string) string {

@@ -324,8 +324,12 @@ func Validate(cfg RuntimeConfig) error {
 	if !oneOf(cfg.Repositories.DefaultAuthType, "ssh", "https", "token") {
 		return fmt.Errorf("repositories.default_auth_type: unsupported auth type")
 	}
-	if _, err := time.ParseDuration(cfg.Repositories.PollInterval); err != nil {
+	pollInterval, err := time.ParseDuration(cfg.Repositories.PollInterval)
+	if err != nil {
 		return fmt.Errorf("repositories.poll_interval_default: %w", err)
+	}
+	if pollInterval <= 0 {
+		return fmt.Errorf("repositories.poll_interval_default: must be positive")
 	}
 	if cfg.Workers.Concurrency <= 0 {
 		return fmt.Errorf("workers.concurrency: must be positive")

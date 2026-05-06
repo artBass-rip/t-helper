@@ -166,12 +166,120 @@ func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t
 	if targetDatabase["database_path"] != targetPath {
 		t.Fatalf("target database path = %#v, want %q", targetDatabase["database_path"], targetPath)
 	}
+	if _, err := appconfig.NewStore(target).Import(ctx, next, nil, "test"); err != nil {
+		t.Fatalf("same-storage import after promotion on target: %v", err)
+	}
 	var ignoreRules int
 	if err := target.DB.QueryRowContext(ctx, "SELECT count(*) FROM ignore_rules").Scan(&ignoreRules); err != nil {
 		t.Fatal(err)
 	}
 	if ignoreRules != 2 {
 		t.Fatalf("target ignore rules = %d, want 2", ignoreRules)
+	}
+}
+
+func TestStoreImportExternalDatabaseOnEmptyBootstrapStagesMigrationTarget(t *testing.T) {
+	ctx := context.Background()
+	sourcePath := filepath.Join(t.TempDir(), "source.db")
+	handle := openMigratedSQLitePath(t, sourcePath)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.Database.DatabasePath = sourcePath
+	cfg.ExternalDatabase.Enabled = true
+	cfg.ExternalDatabase.Provider = "postgresql"
+	cfg.ExternalDatabase.EngineFlavor = "standard"
+	cfg.ExternalDatabase.Host = "postgres.example.internal"
+	cfg.ExternalDatabase.Port = 5432
+	cfg.ExternalDatabase.Username = "secretref://env/THELPER_POSTGRES_USER"
+	cfg.ExternalDatabase.Password = "secretref://env/THELPER_POSTGRES_PASSWORD"
+	cfg.ExternalDatabase.DatabaseName = "t_helper"
+
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("initial external import: %v", err)
+	}
+	current, err := store.CurrentStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("current profile: %v", err)
+	}
+	if current.Provider != "sqlite" || current.DatabaseFingerprint != handle.Fingerprint {
+		t.Fatalf("initial external import switched current profile: %+v handle=%q", current, handle.Fingerprint)
+	}
+	migration, err := store.MigrationStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("migration profile: %v", err)
+	}
+	if migration.Provider != "postgres" || migration.Status != "migration_target" {
+		t.Fatalf("unexpected migration profile: %+v", migration)
+	}
+	active, err := store.ActiveConfig(ctx)
+	if err != nil {
+		t.Fatalf("active config: %v", err)
+	}
+	external := active["external_databases"].(map[string]any)
+	if external["enabled"] != false {
+		t.Fatalf("active config switched to external database before migrate: %#v", external)
+	}
+}
+
+func TestMigrateDBAllowsSecondSQLiteMigrationAfterPromotion(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sourcePath := filepath.Join(dir, "source.db")
+	firstTargetPath := filepath.Join(dir, "target-1.db")
+	secondTargetPath := filepath.Join(dir, "target-2.db")
+	handle := openMigratedSQLitePath(t, sourcePath)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.Database.DatabasePath = sourcePath
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("initial import: %v", err)
+	}
+
+	first := cfg
+	first.Database.DatabasePath = firstTargetPath
+	if _, err := store.Import(ctx, first, nil, "test"); err != nil {
+		t.Fatalf("first target import: %v", err)
+	}
+	if _, err := store.MigrateDB(ctx, storageproviders.MVPRegistry()); err != nil {
+		t.Fatalf("first migrate db: %v", err)
+	}
+	currentAfterFirst, err := store.CurrentStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("current after first migration: %v", err)
+	}
+
+	second := first
+	second.Database.DatabasePath = secondTargetPath
+	if _, err := store.Import(ctx, second, nil, "test"); err != nil {
+		t.Fatalf("second target import: %v", err)
+	}
+	currentAfterSecondImport, err := store.CurrentStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("current after second target import: %v", err)
+	}
+	if currentAfterSecondImport.ID != currentAfterFirst.ID || currentAfterSecondImport.DatabaseFingerprint != currentAfterFirst.DatabaseFingerprint {
+		t.Fatalf("second target import changed active current: before=%+v after=%+v", currentAfterFirst, currentAfterSecondImport)
+	}
+	secondMigration, err := store.MigrationStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("second migration profile: %v", err)
+	}
+	if secondMigration.DatabaseFingerprint == currentAfterFirst.DatabaseFingerprint {
+		t.Fatalf("second migration profile reused active current fingerprint: %+v", secondMigration)
+	}
+	if _, err := store.MigrateDB(ctx, storageproviders.MVPRegistry()); err != nil {
+		t.Fatalf("second migrate db: %v", err)
+	}
+	currentAfterSecondMigration, err := store.CurrentStorageProfile(ctx)
+	if err != nil {
+		t.Fatalf("current after second migration: %v", err)
+	}
+	if currentAfterSecondMigration.DatabaseFingerprint != secondMigration.DatabaseFingerprint {
+		t.Fatalf("second migration target was not promoted: current=%+v migration=%+v", currentAfterSecondMigration, secondMigration)
 	}
 }
 

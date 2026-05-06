@@ -72,3 +72,23 @@ func TestValidateRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestValidateRejectsNonPositiveRepositoryPollInterval(t *testing.T) {
+	file, err := os.Open("../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	cfg, err := Decode(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Repositories.PollInterval = "0s"
+	if err := Validate(cfg); err == nil {
+		t.Fatal("expected zero poll interval validation error")
+	}
+	cfg.Repositories.PollInterval = "-1s"
+	if err := Validate(cfg); err == nil {
+		t.Fatal("expected negative poll interval validation error")
+	}
+}

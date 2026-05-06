@@ -153,10 +153,12 @@
 
 Все database providers реализуются как подключаемые storage adapter libraries. Unknown provider должен приводить к `validation_error` без частичного применения конфигурации.
 
-`database` и `external_databases` в файле импорта описывают либо initial `current`
-profile для пустой установки, либо `migration` profile для последующей миграции.
-Они не являются reloadable runtime settings и не должны переключать активный
-storage backend без `thelper-ctl -migrate-db`.
+`database` и `external_databases` в файле импорта описывают initial `current`
+profile и optional `migration` profile. Для пустой установки с
+`external_databases.enabled = true` `database` остаётся initial `current`
+profile, а `external_databases` создаёт `migration` target. Они не являются
+reloadable runtime settings и не должны переключать активный storage backend
+без `thelper-ctl -migrate-db`.
 
 ### `workers`
 
@@ -382,6 +384,7 @@ Raw `secretref://env/...` может храниться в `config_entries.value
 - не переносить active transient locks как active state;
 - проверить logical migration version, FK integrity и базовые counts/checksums;
 - актуализировать profile statuses: migration становится `current`, предыдущий current сохраняется как historical/rollback candidate;
+- поддерживать последующие migration target после successful switch без перезаписи active `current` profile;
 - не удалять старую БД автоматически;
 - требовать restart runtime после successful switch.
 
