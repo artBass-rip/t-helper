@@ -136,7 +136,11 @@
 
 ### `external_databases`
 
-Описывает внешнюю БД. Если `enabled = true`, внутренняя БД из секции `database` не используется для runtime storage, а все обязательные поля внешнего подключения должны быть заданы.
+Описывает внешний storage target. Если `enabled = true`, все обязательные поля
+внешнего подключения должны быть заданы. В Stage 02 это создаёт или обновляет
+`migration` profile; runtime начинает использовать внешнюю БД только после
+успешного `thelper-ctl -migrate-db` и последующего запуска с promoted `current`
+profile.
 
 - `enabled` - включает внешний storage backend;
 - `provider` - `postgresql`, `mysql` или `mssql`;

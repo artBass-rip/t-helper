@@ -7,6 +7,20 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Stage 02 storage profile imports now keep active `current` storage stable
+  until successful `thelper-ctl -migrate-db`, including initial imports with
+  `external_databases.enabled = true`.
+- Stage 02 storage migration targets now use fingerprint-specific migration
+  profile IDs and retire previous migration targets before staging a new one,
+  allowing repeated storage migrations after a successful promotion.
+- Re-importing config into an already promoted storage target now preserves the
+  active profile identity instead of attempting to create a second `current`
+  profile.
+- `repositories.poll_interval_default` validation now rejects zero and
+  negative durations.
+- Stage 02 configuration docs now clarify that `external_databases` is a
+  migration target in Stage 02 and does not switch runtime storage without
+  `thelper-ctl -migrate-db`.
 - Stage 02 reload results now distinguish `accepted_keys` from actually
   `applied_keys`; accepted-but-not-applied reloadable keys are no longer
   reported as applied.
