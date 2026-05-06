@@ -359,16 +359,22 @@ Raw `secretref://env/...` может храниться в `config_entries.value
 `thelper-ctl -migrate-db` выполняет controlled migration с `current` profile на
 `migration` profile.
 
-Минимальный contract:
+Минимальный Stage 02 contract:
 
 - проверить доступность migration DB, provider, credentials и permissions;
 - применить schema migrations к migration DB;
-- перенести runtime config, root paths, registry, jobs history, findings, auth/RBAC и audit data;
+- перенести Stage 02-owned runtime data: `config_entries`,
+  `storage_profiles`, `storage_provider_settings`, `module_states`,
+  `ignore_rules` and system migration metadata;
 - не переносить active transient locks как active state;
 - проверить logical migration version, FK integrity и базовые counts/checksums;
 - актуализировать profile statuses: migration становится `current`, предыдущий current сохраняется как historical/rollback candidate;
 - не удалять старую БД автоматически;
-- записать audit event `storage.migration_completed`;
 - требовать restart runtime после successful switch.
 
 Если migration не завершилась успешно, active `current` profile не меняется.
+
+Later stages must extend this same migration contract when they introduce their
+own persistent tables. For example, Stage 03 extends it for jobs/workflows,
+Stage 06 for findings/rule sets and Stage 07 for auth/RBAC/audit, including
+audit event `storage.migration_completed` once audit storage exists.

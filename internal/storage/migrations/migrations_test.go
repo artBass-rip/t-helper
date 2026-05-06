@@ -49,8 +49,8 @@ func TestApplyIsIdempotentForSQLite(t *testing.T) {
 	if err := db.QueryRow("SELECT value FROM system_metadata WHERE key = 'schema_version'").Scan(&value); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if value != "stage-01" {
-		t.Fatalf("schema_version = %q, want stage-01", value)
+	if value != "stage-02" {
+		t.Fatalf("schema_version = %q, want stage-02", value)
 	}
 }
 

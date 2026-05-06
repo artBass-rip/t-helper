@@ -23,8 +23,8 @@
 | `ACC-MVP-006` | Project-level scan определяет providers, required auth и quality через `terraform validate` и `TFLint`, а security/validation scan сохраняет findings через `Trivy` как обязательный локальный scanner. | Настроить `PUT /api/projects/{id}/scan-settings`, запустить `POST /api/project-scans`; проверить parent `jobs.job_type = project_scan`, child `jobs.job_type = security_validation_scan` с тем же `job_group_id`, `project_scans.result_payload`, `workflow_statuses` и `security_findings` для `Trivy`. |
 | `ACC-MVP-007` | Runtime-конфигурация хранится в БД. | Импортировать config; проверить `config_entries` и `GET /api/config`. |
 | `ACC-MVP-008` | `thelper-ctl -reconfigure` импортирует конфигурацию и ignore rules. | Запустить CLI command; проверить `config_entries`, `ignore_rules`, отсутствие service restart side effect. |
-| `ACC-MVP-009` | `thelper-ctl -reload` применяет reloadable-конфигурацию. | Изменить `logging.level` или `scanning.global_scan`; проверить `jobs.config_reload.result.v1`. |
-| `ACC-MVP-010` | `thelper-ctl -restart <module>` работает для любого отдельного модуля. | Перезапустить `global-scanner`; проверить `module_states` transition и `jobs.module_restart.result.v1`. |
+| `ACC-MVP-009` | `thelper-ctl -reload` применяет reloadable-конфигурацию. | Изменить `logging.level` или `scanning.global_scan`; проверить sync reload result с `applied_keys`, `restart_required_keys`, `failed_keys` и отсутствие Stage 03 `jobs` dependency. |
+| `ACC-MVP-010` | `thelper-ctl -restart <module>` работает для любого доступного отдельного модуля, а unavailable modules дают controlled error. | Перезапустить доступный module, например `config-manager`; проверить `module_states` transition и `module_restart.result.v1`; restart/reload `global-scanner` до Stage 04 должен вернуть controlled `module_unavailable`. |
 | `ACC-MVP-011` | `GUI` и `Web UI` используют единый backend API и покрывают MVP read/operate сценарии. | Контрактный тест: оба frontend clients используют только documented backend API. |
 | `ACC-MVP-012` | `GUI` работает только локально. | Проверить bind policy/config и отказ удалённого GUI access. |
 | `ACC-MVP-013` | `PostgreSQL` и `SQLite` поддерживаются через storage abstraction. | Запустить один и тот же storage test suite против PostgreSQL и SQLite adapters. |
@@ -55,7 +55,7 @@
 - Импортировать конфигурацию с `scanning.global_scan`; ожидание: `root_paths` созданы или обновлены, а `GET /api/config` возвращает `scanning.global_scan`.
 - Импортировать конфигурацию с legacy/alias key `scanning.global_scann`; ожидание: `validation_error` без частичного применения.
 - Импортировать конфигурацию с любым другим alias для global scan roots, например `globalScan` или `scan_roots`; ожидание: `validation_error` без частичного применения.
-- Проверить, что reload payload использует ключи вида `scanning.global_scan`, например в `jobs.config_reload.payload.v1`.
+- Проверить, что reload request/result использует ключи вида `scanning.global_scan` и возвращает sync result без Stage 03 `jobs` dependency.
 - Проверить, что storage/API/read models используют `repository_id` для связи project -> repository и не требуют поле `repo_id`.
 - Проверить, что `modules.enabled` принимает только registered modules из initial module registry.
 - Импортировать конфигурацию с unknown module в `modules.enabled`; ожидание: `validation_error` без частичного применения.
@@ -63,7 +63,9 @@
 - Проверить, что `database.*` и `external_databases.*` обновляют только storage profile metadata/current bootstrap или `migration` slot и не переключают active DB через reload.
 - Проверить, что `thelper-ctl -reconfigure` может обновить `migration` storage profile без изменения `current`.
 - Проверить, что `thelper-ctl -migrate-db` переносит schema/data, затем актуализирует `current`/`migration` statuses and preserves old DB profile metadata.
+- Проверить SQLite -> PostgreSQL `thelper-ctl -migrate-db` с `external_databases.username/password = secretref://env/...`; ожидание: target DB получает Stage-owned tables/data, secret refs остаются refs, API output masked.
 - Проверить, что failed DB migration не меняет active `current` profile.
+- Для Stage 02 проверить перенос только Stage 02-owned tables: `config_entries`, `storage_profiles`, `storage_provider_settings`, `module_states`, `ignore_rules` and system migration metadata. Later stage-owned tables must extend this migration test when introduced.
 - Проверить, что provider-specific worker settings scoped to PostgreSQL do not change SQLite settings and наоборот.
 
 ### Provider adapters
