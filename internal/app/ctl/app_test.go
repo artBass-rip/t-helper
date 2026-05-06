@@ -130,6 +130,26 @@ func TestStage02CLIReconfigureRejectsSensitiveLiteralsWhenExternalDatabaseDisabl
 	}
 }
 
+func TestStage02CLIReconfigureRejectsTrailingConfigPayload(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "stage02-cli.db")
+	data, err := os.ReadFile("../../../config.example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "trailing.json")
+	if err := os.WriteFile(configPath, append(data, []byte(` {}`)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	app := New(&out, storageproviders.MVPRegistry())
+	if err := app.Run(ctx, Command{Name: "reconfigure", StorageProvider: "sqlite", StorageDSN: dbPath, ConfigPath: configPath}); err == nil {
+		t.Fatal("expected trailing config payload to fail")
+	}
+}
+
 func TestStage02CLIMigrateDBPromotesMigrationTarget(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

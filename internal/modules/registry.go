@@ -29,6 +29,12 @@ const (
 	StateFailed      State = "failed"
 )
 
+var (
+	ErrModuleNotRegistered = errors.New("module not registered")
+	ErrModuleUnavailable   = errors.New("module unavailable")
+	ErrModuleLifecycle     = errors.New("module lifecycle failed")
+)
+
 type Definition struct {
 	Name      string
 	Available bool
@@ -184,14 +190,14 @@ func (s *Store) List(ctx context.Context) ([]ModuleState, error) {
 func (s *Store) Restart(ctx context.Context, name, reason string) (RestartResult, error) {
 	def, ok := s.registry[name]
 	if !ok {
-		return RestartResult{}, fmt.Errorf("module %q is not registered", name)
+		return RestartResult{}, fmt.Errorf("%w: %q", ErrModuleNotRegistered, name)
 	}
 	current, err := s.get(ctx, name)
 	if err != nil {
 		return RestartResult{}, err
 	}
 	if !def.Available || current.State == StateUnavailable {
-		return RestartResult{}, fmt.Errorf("module %q is unavailable", name)
+		return RestartResult{}, fmt.Errorf("%w: %q", ErrModuleUnavailable, name)
 	}
 	now := time.Now().UTC()
 	host, _ := os.Hostname()
@@ -222,14 +228,14 @@ func (s *Store) Restart(ctx context.Context, name, reason string) (RestartResult
 func (s *Store) Reload(ctx context.Context, name, reason string) (RestartResult, error) {
 	def, ok := s.registry[name]
 	if !ok {
-		return RestartResult{}, fmt.Errorf("module %q is not registered", name)
+		return RestartResult{}, fmt.Errorf("%w: %q", ErrModuleNotRegistered, name)
 	}
 	current, err := s.get(ctx, name)
 	if err != nil {
 		return RestartResult{}, err
 	}
 	if !def.Available || current.State == StateUnavailable {
-		return RestartResult{}, fmt.Errorf("module %q is unavailable", name)
+		return RestartResult{}, fmt.Errorf("%w: %q", ErrModuleUnavailable, name)
 	}
 	now := time.Now().UTC()
 	host, _ := os.Hostname()
@@ -260,10 +266,11 @@ func (s *Store) markFailed(ctx context.Context, name string, pid *int, host stri
 }
 
 func (s *Store) markFailedOrJoin(ctx context.Context, name string, pid *int, host string, cause error) error {
+	lifecycleErr := fmt.Errorf("%w: %w", ErrModuleLifecycle, cause)
 	if err := s.markFailed(ctx, name, pid, host, cause); err != nil {
-		return errors.Join(cause, fmt.Errorf("persist failed module state: %w", err))
+		return errors.Join(lifecycleErr, fmt.Errorf("persist failed module state: %w", err))
 	}
-	return cause
+	return lifecycleErr
 }
 
 func (s *Store) get(ctx context.Context, name string) (ModuleState, error) {

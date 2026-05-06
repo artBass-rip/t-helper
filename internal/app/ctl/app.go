@@ -77,7 +77,7 @@ func (a *App) Reconfigure(ctx context.Context, cmd Command) error {
 		return fmt.Errorf("open config: %w", err)
 	}
 	defer file.Close()
-	cfg, err := appconfig.Decode(file)
+	cfg, err := appconfig.DecodeStrict(file)
 	if err != nil {
 		return err
 	}

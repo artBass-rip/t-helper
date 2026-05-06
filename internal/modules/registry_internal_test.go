@@ -31,6 +31,8 @@ func TestReloadFailurePersistsFailedStateAndError(t *testing.T) {
 	}
 	if _, err := store.Reload(ctx, "core", "test"); err == nil {
 		t.Fatal("expected reload failure")
+	} else if !errors.Is(err, ErrModuleLifecycle) {
+		t.Fatalf("reload error = %v, want ErrModuleLifecycle", err)
 	}
 	state, err := store.get(ctx, "core")
 	if err != nil {

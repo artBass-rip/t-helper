@@ -310,10 +310,12 @@ func (s *Store) MigrateDB(ctx context.Context, registry *storage.Registry) (Migr
 	}
 	targetCfg, err := migration.StorageConfig()
 	if err != nil {
+		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, err
 	}
 	target, err := registry.Open(ctx, targetCfg)
 	if err != nil {
+		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, err
 	}
 	defer target.Close()

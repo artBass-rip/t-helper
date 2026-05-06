@@ -44,7 +44,7 @@ func (h *ModulesHandler) Reload(w http.ResponseWriter, r *http.Request) {
 	if req.ModuleName != "" {
 		result, err := h.moduleStore.Reload(r.Context(), req.ModuleName, req.Reason)
 		if err != nil {
-			writeError(w, r, http.StatusBadRequest, "module_unavailable", err.Error())
+			writeModuleError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
@@ -85,10 +85,23 @@ func (h *ModulesHandler) Restart(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.moduleStore.Restart(r.Context(), req.ModuleName, req.Reason)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "module_unavailable", err.Error())
+		writeModuleError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, modules.ErrModuleNotRegistered):
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, modules.ErrModuleUnavailable):
+		writeError(w, r, http.StatusBadRequest, "module_unavailable", err.Error())
+	case errors.Is(err, modules.ErrModuleLifecycle):
+		writeError(w, r, http.StatusInternalServerError, "module_lifecycle_failed", err.Error())
+	default:
+		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+	}
 }
 
 func containsKey(keys []string, wanted string) bool {

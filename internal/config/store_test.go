@@ -207,6 +207,13 @@ func TestMigrateDBFailureDoesNotChangeCurrentProfile(t *testing.T) {
 	if _, err := store.MigrateDB(ctx, storageproviders.MVPRegistry()); err == nil {
 		t.Fatal("expected unsupported migration provider error")
 	}
+	var failed int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM storage_profiles WHERE slot = 'migration' AND status = 'migration_failed'").Scan(&failed); err != nil {
+		t.Fatal(err)
+	}
+	if failed != 1 {
+		t.Fatalf("failed migration profiles = %d, want 1", failed)
+	}
 	currentAfter, err := store.CurrentStorageProfile(ctx)
 	if err != nil {
 		t.Fatalf("current after: %v", err)

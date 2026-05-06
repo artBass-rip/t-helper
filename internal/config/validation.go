@@ -47,11 +47,18 @@ func ValidateImportShape(r io.Reader) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 	var root map[string]any
-	decoder := json.NewDecoder(r)
-	decoder = json.NewDecoder(bytes.NewReader(data))
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&root); err != nil {
 		return fmt.Errorf("decode config: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != nil {
+		if err != io.EOF {
+			return fmt.Errorf("decode config: %w", err)
+		}
+	} else {
+		return fmt.Errorf("decode config: request body must contain a single JSON object")
 	}
 	for key := range root {
 		if _, ok := allowedTopLevelKeys[key]; !ok {
@@ -75,7 +82,7 @@ func ValidateImportShape(r io.Reader) error {
 	if err := validateSecretRefs(root); err != nil {
 		return err
 	}
-	_, err = Decode(bytes.NewReader(data))
+	_, err = DecodeStrict(bytes.NewReader(data))
 	return err
 }
 

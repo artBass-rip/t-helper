@@ -160,6 +160,24 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/restart", bytes.NewReader([]byte(`{"module_name":"does-not-exist"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown restart module status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	apiErr = struct {
+		Error struct {
+			Code          string `json:"code"`
+			CorrelationID string `json:"correlation_id"`
+		} `json:"error"`
+	}{}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode unknown module error: %v", err)
+	}
+	if apiErr.Error.Code != "validation_error" {
+		t.Fatalf("unknown module error code = %q, want validation_error", apiErr.Error.Code)
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/modules/restart", bytes.NewReader([]byte(`{"module_name":"config-manager"} {}`))))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("trailing restart payload status = %d body = %s", rec.Code, rec.Body.String())
