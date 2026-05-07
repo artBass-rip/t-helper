@@ -57,6 +57,12 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/jobs?cursor=not-a-cursor", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/jobs invalid cursor status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/status status = %d body = %s", rec.Code, rec.Body.String())
@@ -93,6 +99,12 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	}
 	if workflow.JobGroupID != "config_operation:"+ref.JobID || workflow.AggregateStatus != jobs.StatusQueued || workflow.ProgressTotal != 1 {
 		t.Fatalf("unexpected workflow status: %+v", workflow)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workflows?cursor=not-a-cursor", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/status/workflows invalid cursor status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

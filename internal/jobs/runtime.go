@@ -235,31 +235,66 @@ func (r *Runtime) RecoverExpiredLeases(ctx context.Context) error {
 }
 
 func (r *Runtime) recoverToQueued(ctx context.Context, job Job, runAfter time.Time) error {
+	tx, err := r.store.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, updated_at = ? WHERE id = ? AND status = 'running'`
-	args := []any{formatTime(runAfter), formatTime(time.Now().UTC()), job.ID}
+	now := time.Now().UTC()
+	args := []any{formatTime(runAfter), formatTime(now), job.ID}
 	if r.store.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`
 	}
-	if _, err := r.store.handle.DB.ExecContext(ctx, query, args...); err != nil {
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
 		return err
 	}
-	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: r.workerID}); err != nil {
+	if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("expired job %s is no longer running", job.ID)
+	}
+	if err := r.store.expireJobLocks(ctx, tx, job.ID); err != nil {
+		return err
+	}
+	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: r.workerID}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
 }
 
 func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage, message string) error {
+	tx, err := r.store.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	query := `UPDATE jobs SET status = 'failed', result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND status = 'running'`
 	now := time.Now().UTC()
 	args := []any{string(result), message, formatTime(now), formatTime(now), job.ID}
 	if r.store.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = 'failed', result_payload = $1, error_message = $2, finished_at = $3, updated_at = $4 WHERE id = $5 AND status = 'running'`
 	}
-	if _, err := r.store.handle.DB.ExecContext(ctx, query, args...); err != nil {
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
 		return err
 	}
-	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventFailed, Status: StatusFailed, WorkerID: r.workerID}); err != nil {
+	if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("expired job %s is no longer running", job.ID)
+	}
+	if err := r.store.expireJobLocks(ctx, tx, job.ID); err != nil {
+		return err
+	}
+	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventFailed, Status: StatusFailed, WorkerID: r.workerID}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))

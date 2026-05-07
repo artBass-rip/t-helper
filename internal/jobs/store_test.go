@@ -145,6 +145,53 @@ func TestLockContentionAndExpiredLeaseRecovery(t *testing.T) {
 	}
 }
 
+func TestExpiredLeaseRecoveryExpiresHeldLocks(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		LockKey: "resource:expired",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	claimed, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:expired", LeaseDuration: time.Millisecond})
+	if err != nil || !ok || claimed.ID != ref.JobID {
+		t.Fatalf("claim: ok=%v job=%+v err=%v", ok, claimed, err)
+	}
+	if locked, err := store.AcquireLock(ctx, claimed, "host:1:expired", time.Hour); err != nil || !locked {
+		t.Fatalf("acquire lock: locked=%v err=%v", locked, err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: store, WorkerID: "host:1:recovery", LeaseDuration: time.Minute})
+	if err := runtime.RecoverExpiredLeases(ctx); err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+	locks, err := store.ListLocks(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list locks: %v", err)
+	}
+	if len(locks) != 1 || locks[0].Status != "expired" {
+		t.Fatalf("expected held lock to expire, got %+v", locks)
+	}
+	nextRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		LockKey: "resource:expired",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue next: %v", err)
+	}
+	next, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:next", LeaseDuration: time.Minute})
+	if err != nil || !ok || next.ID != nextRef.JobID {
+		t.Fatalf("claim next: ok=%v job=%+v err=%v", ok, next, err)
+	}
+	if locked, err := store.AcquireLock(ctx, next, "host:1:next", time.Minute); err != nil || !locked {
+		t.Fatalf("new lock should not be blocked by expired lock: locked=%v err=%v", locked, err)
+	}
+}
+
 func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 	ctx := context.Background()
 	store := openStore(t)
@@ -327,6 +374,137 @@ func TestConcurrentWorkersClaimOnlyOneQueuedJob(t *testing.T) {
 	wg.Wait()
 	if claims.Load() != 1 {
 		t.Fatalf("claims = %d, want 1", claims.Load())
+	}
+}
+
+func TestClaimOrderingUsesRunAfterPriorityCreatedAt(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	now := time.Now().UTC()
+	lowPriority, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		ID:       "job_low_priority",
+		JobType:  "config_reload",
+		RunAfter: now,
+		Priority: 1,
+		Payload:  json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue low priority: %v", err)
+	}
+	highPriority, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		ID:       "job_high_priority",
+		JobType:  "config_reload",
+		RunAfter: now,
+		Priority: 10,
+		Payload:  json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue high priority: %v", err)
+	}
+	future, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		ID:       "job_future",
+		JobType:  "config_reload",
+		RunAfter: now.Add(time.Hour),
+		Priority: 100,
+		Payload:  json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue future: %v", err)
+	}
+
+	claimed, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:worker", Now: now, LeaseDuration: time.Minute})
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	if claimed.ID != highPriority.JobID {
+		t.Fatalf("claimed %q, want high priority %q; low=%q future=%q", claimed.ID, highPriority.JobID, lowPriority.JobID, future.JobID)
+	}
+}
+
+func TestJobsListCursorPagination(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	for _, id := range []string{"job_page_1", "job_page_2", "job_page_3"} {
+		if _, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+			ID:      id,
+			JobType: "config_reload",
+			Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", id, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	first, err := store.ListPage(ctx, jobs.ListFilters{Limit: 2})
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("unexpected first page: %+v", first)
+	}
+	second, err := store.ListPage(ctx, jobs.ListFilters{Limit: 2, Cursor: first.NextCursor})
+	if err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if len(second.Items) != 1 || second.NextCursor != "" {
+		t.Fatalf("unexpected second page: %+v", second)
+	}
+	if first.Items[0].ID == second.Items[0].ID || first.Items[1].ID == second.Items[0].ID {
+		t.Fatalf("cursor repeated item: first=%+v second=%+v", first.Items, second.Items)
+	}
+}
+
+func TestConcurrentRuntimeWorkersRunNonConflictingLocks(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	for _, lockKey := range []string{"resource:one", "resource:two"} {
+		if _, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+			JobType: "config_reload",
+			LockKey: lockKey,
+			Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", lockKey, err)
+		}
+	}
+
+	var handled atomic.Int32
+	handler := jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+		handled.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
+	})
+	var wg sync.WaitGroup
+	for _, workerID := range []string{"host:1:first", "host:1:second"} {
+		wg.Add(1)
+		go func(workerID string) {
+			defer wg.Done()
+			runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+				Store:    store,
+				WorkerID: workerID,
+				Handlers: map[string]jobs.Handler{
+					"config_reload": handler,
+				},
+				HeartbeatInterval: time.Millisecond,
+				LeaseDuration:     time.Second,
+			})
+			ran, err := runtime.RunOnce(ctx)
+			if err != nil {
+				t.Errorf("run once %s: %v", workerID, err)
+			}
+			if !ran {
+				t.Errorf("worker %s did not claim a job", workerID)
+			}
+		}(workerID)
+	}
+	wg.Wait()
+	if handled.Load() != 2 {
+		t.Fatalf("handled jobs = %d, want 2", handled.Load())
+	}
+	items, err := store.List(ctx, jobs.ListFilters{Status: jobs.StatusSucceeded})
+	if err != nil {
+		t.Fatalf("list succeeded: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("succeeded jobs = %d, want 2: %+v", len(items), items)
 	}
 }
 

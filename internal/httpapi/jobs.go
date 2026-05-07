@@ -19,19 +19,24 @@ func NewJobsHandler(store *jobs.Store) *JobsHandler {
 
 func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := h.store.List(r.Context(), jobs.ListFilters{
+	page, err := h.store.ListPage(r.Context(), jobs.ListFilters{
 		JobType:     r.URL.Query().Get("job_type"),
 		Status:      r.URL.Query().Get("status"),
 		LockKey:     r.URL.Query().Get("lock_key"),
 		JobGroupID:  r.URL.Query().Get("job_group_id"),
 		ParentJobID: r.URL.Query().Get("parent_job_id"),
 		Limit:       limit,
+		Cursor:      r.URL.Query().Get("cursor"),
 	})
 	if err != nil {
+		if err.Error() == "invalid cursor" {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
+			return
+		}
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": nil})
+	writeJSON(w, http.StatusOK, map[string]any{"items": page.Items, "next_cursor": nullString(page.NextCursor)})
 }
 
 func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -66,12 +71,16 @@ func (h *StatusHandler) Runtime(w http.ResponseWriter, r *http.Request) {
 
 func (h *StatusHandler) Workflows(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := h.store.WorkflowStatuses(r.Context(), r.URL.Query().Get("workflow_type"), r.URL.Query().Get("aggregate_status"), limit)
+	page, err := h.store.WorkflowStatusesPage(r.Context(), r.URL.Query().Get("workflow_type"), r.URL.Query().Get("aggregate_status"), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
+		if err.Error() == "invalid cursor" {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
+			return
+		}
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": nil})
+	writeJSON(w, http.StatusOK, map[string]any{"items": page.Items, "next_cursor": nullString(page.NextCursor)})
 }
 
 func (h *StatusHandler) Workflow(w http.ResponseWriter, r *http.Request) {
@@ -107,4 +116,11 @@ func (h *StatusHandler) Workers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": nil})
+}
+
+func nullString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

@@ -33,7 +33,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency_key_unique
 CREATE INDEX IF NOT EXISTS jobs_parent_job_id_idx ON jobs (parent_job_id);
 CREATE INDEX IF NOT EXISTS jobs_group_status_idx ON jobs (job_group_id, status);
 CREATE INDEX IF NOT EXISTS jobs_lock_status_idx ON jobs (lock_key, status);
-CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs (status, run_after, priority, created_at);
+CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs (status, run_after ASC, priority DESC, created_at ASC);
 CREATE INDEX IF NOT EXISTS jobs_lease_expires_at_idx ON jobs (lease_expires_at);
 CREATE INDEX IF NOT EXISTS jobs_leased_by_status_idx ON jobs (leased_by, status);
 
@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS job_events_job_created_at_idx ON job_events (job_id, 
 
 CREATE TABLE IF NOT EXISTS workflow_statuses (
   id TEXT PRIMARY KEY,
-  workflow_type TEXT NOT NULL CHECK (workflow_type IN ('project_scan', 'global_scan', 'repository_operation', 'config_operation', 'module_operation', 'scim_sync')),
+  workflow_type TEXT NOT NULL CHECK (workflow_type IN ('project_scan', 'project_discovery', 'global_scan', 'repository_operation', 'config_operation', 'module_operation', 'scim_sync')),
   workflow_id TEXT NOT NULL,
   job_group_id TEXT NOT NULL,
   aggregate_status TEXT NOT NULL CHECK (aggregate_status IN ('queued', 'running', 'succeeded', 'failed', 'partial', 'cancelled')),

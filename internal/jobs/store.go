@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,7 +15,11 @@ import (
 	"github.com/artBass-rip/t-helper/internal/storage"
 )
 
-var ErrNotFound = errors.New("job not found")
+var (
+	ErrNotFound             = errors.New("job not found")
+	ErrIdempotencyConflict  = errors.New("idempotency conflict")
+	ErrInvalidCursor        = errors.New("invalid cursor")
+)
 
 type Store struct {
 	handle *storage.Handle
@@ -58,7 +63,7 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 	if req.IdempotencyKey != "" {
 		if existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey); err == nil {
 			if string(existing.Payload) != string(req.Payload) {
-				return JobRef{}, fmt.Errorf("idempotency conflict for %s/%s", req.JobType, req.IdempotencyKey)
+				return JobRef{}, fmt.Errorf("%w for %s/%s", ErrIdempotencyConflict, req.JobType, req.IdempotencyKey)
 			}
 			return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, nil
 		} else if !errors.Is(err, ErrNotFound) {
@@ -108,10 +113,15 @@ func (s *Store) Get(ctx context.Context, id string) (Job, error) {
 }
 
 func (s *Store) List(ctx context.Context, filters ListFilters) ([]Job, error) {
+	page, err := s.list(ctx, filters, 200)
+	return page.Items, err
+}
+
+func (s *Store) ListPage(ctx context.Context, filters ListFilters) (Page[Job], error) {
 	return s.list(ctx, filters, 200)
 }
 
-func (s *Store) list(ctx context.Context, filters ListFilters, maxLimit int) ([]Job, error) {
+func (s *Store) list(ctx context.Context, filters ListFilters, maxLimit int) (Page[Job], error) {
 	var where []string
 	var args []any
 	add := func(clause string, value any) {
@@ -133,6 +143,14 @@ func (s *Store) list(ctx context.Context, filters ListFilters, maxLimit int) ([]
 	if filters.ParentJobID != "" {
 		add("parent_job_id = %s", filters.ParentJobID)
 	}
+	if filters.Cursor != "" {
+		cursor, err := decodeCursor(filters.Cursor)
+		if err != nil {
+			return Page[Job]{}, err
+		}
+		args = append(args, formatTime(cursor.Time), formatTime(cursor.Time), cursor.ID)
+		where = append(where, fmt.Sprintf("(created_at < %s OR (created_at = %s AND id < %s))", s.placeholder(len(args)-2), s.placeholder(len(args)-1), s.placeholder(len(args))))
+	}
 	limit := filters.Limit
 	if maxLimit <= 0 {
 		maxLimit = 200
@@ -147,22 +165,31 @@ func (s *Store) list(ctx context.Context, filters ListFilters, maxLimit int) ([]
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	args = append(args, limit)
+	args = append(args, limit+1)
 	query += " ORDER BY created_at DESC, id DESC LIMIT " + s.placeholder(len(args))
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return Page[Job]{}, err
 	}
 	defer rows.Close()
 	var out []Job
 	for rows.Next() {
 		job, err := scanJob(rows)
 		if err != nil {
-			return nil, err
+			return Page[Job]{}, err
 		}
 		out = append(out, job)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return Page[Job]{}, err
+	}
+	var next string
+	if len(out) > limit {
+		out = out[:limit]
+		last := out[len(out)-1]
+		next = encodeCursor(last.CreatedAt, last.ID)
+	}
+	return Page[Job]{Items: out, NextCursor: next}, nil
 }
 
 type ListFilters struct {
@@ -172,6 +199,7 @@ type ListFilters struct {
 	JobGroupID  string
 	ParentJobID string
 	Limit       int
+	Cursor      string
 }
 
 func (s *Store) ClaimNext(ctx context.Context, opts ClaimOptions) (Job, bool, error) {
@@ -207,14 +235,21 @@ RETURNING ` + s.jobSelectColumns()
 		return Job{}, false, err
 	}
 	defer tx.Rollback()
+	var candidateID string
+	selectCandidate := `SELECT id FROM jobs
+WHERE status = 'queued' AND run_after <= ?
+ORDER BY run_after ASC, priority DESC, created_at ASC
+LIMIT 1`
+	err = tx.QueryRowContext(ctx, selectCandidate, formatTime(opts.Now)).Scan(&candidateID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, false, nil
+	}
+	if err != nil {
+		return Job{}, false, err
+	}
 	update := `UPDATE jobs SET status = 'running', leased_by = ?, lease_expires_at = ?, heartbeat_at = ?, started_at = COALESCE(started_at, ?), attempt_count = attempt_count + 1, updated_at = ?
-WHERE id = (
-  SELECT id FROM jobs
-  WHERE status = 'queued' AND run_after <= ?
-  ORDER BY run_after ASC, priority DESC, created_at ASC
-  LIMIT 1
-) AND status = 'queued'`
-	res, err := tx.ExecContext(ctx, update, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now))
+WHERE id = ? AND status = 'queued'`
+	res, err := tx.ExecContext(ctx, update, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now), candidateID)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -225,7 +260,7 @@ WHERE id = (
 	if affected == 0 {
 		return Job{}, false, nil
 	}
-	job, err := scanJob(tx.QueryRowContext(ctx, "SELECT "+s.jobSelectColumns()+" FROM jobs WHERE leased_by = ? AND status = 'running' ORDER BY updated_at DESC LIMIT 1", opts.WorkerID))
+	job, err := scanJob(tx.QueryRowContext(ctx, "SELECT "+s.jobSelectColumns()+" FROM jobs WHERE id = ?", candidateID))
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -306,14 +341,7 @@ func (s *Store) ExtendLocks(ctx context.Context, jobID, workerID string, expires
 }
 
 func (s *Store) ReleaseLocks(ctx context.Context, jobID, workerID string) error {
-	now := time.Now().UTC()
-	query := `UPDATE job_locks SET status = 'released', released_at = ? WHERE job_id = ? AND owner = ? AND status = 'held'`
-	args := []any{formatTime(now), jobID, workerID}
-	if s.handle.Provider == "postgres" {
-		query = `UPDATE job_locks SET status = 'released', released_at = $1 WHERE job_id = $2 AND owner = $3 AND status = 'held'`
-	}
-	_, err := s.handle.DB.ExecContext(ctx, query, args...)
-	return err
+	return s.releaseLocks(ctx, s.handle.DB, jobID, workerID, time.Now().UTC())
 }
 
 func (s *Store) ExpireLocks(ctx context.Context, now time.Time) error {
@@ -326,20 +354,41 @@ func (s *Store) ExpireLocks(ctx context.Context, now time.Time) error {
 	return err
 }
 
+func (s *Store) expireJobLocks(ctx context.Context, exec sqlExecutor, jobID string) error {
+	query := `UPDATE job_locks SET status = 'expired' WHERE job_id = ? AND status = 'held'`
+	args := []any{jobID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE job_locks SET status = 'expired' WHERE job_id = $1 AND status = 'held'`
+	}
+	_, err := exec.ExecContext(ctx, query, args...)
+	return err
+}
+
 func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, result json.RawMessage, message string) error {
 	if len(result) == 0 {
 		result = json.RawMessage(`{}`)
 	}
 	now := time.Now().UTC()
-	if err := s.ReleaseLocks(ctx, job.ID, workerID); err != nil {
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	query := `UPDATE jobs SET status = ?, result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
 	args := []any{status, string(result), nullEmpty(message), formatTime(now), formatTime(now), job.ID, workerID}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = $1, result_payload = $2, error_message = $3, finished_at = $4, updated_at = $5 WHERE id = $6 AND leased_by = $7 AND status = 'running'`
 	}
-	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+	}
+	if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
 		return err
 	}
 	eventType := EventSucceeded
@@ -348,7 +397,10 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	} else if status == StatusCancelled {
 		eventType = EventCancelled
 	}
-	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: eventType, Status: status, WorkerID: workerID}); err != nil {
+	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: eventType, Status: status, WorkerID: workerID}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
@@ -356,21 +408,45 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 
 func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, runAfter time.Time) error {
 	now := time.Now().UTC()
-	if err := s.ReleaseLocks(ctx, job.ID, workerID); err != nil {
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, error_message = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
 	args := []any{formatTime(runAfter), nullEmpty(reason), formatTime(now), job.ID, workerID}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, error_message = $2, updated_at = $3 WHERE id = $4 AND leased_by = $5 AND status = 'running'`
 	}
-	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
 		return err
 	}
-	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayload(reason)}); err != nil {
+	if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+	}
+	if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
+		return err
+	}
+	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayload(reason)}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+}
+
+func (s *Store) releaseLocks(ctx context.Context, exec sqlExecutor, jobID, workerID string, releasedAt time.Time) error {
+	query := `UPDATE job_locks SET status = 'released', released_at = ? WHERE job_id = ? AND owner = ? AND status = 'held'`
+	args := []any{formatTime(releasedAt), jobID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE job_locks SET status = 'released', released_at = $1 WHERE job_id = $2 AND owner = $3 AND status = 'held'`
+	}
+	_, err := exec.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (s *Store) AddEvent(ctx context.Context, event Event) error {
@@ -572,7 +648,7 @@ func workflowTypeForJobType(jobType string) string {
 	case "global_scan":
 		return "global_scan"
 	default:
-		return "global_scan"
+		return jobType
 	}
 }
 
@@ -680,6 +756,31 @@ func parseTime(value string) (time.Time, error) {
 		return t.UTC(), nil
 	}
 	return time.Parse(time.RFC3339, value)
+}
+
+type listCursor struct {
+	Time time.Time `json:"time"`
+	ID   string    `json:"id"`
+}
+
+func encodeCursor(t time.Time, id string) string {
+	payload, _ := json.Marshal(listCursor{Time: t.UTC(), ID: id})
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func decodeCursor(value string) (listCursor, error) {
+	data, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return listCursor{}, ErrInvalidCursor
+	}
+	var cursor listCursor
+	if err := json.Unmarshal(data, &cursor); err != nil {
+		return listCursor{}, ErrInvalidCursor
+	}
+	if cursor.Time.IsZero() || cursor.ID == "" {
+		return listCursor{}, ErrInvalidCursor
+	}
+	return cursor, nil
 }
 
 func newID(prefix string) string {

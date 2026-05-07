@@ -47,10 +47,11 @@ func (s *Store) RefreshWorkflowStatus(ctx context.Context, jobGroupID, workflowI
 	if jobGroupID == "" {
 		return nil
 	}
-	jobs, err := s.list(ctx, ListFilters{JobGroupID: jobGroupID, Limit: 1000}, 1000)
+	page, err := s.list(ctx, ListFilters{JobGroupID: jobGroupID, Limit: 1000}, 1000)
 	if err != nil {
 		return err
 	}
+	jobs := page.Items
 	if len(jobs) == 0 {
 		return nil
 	}
@@ -266,6 +267,11 @@ func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 }
 
 func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateStatus string, limit int) ([]WorkflowStatus, error) {
+	page, err := s.WorkflowStatusesPage(ctx, workflowType, aggregateStatus, limit, "")
+	return page.Items, err
+}
+
+func (s *Store) WorkflowStatusesPage(ctx context.Context, workflowType, aggregateStatus string, limit int, cursorValue string) (Page[WorkflowStatus], error) {
 	var where []string
 	var args []any
 	add := func(clause string, value any) {
@@ -278,6 +284,14 @@ func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateSta
 	if aggregateStatus != "" {
 		add("aggregate_status = %s", aggregateStatus)
 	}
+	if cursorValue != "" {
+		cursor, err := decodeCursor(cursorValue)
+		if err != nil {
+			return Page[WorkflowStatus]{}, err
+		}
+		args = append(args, formatTime(cursor.Time), formatTime(cursor.Time), cursor.ID)
+		where = append(where, fmt.Sprintf("(updated_at < %s OR (updated_at = %s AND id < %s))", s.placeholder(len(args)-2), s.placeholder(len(args)-1), s.placeholder(len(args))))
+	}
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
@@ -288,22 +302,31 @@ func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateSta
 			query += " AND " + clause
 		}
 	}
-	args = append(args, limit)
-	query += " ORDER BY updated_at DESC LIMIT " + s.placeholder(len(args))
+	args = append(args, limit+1)
+	query += " ORDER BY updated_at DESC, id DESC LIMIT " + s.placeholder(len(args))
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return Page[WorkflowStatus]{}, err
 	}
 	defer rows.Close()
 	var out []WorkflowStatus
 	for rows.Next() {
 		item, err := scanWorkflow(rows)
 		if err != nil {
-			return nil, err
+			return Page[WorkflowStatus]{}, err
 		}
 		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return Page[WorkflowStatus]{}, err
+	}
+	var next string
+	if len(out) > limit {
+		out = out[:limit]
+		last := out[len(out)-1]
+		next = encodeCursor(last.UpdatedAt, last.ID)
+	}
+	return Page[WorkflowStatus]{Items: out, NextCursor: next}, nil
 }
 
 func (s *Store) WorkflowStatus(ctx context.Context, jobGroupID string) (WorkflowStatus, error) {

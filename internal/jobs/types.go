@@ -113,6 +113,11 @@ type EnqueueRequest struct {
 	Payload        json.RawMessage
 }
 
+type Page[T any] struct {
+	Items      []T
+	NextCursor string
+}
+
 type ClaimOptions struct {
 	WorkerID      string
 	Now           time.Time

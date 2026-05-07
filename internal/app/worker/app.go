@@ -6,14 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path/filepath"
-	"strings"
 	"time"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/modules"
-	appruntime "github.com/artBass-rip/t-helper/internal/runtime"
 	"github.com/artBass-rip/t-helper/internal/storage"
 )
 
@@ -62,11 +59,6 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	defer handle.Close()
-	workerLock, err := acquireSQLiteWorkerLock(handle)
-	if err != nil {
-		return err
-	}
-	defer workerLock.Release()
 
 	configStore := appconfig.NewStore(handle)
 	moduleStore := modules.NewStore(handle)
@@ -88,21 +80,6 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	a.logger.Info("thelper-worker started", "provider", handle.Provider)
 	return runtime.Run(ctx)
-}
-
-func acquireSQLiteWorkerLock(handle *storage.Handle) (*appruntime.RuntimeLock, error) {
-	if handle.Provider != "sqlite" {
-		return nil, nil
-	}
-	fingerprint := strings.TrimPrefix(handle.Fingerprint, "db:")
-	if fingerprint == "" {
-		fingerprint = strings.NewReplacer(":", "_", "/", "_", "\\", "_").Replace(handle.Fingerprint)
-	}
-	path := filepath.Join(".artifacts", "runtime", "thelper-worker-"+fingerprint+".lock")
-	return appruntime.AcquireLock(path, appruntime.LockMetadata{
-		InstanceID:                "worker-" + fingerprint,
-		ConfigDatabaseFingerprint: handle.Fingerprint,
-	})
 }
 
 func (a *App) resolveCurrentProfileHandle(ctx context.Context, bootstrap *storage.Handle) (*storage.Handle, error) {
