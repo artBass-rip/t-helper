@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -71,6 +72,17 @@ type RuntimeSettings struct {
 	LogLevel       string
 	EnabledModules []string
 	Loaded         bool
+}
+
+type WorkerProviderSettings struct {
+	WorkersConcurrency int
+	WorkerProcessLimit int
+	BusyTimeout        time.Duration
+	LeaseDuration      time.Duration
+	HeartbeatInterval  time.Duration
+	SQLiteJournalMode  string
+	SQLiteForeignKeys  bool
+	Loaded             bool
 }
 
 func NewStore(handle *storage.Handle) *Store {
@@ -297,6 +309,80 @@ func (s *Store) RuntimeSettings(ctx context.Context) (RuntimeSettings, error) {
 		_ = valueType
 	}
 	return settings, rows.Err()
+}
+
+func (s *Store) CurrentWorkerProviderSettings(ctx context.Context) (WorkerProviderSettings, error) {
+	profile, err := s.CurrentStorageProfile(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return defaultWorkerProviderSettings(s.handle.Provider), nil
+		}
+		return WorkerProviderSettings{}, err
+	}
+	settings, err := s.WorkerProviderSettings(ctx, profile.ID, s.handle.Provider)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return defaultWorkerProviderSettings(s.handle.Provider), nil
+		}
+		return WorkerProviderSettings{}, err
+	}
+	return settings, nil
+}
+
+func (s *Store) WorkerProviderSettings(ctx context.Context, profileID, provider string) (WorkerProviderSettings, error) {
+	query := `SELECT workers_concurrency, worker_process_limit, busy_timeout, lease_duration, heartbeat_interval, COALESCE(sqlite_journal_mode, ''), sqlite_foreign_keys
+FROM storage_provider_settings WHERE storage_profile_id = ? AND provider = ?`
+	args := []any{profileID, provider}
+	if s.handle.Provider == "postgres" {
+		query = `SELECT workers_concurrency, worker_process_limit, busy_timeout, lease_duration, heartbeat_interval, COALESCE(sqlite_journal_mode, ''), sqlite_foreign_keys
+FROM storage_provider_settings WHERE storage_profile_id = $1 AND provider = $2`
+	}
+	var settings WorkerProviderSettings
+	var busyTimeout, leaseDuration, heartbeatInterval string
+	if err := s.handle.DB.QueryRowContext(ctx, query, args...).Scan(
+		&settings.WorkersConcurrency,
+		&settings.WorkerProcessLimit,
+		&busyTimeout,
+		&leaseDuration,
+		&heartbeatInterval,
+		&settings.SQLiteJournalMode,
+		&settings.SQLiteForeignKeys,
+	); err != nil {
+		return WorkerProviderSettings{}, err
+	}
+	var err error
+	if settings.BusyTimeout, err = time.ParseDuration(busyTimeout); err != nil {
+		return WorkerProviderSettings{}, fmt.Errorf("storage_provider_settings.busy_timeout: %w", err)
+	}
+	if settings.LeaseDuration, err = time.ParseDuration(leaseDuration); err != nil {
+		return WorkerProviderSettings{}, fmt.Errorf("storage_provider_settings.lease_duration: %w", err)
+	}
+	if settings.HeartbeatInterval, err = time.ParseDuration(heartbeatInterval); err != nil {
+		return WorkerProviderSettings{}, fmt.Errorf("storage_provider_settings.heartbeat_interval: %w", err)
+	}
+	settings.Loaded = true
+	return settings, nil
+}
+
+func defaultWorkerProviderSettings(provider string) WorkerProviderSettings {
+	if provider == "sqlite" {
+		return WorkerProviderSettings{
+			WorkersConcurrency: 1,
+			WorkerProcessLimit: 1,
+			BusyTimeout:        5 * time.Second,
+			LeaseDuration:      30 * time.Second,
+			HeartbeatInterval:  10 * time.Second,
+			SQLiteJournalMode:  "WAL",
+			SQLiteForeignKeys:  true,
+		}
+	}
+	return WorkerProviderSettings{
+		WorkersConcurrency: 4,
+		WorkerProcessLimit: 4,
+		BusyTimeout:        5 * time.Second,
+		LeaseDuration:      30 * time.Second,
+		HeartbeatInterval:  10 * time.Second,
+	}
 }
 
 func (s *Store) Reload(ctx context.Context, keys []string) (ReloadResult, error) {

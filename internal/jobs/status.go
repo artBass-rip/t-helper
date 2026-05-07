@@ -394,13 +394,26 @@ func latestEventSummary(ev *Event) any {
 	if ev == nil {
 		return nil
 	}
-	return map[string]any{
+	summary := map[string]any{
 		"job_id":     ev.JobID,
 		"event_type": ev.EventType,
 		"status":     ev.Status,
 		"worker_id":  ev.WorkerID,
 		"created_at": ev.CreatedAt,
 	}
+	var payload struct {
+		Message string         `json:"message"`
+		Details map[string]any `json:"details"`
+	}
+	if len(ev.Payload) > 0 && json.Unmarshal(ev.Payload, &payload) == nil {
+		if payload.Message != "" {
+			summary["message"] = payload.Message
+		}
+		if len(payload.Details) > 0 {
+			summary["details"] = payload.Details
+		}
+	}
+	return summary
 }
 
 func aggregateStatus(counts map[string]int, total int) string {

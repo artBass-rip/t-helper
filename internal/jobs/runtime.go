@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
@@ -35,6 +36,7 @@ type Runtime struct {
 	heartbeatTimeout  time.Duration
 	retentionInterval time.Duration
 	retentionTTL      time.Duration
+	concurrency       int
 }
 
 type RuntimeOptions struct {
@@ -48,6 +50,7 @@ type RuntimeOptions struct {
 	HeartbeatTimeout  time.Duration
 	RetentionInterval time.Duration
 	RetentionTTL      time.Duration
+	Concurrency       int
 }
 
 func NewRuntime(opts RuntimeOptions) *Runtime {
@@ -75,6 +78,9 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 	if opts.RetentionTTL <= 0 {
 		opts.RetentionTTL = 30 * 24 * time.Hour
 	}
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 1
+	}
 	return &Runtime{
 		store:             opts.Store,
 		handlers:          opts.Handlers,
@@ -86,6 +92,7 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 		heartbeatTimeout:  opts.HeartbeatTimeout,
 		retentionInterval: opts.RetentionInterval,
 		retentionTTL:      opts.RetentionTTL,
+		concurrency:       opts.Concurrency,
 	}
 }
 
@@ -93,33 +100,59 @@ func (r *Runtime) Run(ctx context.Context) error {
 	if err := r.store.ReconcileWorkflowStatuses(ctx); err != nil {
 		r.logger.Warn("reconcile workflow statuses failed", "error", err)
 	}
-	ticker := time.NewTicker(r.pollInterval)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r.maintenanceLoop(ctx)
+	}()
+	for i := 0; i < r.concurrency; i++ {
+		wg.Add(1)
+		go func(slot int) {
+			defer wg.Done()
+			r.workerLoop(ctx, slot)
+		}(i)
+	}
+	<-ctx.Done()
+	wg.Wait()
+	return ctx.Err()
+}
+
+func (r *Runtime) maintenanceLoop(ctx context.Context) {
+	ticker := time.NewTicker(r.retentionInterval)
 	defer ticker.Stop()
-	nextRetentionCleanup := time.Now().UTC().Add(r.retentionInterval)
 	for {
-		now := time.Now().UTC()
-		if !now.Before(nextRetentionCleanup) {
-			result, err := r.store.CleanupRetention(ctx, now.Add(-r.retentionTTL))
-			if err != nil {
-				r.logger.Warn("job retention cleanup failed", "error", err)
-			} else {
-				r.logger.Info("job retention cleanup completed", "deleted_job_events", result.DeletedJobEvents, "deleted_job_locks", result.DeletedJobLocks)
-			}
-			nextRetentionCleanup = now.Add(r.retentionInterval)
-		}
-		if err := r.RecoverExpiredLeases(ctx); err != nil {
+		if err := r.RecoverExpiredLeases(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			r.logger.Warn("recover expired leases failed", "error", err)
 		}
+		result, err := r.store.CleanupRetention(ctx, time.Now().UTC().Add(-r.retentionTTL))
+		if err != nil && !errors.Is(err, context.Canceled) {
+			r.logger.Warn("job retention cleanup failed", "error", err)
+		} else if err == nil {
+			r.logger.Info("job retention cleanup completed", "deleted_job_events", result.DeletedJobEvents, "deleted_job_locks", result.DeletedJobLocks)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (r *Runtime) workerLoop(ctx context.Context, slot int) {
+	ticker := time.NewTicker(r.pollInterval)
+	defer ticker.Stop()
+	for {
 		ran, err := r.RunOnce(ctx)
-		if err != nil {
-			r.logger.Warn("worker iteration failed", "error", err)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			r.logger.Warn("worker iteration failed", "slot", slot, "error", err)
 		}
 		if ran {
 			continue
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return
 		case <-ticker.C:
 		}
 	}

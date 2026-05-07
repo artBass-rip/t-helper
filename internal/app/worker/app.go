@@ -21,16 +21,15 @@ type Config struct {
 	PollInterval      time.Duration
 	LeaseDuration     time.Duration
 	HeartbeatInterval time.Duration
+	Concurrency       int
 }
 
 func DefaultConfig() Config {
 	return Config{
-		StorageProvider:   "sqlite",
-		StorageDSN:        ".artifacts/dev/sqlite/t-helper.db",
-		LogLevel:          "info",
-		PollInterval:      time.Second,
-		LeaseDuration:     30 * time.Second,
-		HeartbeatInterval: 10 * time.Second,
+		StorageProvider: "sqlite",
+		StorageDSN:      ".artifacts/dev/sqlite/t-helper.db",
+		LogLevel:        "info",
+		PollInterval:    time.Second,
 	}
 }
 
@@ -70,16 +69,47 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	jobStore := jobs.NewStore(handle)
-	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+	runtimeOptions, err := a.runtimeOptions(ctx, handle.Provider, configStore, jobStore, moduleStore)
+	if err != nil {
+		return err
+	}
+	runtime := jobs.NewRuntime(runtimeOptions)
+	a.logger.Info("thelper-worker started", "provider", handle.Provider, "concurrency", runtimeOptions.Concurrency)
+	return runtime.Run(ctx)
+}
+
+func (a *App) runtimeOptions(ctx context.Context, provider string, configStore *appconfig.Store, jobStore *jobs.Store, moduleStore *modules.Store) (jobs.RuntimeOptions, error) {
+	cfg := a.cfg
+	defaults := DefaultConfig()
+	providerSettings, err := configStore.CurrentWorkerProviderSettings(ctx)
+	if err != nil {
+		return jobs.RuntimeOptions{}, err
+	}
+	if cfg.LeaseDuration == 0 || cfg.LeaseDuration == defaults.LeaseDuration {
+		cfg.LeaseDuration = providerSettings.LeaseDuration
+	}
+	if cfg.HeartbeatInterval == 0 || cfg.HeartbeatInterval == defaults.HeartbeatInterval {
+		cfg.HeartbeatInterval = providerSettings.HeartbeatInterval
+	}
+	concurrency := cfg.Concurrency
+	if concurrency <= 0 {
+		concurrency = providerSettings.WorkersConcurrency
+	}
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	if provider == "sqlite" && concurrency != 1 {
+		return jobs.RuntimeOptions{}, fmt.Errorf("sqlite_worker_concurrency_unsupported")
+	}
+	return jobs.RuntimeOptions{
 		Store:             jobStore,
 		Handlers:          jobs.ModuleHandlers(configStore, moduleStore),
 		Logger:            a.logger,
-		PollInterval:      a.cfg.PollInterval,
-		LeaseDuration:     a.cfg.LeaseDuration,
-		HeartbeatInterval: a.cfg.HeartbeatInterval,
-	})
-	a.logger.Info("thelper-worker started", "provider", handle.Provider)
-	return runtime.Run(ctx)
+		PollInterval:      cfg.PollInterval,
+		LeaseDuration:     cfg.LeaseDuration,
+		HeartbeatInterval: cfg.HeartbeatInterval,
+		Concurrency:       concurrency,
+	}, nil
 }
 
 func (a *App) resolveCurrentProfileHandle(ctx context.Context, bootstrap *storage.Handle) (*storage.Handle, error) {

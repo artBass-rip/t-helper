@@ -32,6 +32,15 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
+	if err := jobStore.AddEvent(ctx, jobs.Event{
+		JobID:      ref.JobID,
+		JobGroupID: "config_operation:" + ref.JobID,
+		EventType:  jobs.EventProgress,
+		Status:     jobs.StatusQueued,
+		Payload:    json.RawMessage(`{"schema_version":"job_events.payload.v1","message":"queued for test","details":{"phase":"acceptance"}}`),
+	}); err != nil {
+		t.Fatalf("add progress event: %v", err)
+	}
 
 	handler := httpapi.New(
 		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
@@ -96,6 +105,10 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	}
 	if jobStatus.SchemaVersion != "job_status.v1" || jobStatus.JobID != ref.JobID {
 		t.Fatalf("unexpected job status: %+v", jobStatus)
+	}
+	latest, ok := jobStatus.LatestEvent.(map[string]any)
+	if !ok || latest["message"] != "queued for test" {
+		t.Fatalf("latest event did not include payload message: %#v", jobStatus.LatestEvent)
 	}
 
 	rec = httptest.NewRecorder()

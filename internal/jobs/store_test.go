@@ -555,6 +555,84 @@ func TestConcurrentRuntimeWorkersRunNonConflictingLocks(t *testing.T) {
 	}
 }
 
+func TestRuntimeRunHonorsInProcessConcurrency(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := openStore(t)
+	for _, lockKey := range []string{"resource:one", "resource:two"} {
+		if _, err := store.Enqueue(context.Background(), jobs.EnqueueRequest{
+			JobType: "config_reload",
+			LockKey: lockKey,
+			Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", lockKey, err)
+		}
+	}
+
+	var active atomic.Int32
+	var maxActive atomic.Int32
+	done := make(chan struct{}, 2)
+	handler := jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+		current := active.Add(1)
+		for {
+			previous := maxActive.Load()
+			if current <= previous || maxActive.CompareAndSwap(previous, current) {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+		active.Add(-1)
+		done <- struct{}{}
+		return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
+	})
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:worker",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": handler,
+		},
+		PollInterval:      time.Millisecond,
+		HeartbeatInterval: time.Millisecond,
+		LeaseDuration:     time.Second,
+		Concurrency:       2,
+	})
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runtime.Run(ctx)
+	}()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("runtime did not process both jobs")
+		}
+	}
+	if maxActive.Load() < 2 {
+		t.Fatalf("max active handlers = %d, want at least 2", maxActive.Load())
+	}
+	deadline := time.After(time.Second)
+	for {
+		items, err := store.List(context.Background(), jobs.ListFilters{Status: jobs.StatusSucceeded})
+		if err != nil {
+			t.Fatalf("list succeeded: %v", err)
+		}
+		if len(items) == 2 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("succeeded jobs = %d, want 2: %+v", len(items), items)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	cancel()
+	select {
+	case <-errCh:
+	case <-time.After(time.Second):
+		t.Fatal("runtime did not stop after cancellation")
+	}
+}
+
 func openStore(t *testing.T) *jobs.Store {
 	t.Helper()
 	ctx := context.Background()

@@ -736,7 +736,7 @@ func isUniqueConstraintError(err error) bool {
 }
 
 func formatTime(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
+	return t.UTC().Format("2006-01-02T15:04:05.000000000Z")
 }
 
 func parseTimePtr(value string) *time.Time {
