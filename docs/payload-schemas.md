@@ -12,8 +12,10 @@
 - Payload не должен содержать raw passwords, password hashes, password reset tokens или reset token hashes.
 - Поля `actor`, `correlation_id`, `idempotency_key` хранятся на уровне `jobs`, но могут дублироваться в payload только если это нужно для межмодульного сообщения.
 - Worker execution metadata хранится на уровне `jobs` (`leased_by`, `attempt_count`, `lease_expires_at`, `heartbeat_at`, `run_after`) и может дублироваться в `result_payload` только для диагностики без секретов.
-- Result payload для failed jobs должен включать диагностический `worker_id`, `attempt` и machine-readable `error_code`, если это применимо.
+- Result payload для failed jobs должен использовать `jobs.failure.result.v1`, если job-specific failed result schema явно не описана.
 - Jobs должны публиковать status events/metrics в `job_events`; aggregate workflow status хранится в `workflow_statuses`.
+  Runtime heartbeat freshness is stored on `jobs.heartbeat_at`; heartbeat
+  events are bounded diagnostics and are not required for every heartbeat tick.
 
 ## Jobs payloads
 
@@ -255,6 +257,27 @@ Stage 03 job-backed config reload payload. Stage 02 uses the synchronous
 }
 ```
 
+### `jobs.failure.result.v1`
+
+Default failed job result payload. It is used unless a job-specific failed
+result schema is explicitly documented.
+
+```json
+{
+  "schema_version": "jobs.failure.result.v1",
+  "job_type": "module_restart",
+  "worker_id": "host:12345:worker_uuid",
+  "attempt": 1,
+  "error_code": "validation_error",
+  "message": "module_name is required",
+  "retryable": false
+}
+```
+
+`error_code` is machine-readable. Stage 03 baseline values are
+`validation_error`, `unknown_job_type`, `lock_contention`, `transient_error`,
+`handler_failed` and `cancelled`.
+
 ### `config_import.result.v1`
 
 Stage 02 synchronous config import result.
@@ -435,6 +458,10 @@ Stage 02 synchronous controlled storage migration result.
 
 ## Status schemas
 
+HTTP response DTOs for `runtime_status.v1`, `job_status.v1` and
+`worker_status.v1` are defined in [`api.md`](api.md). This section defines the
+structured payloads embedded in status storage/read models.
+
 ### `job_events.payload.v1`
 
 ```json
@@ -447,27 +474,43 @@ Stage 02 synchronous controlled storage migration result.
 
 ### `workflow_status.summary.v1`
 
+Generic workflow summary payload owned by `status-monitor`. Domain-specific
+components may be added under `components`, but the baseline `counts` and
+`latest_event` fields remain stable for all workflow types.
+
 ```json
 {
   "schema_version": "workflow_status.summary.v1",
-  "workflow_type": "project_scan",
-  "workflow_id": "project_scan_opaque_id",
-  "job_group_id": "project_scan:project_scan_opaque_id",
+  "workflow_type": "module_operation",
+  "workflow_id": "job_opaque_id",
+  "job_group_id": "module_operation:job_opaque_id",
   "aggregate_status": "running",
+  "counts": {
+    "queued": 0,
+    "running": 1,
+    "succeeded": 0,
+    "failed": 0,
+    "cancelled": 0
+  },
+  "latest_event": {
+    "job_id": "job_opaque_id",
+    "event_type": "progress",
+    "status": "running",
+    "worker_id": "host:12345:worker_uuid",
+    "created_at": "2026-04-08T00:00:00Z"
+  },
   "components": {
-    "project_checks": {
-      "status": "succeeded",
-      "job_id": "job_parent_opaque_id"
-    },
-    "security_checks": {
-      "status": "running",
-      "job_ids": ["job_child_opaque_id"],
-      "completed_modules": 2,
-      "total_modules": 5
+    "module_operation": {
+      "module_name": "config-manager",
+      "operation": "module_restart"
     }
   }
 }
 ```
+
+If no `job_events` exist for the workflow, `latest_event` is `null`. Heartbeat
+freshness is read from `jobs.heartbeat_at`; `latest_event` may be a lifecycle,
+progress or diagnostic heartbeat event.
 
 ## Module state details
 
