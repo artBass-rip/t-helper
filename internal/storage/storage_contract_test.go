@@ -46,7 +46,8 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	}
 	assertSystemMetadata(t, handle.DB)
 	assertStage02TablesPresent(t, handle.DB, handle.Provider)
-	assertPostStage02TablesAbsent(t, handle.DB, handle.Provider)
+	assertStage03TablesPresent(t, handle.DB, handle.Provider)
+	assertPostStage03TablesAbsent(t, handle.DB, handle.Provider)
 	if handle.Fingerprint == "" {
 		t.Fatal("expected non-empty database fingerprint")
 	}
@@ -71,6 +72,10 @@ func requirePostgresTestDatabase(t *testing.T, dsn string) {
 func resetStage01Tables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS workflow_statuses",
+		"DROP TABLE IF EXISTS job_events",
+		"DROP TABLE IF EXISTS job_locks",
+		"DROP TABLE IF EXISTS jobs",
 		"DROP TABLE IF EXISTS ignore_rules",
 		"DROP TABLE IF EXISTS module_states",
 		"DROP TABLE IF EXISTS storage_provider_settings",
@@ -105,11 +110,18 @@ func assertStage02TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	}
 }
 
-func assertPostStage02TablesAbsent(t *testing.T, db *sql.DB, provider string) {
+func assertStage03TablesPresent(t *testing.T, db *sql.DB, provider string) {
+	t.Helper()
+	for _, table := range []string{"jobs", "job_locks", "job_events", "workflow_statuses"} {
+		if !tableExists(t, db, provider, table) {
+			t.Fatalf("Stage 03 table %q was not created", table)
+		}
+	}
+}
+
+func assertPostStage03TablesAbsent(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
 	laterStageTables := []string{
-		"jobs",
-		"job_locks",
 		"root_paths",
 		"projects",
 		"repositories",

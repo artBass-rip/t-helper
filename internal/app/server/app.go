@@ -12,6 +12,7 @@ import (
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/httpapi"
+	"github.com/artBass-rip/t-helper/internal/jobs"
 	applog "github.com/artBass-rip/t-helper/internal/log"
 	"github.com/artBass-rip/t-helper/internal/modules"
 	"github.com/artBass-rip/t-helper/internal/runtime"
@@ -153,6 +154,7 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 	)
 	configStore := appconfig.NewStore(handle)
 	moduleStore := modules.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
 	settings, err := configStore.RuntimeSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -164,6 +166,8 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 		httpapi.NewHealthHandler(health),
 		httpapi.NewConfigHandler(configStore),
 		httpapi.NewModulesHandler(configStore, moduleStore),
+		httpapi.NewJobsHandler(jobStore),
+		httpapi.NewStatusHandler(jobStore),
 	), nil
 }
 

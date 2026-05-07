@@ -1,0 +1,524 @@
+package jobs
+
+import (
+	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/artBass-rip/t-helper/internal/storage"
+)
+
+var ErrNotFound = errors.New("job not found")
+
+type Store struct {
+	handle *storage.Handle
+}
+
+func NewStore(handle *storage.Handle) *Store {
+	return &Store{handle: handle}
+}
+
+func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	now := time.Now().UTC()
+	if req.ID == "" {
+		req.ID = newID("job")
+	}
+	if strings.TrimSpace(req.Actor) == "" {
+		req.Actor = "system"
+	}
+	if req.MaxAttempts == 0 {
+		req.MaxAttempts = 3
+	}
+	if req.RunAfter.IsZero() {
+		req.RunAfter = now
+	}
+	if len(req.Payload) == 0 {
+		req.Payload = json.RawMessage(`{}`)
+	}
+	if req.JobGroupID == "" {
+		req.JobGroupID = defaultJobGroupID(req.JobType, req.ID)
+	}
+	if req.WorkflowID == "" {
+		req.WorkflowID = req.ID
+	}
+
+	if req.IdempotencyKey != "" {
+		if existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey); err == nil {
+			if string(existing.Payload) != string(req.Payload) {
+				return JobRef{}, fmt.Errorf("idempotency conflict for %s/%s", req.JobType, req.IdempotencyKey)
+			}
+			return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, nil
+		} else if !errors.Is(err, ErrNotFound) {
+			return JobRef{}, err
+		}
+	}
+
+	query := `INSERT INTO jobs (id, job_type, status, actor, correlation_id, idempotency_key, parent_job_id, job_group_id, lock_key, attempt_count, max_attempts, run_after, priority, payload, created_at, updated_at)
+VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+	args := []any{req.ID, req.JobType, nullEmpty(req.Actor), nullEmpty(req.CorrelationID), nullEmpty(req.IdempotencyKey), nullEmpty(req.ParentJobID), req.JobGroupID, nullEmpty(req.LockKey), req.MaxAttempts, formatTime(req.RunAfter), req.Priority, string(req.Payload), formatTime(now), formatTime(now)}
+	if s.handle.Provider == "postgres" {
+		query = `INSERT INTO jobs (id, job_type, status, actor, correlation_id, idempotency_key, parent_job_id, job_group_id, lock_key, attempt_count, max_attempts, run_after, priority, payload, created_at, updated_at)
+VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14)`
+	}
+	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		return JobRef{}, err
+	}
+	if err := s.AddEvent(ctx, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
+		return JobRef{}, err
+	}
+	if err := s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID); err != nil {
+		return JobRef{}, err
+	}
+	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+}
+
+func (s *Store) Get(ctx context.Context, id string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE id = ?"
+	args := []any{id}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE id = $1"
+	}
+	row := s.handle.DB.QueryRowContext(ctx, query, args...)
+	job, err := scanJob(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) List(ctx context.Context, filters ListFilters) ([]Job, error) {
+	var where []string
+	var args []any
+	add := func(clause string, value any) {
+		args = append(args, value)
+		where = append(where, fmt.Sprintf(clause, s.placeholder(len(args))))
+	}
+	if filters.JobType != "" {
+		add("job_type = %s", filters.JobType)
+	}
+	if filters.Status != "" {
+		add("status = %s", filters.Status)
+	}
+	if filters.LockKey != "" {
+		add("lock_key = %s", filters.LockKey)
+	}
+	if filters.JobGroupID != "" {
+		add("job_group_id = %s", filters.JobGroupID)
+	}
+	if filters.ParentJobID != "" {
+		add("parent_job_id = %s", filters.ParentJobID)
+	}
+	limit := filters.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs"
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	args = append(args, limit)
+	query += " ORDER BY created_at DESC, id DESC LIMIT " + s.placeholder(len(args))
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Job
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	return out, rows.Err()
+}
+
+type ListFilters struct {
+	JobType     string
+	Status      string
+	LockKey     string
+	JobGroupID  string
+	ParentJobID string
+	Limit       int
+}
+
+func (s *Store) ClaimNext(ctx context.Context, opts ClaimOptions) (Job, bool, error) {
+	if opts.Now.IsZero() {
+		opts.Now = time.Now().UTC()
+	}
+	if opts.LeaseDuration <= 0 {
+		opts.LeaseDuration = 30 * time.Second
+	}
+	leaseExpires := opts.Now.Add(opts.LeaseDuration)
+	if s.handle.Provider == "postgres" {
+		query := `UPDATE jobs SET status = 'running', leased_by = $1, lease_expires_at = $2, heartbeat_at = $3, started_at = COALESCE(started_at, $3), attempt_count = attempt_count + 1, updated_at = $3
+WHERE id = (
+  SELECT id FROM jobs
+  WHERE status = 'queued' AND run_after <= $3
+  ORDER BY run_after ASC, priority DESC, created_at ASC
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+RETURNING ` + s.jobSelectColumns()
+		job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now)))
+		if errors.Is(err, sql.ErrNoRows) {
+			return Job{}, false, nil
+		}
+		if err != nil {
+			return Job{}, false, err
+		}
+		return s.afterClaim(ctx, job, opts.WorkerID)
+	}
+
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Job{}, false, err
+	}
+	defer tx.Rollback()
+	update := `UPDATE jobs SET status = 'running', leased_by = ?, lease_expires_at = ?, heartbeat_at = ?, started_at = COALESCE(started_at, ?), attempt_count = attempt_count + 1, updated_at = ?
+WHERE id = (
+  SELECT id FROM jobs
+  WHERE status = 'queued' AND run_after <= ?
+  ORDER BY run_after ASC, priority DESC, created_at ASC
+  LIMIT 1
+) AND status = 'queued'`
+	res, err := tx.ExecContext(ctx, update, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now))
+	if err != nil {
+		return Job{}, false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return Job{}, false, err
+	}
+	if affected == 0 {
+		return Job{}, false, nil
+	}
+	job, err := scanJob(tx.QueryRowContext(ctx, "SELECT "+s.jobSelectColumns()+" FROM jobs WHERE leased_by = ? AND status = 'running' ORDER BY updated_at DESC LIMIT 1", opts.WorkerID))
+	if err != nil {
+		return Job{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Job{}, false, err
+	}
+	return s.afterClaim(ctx, job, opts.WorkerID)
+}
+
+func (s *Store) afterClaim(ctx context.Context, job Job, workerID string) (Job, bool, error) {
+	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventClaimed, Status: StatusRunning, WorkerID: workerID}); err != nil {
+		return Job{}, false, err
+	}
+	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
+		return Job{}, false, err
+	}
+	if err := s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
+		return Job{}, false, err
+	}
+	return job, true, nil
+}
+
+func (s *Store) Heartbeat(ctx context.Context, jobID, workerID string, leaseDuration time.Duration) error {
+	now := time.Now().UTC()
+	query := `UPDATE jobs SET heartbeat_at = ?, lease_expires_at = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
+	args := []any{formatTime(now), formatTime(now.Add(leaseDuration)), formatTime(now), jobID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE jobs SET heartbeat_at = $1, lease_expires_at = $2, updated_at = $3 WHERE id = $4 AND leased_by = $5 AND status = 'running'`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Store) AcquireLock(ctx context.Context, job Job, workerID string, leaseDuration time.Duration) (bool, error) {
+	if job.LockKey == "" {
+		return true, nil
+	}
+	now := time.Now().UTC()
+	if err := s.ExpireLocks(ctx, now); err != nil {
+		return false, err
+	}
+	query := `INSERT INTO job_locks (id, lock_key, job_id, owner, status, created_at, expires_at) VALUES (?, ?, ?, ?, 'held', ?, ?)`
+	args := []any{newID("lock"), job.LockKey, job.ID, workerID, formatTime(now), formatTime(now.Add(leaseDuration))}
+	if s.handle.Provider == "postgres" {
+		query = `INSERT INTO job_locks (id, lock_key, job_id, owner, status, created_at, expires_at) VALUES ($1, $2, $3, $4, 'held', $5, $6)`
+	}
+	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Store) ReleaseLocks(ctx context.Context, jobID, workerID string) error {
+	now := time.Now().UTC()
+	query := `UPDATE job_locks SET status = 'released', released_at = ? WHERE job_id = ? AND owner = ? AND status = 'held'`
+	args := []any{formatTime(now), jobID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE job_locks SET status = 'released', released_at = $1 WHERE job_id = $2 AND owner = $3 AND status = 'held'`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Store) ExpireLocks(ctx context.Context, now time.Time) error {
+	query := `UPDATE job_locks SET status = 'expired' WHERE status = 'held' AND expires_at <= ?`
+	args := []any{formatTime(now)}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE job_locks SET status = 'expired' WHERE status = 'held' AND expires_at <= $1`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, result json.RawMessage, message string) error {
+	if len(result) == 0 {
+		result = json.RawMessage(`{}`)
+	}
+	now := time.Now().UTC()
+	if err := s.ReleaseLocks(ctx, job.ID, workerID); err != nil {
+		return err
+	}
+	query := `UPDATE jobs SET status = ?, result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
+	args := []any{status, string(result), nullEmpty(message), formatTime(now), formatTime(now), job.ID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE jobs SET status = $1, result_payload = $2, error_message = $3, finished_at = $4, updated_at = $5 WHERE id = $6 AND leased_by = $7 AND status = 'running'`
+	}
+	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	eventType := EventSucceeded
+	if status == StatusFailed {
+		eventType = EventFailed
+	} else if status == StatusCancelled {
+		eventType = EventCancelled
+	}
+	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: eventType, Status: status, WorkerID: workerID}); err != nil {
+		return err
+	}
+	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+}
+
+func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, runAfter time.Time) error {
+	now := time.Now().UTC()
+	if err := s.ReleaseLocks(ctx, job.ID, workerID); err != nil {
+		return err
+	}
+	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, error_message = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
+	args := []any{formatTime(runAfter), nullEmpty(reason), formatTime(now), job.ID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, error_message = $2, updated_at = $3 WHERE id = $4 AND leased_by = $5 AND status = 'running'`
+	}
+	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayload(reason)}); err != nil {
+		return err
+	}
+	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+}
+
+func (s *Store) AddEvent(ctx context.Context, event Event) error {
+	if event.ID == "" {
+		event.ID = newID("event")
+	}
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
+	}
+	query := `INSERT INTO job_events (id, job_id, job_group_id, event_type, status, worker_id, metric_name, metric_value, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{event.ID, event.JobID, nullEmpty(event.JobGroupID), event.EventType, nullEmpty(event.Status), nullEmpty(event.WorkerID), nullEmpty(event.MetricName), event.MetricValue, nullJSON(event.Payload), formatTime(event.CreatedAt)}
+	if s.handle.Provider == "postgres" {
+		query = `INSERT INTO job_events (id, job_id, job_group_id, event_type, status, worker_id, metric_name, metric_value, payload, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Store) LatestEvent(ctx context.Context, jobID string) (*Event, error) {
+	query := `SELECT id, job_id, COALESCE(job_group_id, ''), event_type, COALESCE(status, ''), COALESCE(worker_id, ''), COALESCE(metric_name, ''), metric_value, COALESCE(payload, ''), ` + s.timeExpr("created_at") + ` FROM job_events WHERE job_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`
+	args := []any{jobID}
+	if s.handle.Provider == "postgres" {
+		query = `SELECT id, job_id, COALESCE(job_group_id, ''), event_type, COALESCE(status, ''), COALESCE(worker_id, ''), COALESCE(metric_name, ''), metric_value, COALESCE(payload::text, ''), ` + s.timeExpr("created_at") + ` FROM job_events WHERE job_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`
+	}
+	ev, err := scanEvent(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return &ev, err
+}
+
+func (s *Store) findByIdempotency(ctx context.Context, actor, jobType, key string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE actor = ? AND job_type = ? AND idempotency_key = ?"
+	args := []any{actor, jobType, key}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE actor = $1 AND job_type = $2 AND idempotency_key = $3"
+	}
+	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) jobSelectColumns() string {
+	if s.handle.Provider == "postgres" {
+		return `id, job_type, status, COALESCE(actor, ''), COALESCE(correlation_id, ''), COALESCE(idempotency_key, ''), COALESCE(parent_job_id, ''), COALESCE(job_group_id, ''), COALESCE(lock_key, ''), attempt_count, max_attempts, COALESCE(leased_by, ''), lease_expires_at::text, heartbeat_at::text, run_after::text, priority, payload::text, COALESCE(result_payload::text, ''), created_at::text, started_at::text, finished_at::text, COALESCE(error_message, ''), updated_at::text`
+	}
+	return `id, job_type, status, COALESCE(actor, ''), COALESCE(correlation_id, ''), COALESCE(idempotency_key, ''), COALESCE(parent_job_id, ''), COALESCE(job_group_id, ''), COALESCE(lock_key, ''), attempt_count, max_attempts, COALESCE(leased_by, ''), COALESCE(lease_expires_at, ''), COALESCE(heartbeat_at, ''), run_after, priority, payload, COALESCE(result_payload, ''), created_at, COALESCE(started_at, ''), COALESCE(finished_at, ''), COALESCE(error_message, ''), updated_at`
+}
+
+func scanJob(row interface{ Scan(dest ...any) error }) (Job, error) {
+	var job Job
+	var lease, heartbeat, runAfter, created, started, finished, updated string
+	var payload, result string
+	err := row.Scan(&job.ID, &job.JobType, &job.Status, &job.Actor, &job.CorrelationID, &job.IdempotencyKey, &job.ParentJobID, &job.JobGroupID, &job.LockKey, &job.AttemptCount, &job.MaxAttempts, &job.LeasedBy, &lease, &heartbeat, &runAfter, &job.Priority, &payload, &result, &created, &started, &finished, &job.ErrorMessage, &updated)
+	if err != nil {
+		return Job{}, err
+	}
+	job.Payload = json.RawMessage(payload)
+	if result != "" {
+		job.ResultPayload = json.RawMessage(result)
+	}
+	job.RunAfter, _ = parseTime(runAfter)
+	job.CreatedAt, _ = parseTime(created)
+	job.UpdatedAt, _ = parseTime(updated)
+	job.LeaseExpiresAt = parseTimePtr(lease)
+	job.HeartbeatAt = parseTimePtr(heartbeat)
+	job.StartedAt = parseTimePtr(started)
+	job.FinishedAt = parseTimePtr(finished)
+	return job, nil
+}
+
+func scanEvent(row interface{ Scan(dest ...any) error }) (Event, error) {
+	var ev Event
+	var metric sql.NullFloat64
+	var payload, created string
+	err := row.Scan(&ev.ID, &ev.JobID, &ev.JobGroupID, &ev.EventType, &ev.Status, &ev.WorkerID, &ev.MetricName, &metric, &payload, &created)
+	if err != nil {
+		return Event{}, err
+	}
+	if metric.Valid {
+		ev.MetricValue = &metric.Float64
+	}
+	if payload != "" {
+		ev.Payload = json.RawMessage(payload)
+	}
+	ev.CreatedAt, _ = parseTime(created)
+	return ev, nil
+}
+
+func (s *Store) placeholder(idx int) string {
+	if s.handle.Provider == "postgres" {
+		return fmt.Sprintf("$%d", idx)
+	}
+	return "?"
+}
+
+func (s *Store) timeExpr(column string) string {
+	if s.handle.Provider == "postgres" {
+		return column + "::text"
+	}
+	return column
+}
+
+func defaultJobGroupID(jobType, id string) string {
+	switch jobType {
+	case "config_reload":
+		return "config_operation:" + id
+	case "module_restart":
+		return "module_operation:" + id
+	default:
+		return jobType + ":" + id
+	}
+}
+
+func workflowIDForJob(job Job) string {
+	if strings.Contains(job.JobGroupID, ":") {
+		parts := strings.SplitN(job.JobGroupID, ":", 2)
+		if parts[1] != "" && parts[1] != job.ID {
+			return parts[1]
+		}
+	}
+	return job.ID
+}
+
+func workflowTypeForJobType(jobType string) string {
+	switch jobType {
+	case "config_reload":
+		return "config_operation"
+	case "module_restart":
+		return "module_operation"
+	case "project_scan", "security_validation_scan":
+		return "project_scan"
+	case "repo_clone", "repo_pull", "repo_sync":
+		return "repository_operation"
+	case "scim_sync":
+		return "scim_sync"
+	case "global_scan":
+		return "global_scan"
+	default:
+		return "global_scan"
+	}
+}
+
+func nullEmpty(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
+func nullJSON(value json.RawMessage) any {
+	if len(value) == 0 {
+		return nil
+	}
+	return string(value)
+}
+
+func eventPayload(message string) json.RawMessage {
+	data, _ := json.Marshal(map[string]any{"schema_version": "job_events.payload.v1", "message": message, "details": map[string]any{}})
+	return data
+}
+
+func formatTime(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
+func parseTimePtr(value string) *time.Time {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	t, err := parseTime(value)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+func parseTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02 15:04:05.999999999-07", value); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02 15:04:05.999999999Z07:00", value); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Parse(time.RFC3339, value)
+}
+
+func newID(prefix string) string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	}
+	return prefix + "_" + hex.EncodeToString(b[:])
+}

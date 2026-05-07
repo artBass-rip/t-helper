@@ -195,6 +195,14 @@ func TestStage02HTTPConfigAndModuleFlow(t *testing.T) {
 	if restart.SchemaVersion != "module_restart.result.v1" || restart.NewState != modules.StateRunning {
 		t.Fatalf("unexpected restart result: %+v", restart)
 	}
+
+	var jobCount int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM jobs").Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs: %v", err)
+	}
+	if jobCount != 0 {
+		t.Fatalf("Stage 02 synchronous module endpoints created %d jobs, want 0", jobCount)
+	}
 }
 
 func TestStage02HTTPRejectsInvalidConfigAtomically(t *testing.T) {
