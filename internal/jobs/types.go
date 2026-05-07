@@ -80,6 +80,17 @@ type WorkflowStatus struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
+type Lock struct {
+	ID         string     `json:"id"`
+	LockKey    string     `json:"lock_key"`
+	JobID      string     `json:"job_id"`
+	Owner      string     `json:"owner"`
+	Status     string     `json:"status"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	ReleasedAt *time.Time `json:"released_at,omitempty"`
+}
+
 type JobRef struct {
 	JobID         string `json:"job_id"`
 	Status        string `json:"status"`

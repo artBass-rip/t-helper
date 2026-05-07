@@ -47,7 +47,7 @@ func (s *Store) RefreshWorkflowStatus(ctx context.Context, jobGroupID, workflowI
 	if jobGroupID == "" {
 		return nil
 	}
-	jobs, err := s.List(ctx, ListFilters{JobGroupID: jobGroupID, Limit: 1000})
+	jobs, err := s.list(ctx, ListFilters{JobGroupID: jobGroupID, Limit: 1000}, 1000)
 	if err != nil {
 		return err
 	}
@@ -95,6 +95,62 @@ ON CONFLICT (job_group_id) DO UPDATE SET workflow_type = EXCLUDED.workflow_type,
 	}
 	_, err = s.handle.DB.ExecContext(ctx, query, args...)
 	return err
+}
+
+func (s *Store) ReconcileWorkflowStatuses(ctx context.Context) error {
+	rows, err := s.handle.DB.QueryContext(ctx, "SELECT DISTINCT job_group_id FROM jobs WHERE job_group_id IS NOT NULL AND job_group_id <> ''")
+	if err != nil {
+		return err
+	}
+	var groups []string
+	for rows.Next() {
+		var group string
+		if err := rows.Scan(&group); err != nil {
+			rows.Close()
+			return err
+		}
+		groups = append(groups, group)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, group := range groups {
+		if err := s.RefreshWorkflowStatus(ctx, group, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type RetentionCleanupResult struct {
+	DeletedJobEvents int `json:"deleted_job_events"`
+	DeletedJobLocks  int `json:"deleted_job_locks"`
+}
+
+func (s *Store) CleanupRetention(ctx context.Context, cutoff time.Time) (RetentionCleanupResult, error) {
+	var result RetentionCleanupResult
+	eventQuery := "DELETE FROM job_events WHERE created_at < ?"
+	lockQuery := "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < ?"
+	args := []any{formatTime(cutoff)}
+	if s.handle.Provider == "postgres" {
+		eventQuery = "DELETE FROM job_events WHERE created_at < $1"
+		lockQuery = "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < $1"
+	}
+	res, err := s.handle.DB.ExecContext(ctx, eventQuery, args...)
+	if err != nil {
+		return result, err
+	}
+	if n, err := res.RowsAffected(); err == nil {
+		result.DeletedJobEvents = int(n)
+	}
+	res, err = s.handle.DB.ExecContext(ctx, lockQuery, args...)
+	if err != nil {
+		return result, err
+	}
+	if n, err := res.RowsAffected(); err == nil {
+		result.DeletedJobLocks = int(n)
+	}
+	return result, nil
 }
 
 func (s *Store) RuntimeStatus(ctx context.Context) (RuntimeStatus, error) {

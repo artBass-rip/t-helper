@@ -81,4 +81,32 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	if jobStatus.SchemaVersion != "job_status.v1" || jobStatus.JobID != ref.JobID {
 		t.Fatalf("unexpected job status: %+v", jobStatus)
 	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workflows/config_operation:"+ref.JobID, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/status/workflows/{job_group_id} status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var workflow jobs.WorkflowStatus
+	if err := json.NewDecoder(rec.Body).Decode(&workflow); err != nil {
+		t.Fatalf("decode workflow status: %v", err)
+	}
+	if workflow.JobGroupID != "config_operation:"+ref.JobID || workflow.AggregateStatus != jobs.StatusQueued || workflow.ProgressTotal != 1 {
+		t.Fatalf("unexpected workflow status: %+v", workflow)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workers", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/status/workers status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var workers struct {
+		Items []jobs.WorkerStatus `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&workers); err != nil {
+		t.Fatalf("decode workers: %v", err)
+	}
+	if len(workers.Items) != 0 {
+		t.Fatalf("expected no idle workers in Stage 03, got %+v", workers)
+	}
 }

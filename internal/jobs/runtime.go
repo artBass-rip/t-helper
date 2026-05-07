@@ -72,6 +72,9 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
+	if err := r.store.ReconcileWorkflowStatuses(ctx); err != nil {
+		r.logger.Warn("reconcile workflow statuses failed", "error", err)
+	}
 	ticker := time.NewTicker(r.pollInterval)
 	defer ticker.Stop()
 	for {
@@ -104,6 +107,9 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		runAfter := time.Now().UTC().Add(backoff(job.AttemptCount))
 		return true, r.store.Requeue(ctx, job, r.workerID, "lock_contention", runAfter)
 	}
+	if err := r.store.Start(ctx, job, r.workerID); err != nil {
+		return true, err
+	}
 
 	handler := r.handlers[job.JobType]
 	if handler == nil {
@@ -117,6 +123,12 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 			Retryable:     false,
 		})
 		return true, r.store.Complete(ctx, job, r.workerID, StatusFailed, result, "unknown job type")
+	}
+	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
+		return true, err
+	}
+	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
+		return true, err
 	}
 
 	heartbeatCtx, stop := context.WithCancel(ctx)
@@ -132,6 +144,18 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	classified := classifyError(handleErr)
 	if classified.Retryable && job.AttemptCount < job.MaxAttempts {
 		return true, r.store.Requeue(ctx, job, r.workerID, classified.Code, time.Now().UTC().Add(backoff(job.AttemptCount)))
+	}
+	if classified.Code == "cancelled" {
+		failure, _ := json.Marshal(FailureResult{
+			SchemaVersion: ResultFailureSchemaVersion,
+			JobType:       job.JobType,
+			WorkerID:      r.workerID,
+			Attempt:       job.AttemptCount,
+			ErrorCode:     classified.Code,
+			Message:       classified.Message,
+			Retryable:     false,
+		})
+		return true, r.store.Complete(ctx, job, r.workerID, StatusCancelled, failure, classified.Message)
 	}
 	failure, _ := json.Marshal(FailureResult{
 		SchemaVersion: ResultFailureSchemaVersion,
@@ -244,6 +268,9 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) map[string]Handler {
 	return map[string]Handler{
 		"config_reload": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
+			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
+				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+			}
 			var payload struct {
 				Keys []string `json:"keys"`
 			}
@@ -258,6 +285,9 @@ func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) ma
 			return json.Marshal(result)
 		}),
 		"module_restart": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
+			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
+				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+			}
 			var payload struct {
 				ModuleName string `json:"module_name"`
 			}

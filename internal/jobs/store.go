@@ -20,6 +20,10 @@ type Store struct {
 	handle *storage.Handle
 }
 
+type sqlExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
 func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle}
 }
@@ -40,6 +44,9 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 	}
 	if len(req.Payload) == 0 {
 		req.Payload = json.RawMessage(`{}`)
+	}
+	if err := validatePayloadSchema(req.JobType, req.Payload); err != nil {
+		return JobRef{}, err
 	}
 	if req.JobGroupID == "" {
 		req.JobGroupID = defaultJobGroupID(req.JobType, req.ID)
@@ -66,10 +73,18 @@ VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
 		query = `INSERT INTO jobs (id, job_type, status, actor, correlation_id, idempotency_key, parent_job_id, job_group_id, lock_key, attempt_count, max_attempts, run_after, priority, payload, created_at, updated_at)
 VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14)`
 	}
-	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
 		return JobRef{}, err
 	}
-	if err := s.AddEvent(ctx, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return JobRef{}, err
+	}
+	if err := s.addEvent(ctx, tx, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
+		return JobRef{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return JobRef{}, err
 	}
 	if err := s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID); err != nil {
@@ -93,6 +108,10 @@ func (s *Store) Get(ctx context.Context, id string) (Job, error) {
 }
 
 func (s *Store) List(ctx context.Context, filters ListFilters) ([]Job, error) {
+	return s.list(ctx, filters, 200)
+}
+
+func (s *Store) list(ctx context.Context, filters ListFilters, maxLimit int) ([]Job, error) {
 	var where []string
 	var args []any
 	add := func(clause string, value any) {
@@ -115,8 +134,14 @@ func (s *Store) List(ctx context.Context, filters ListFilters) ([]Job, error) {
 		add("parent_job_id = %s", filters.ParentJobID)
 	}
 	limit := filters.Limit
-	if limit <= 0 || limit > 200 {
+	if maxLimit <= 0 {
+		maxLimit = 200
+	}
+	if limit <= 0 || limit > maxLimit {
 		limit = 100
+		if maxLimit > 200 {
+			limit = maxLimit
+		}
 	}
 	query := "SELECT " + s.jobSelectColumns() + " FROM jobs"
 	if len(where) > 0 {
@@ -214,13 +239,17 @@ func (s *Store) afterClaim(ctx context.Context, job Job, workerID string) (Job, 
 	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventClaimed, Status: StatusRunning, WorkerID: workerID}); err != nil {
 		return Job{}, false, err
 	}
-	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
-		return Job{}, false, err
-	}
 	if err := s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
 		return Job{}, false, err
 	}
 	return job, true, nil
+}
+
+func (s *Store) Start(ctx context.Context, job Job, workerID string) error {
+	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
+		return err
+	}
+	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
 }
 
 func (s *Store) Heartbeat(ctx context.Context, jobID, workerID string, leaseDuration time.Duration) error {
@@ -230,8 +259,18 @@ func (s *Store) Heartbeat(ctx context.Context, jobID, workerID string, leaseDura
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET heartbeat_at = $1, lease_expires_at = $2, updated_at = $3 WHERE id = $4 AND leased_by = $5 AND status = 'running'`
 	}
-	_, err := s.handle.DB.ExecContext(ctx, query, args...)
-	return err
+	res, err := s.handle.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return nil
+	}
+	return s.ExtendLocks(ctx, jobID, workerID, now.Add(leaseDuration))
 }
 
 func (s *Store) AcquireLock(ctx context.Context, job Job, workerID string, leaseDuration time.Duration) (bool, error) {
@@ -248,9 +287,22 @@ func (s *Store) AcquireLock(ctx context.Context, job Job, workerID string, lease
 		query = `INSERT INTO job_locks (id, lock_key, job_id, owner, status, created_at, expires_at) VALUES ($1, $2, $3, $4, 'held', $5, $6)`
 	}
 	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
-		return false, nil
+		if isUniqueConstraintError(err) {
+			return false, nil
+		}
+		return false, err
 	}
 	return true, nil
+}
+
+func (s *Store) ExtendLocks(ctx context.Context, jobID, workerID string, expiresAt time.Time) error {
+	query := `UPDATE job_locks SET expires_at = ? WHERE job_id = ? AND owner = ? AND status = 'held'`
+	args := []any{formatTime(expiresAt), jobID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE job_locks SET expires_at = $1 WHERE job_id = $2 AND owner = $3 AND status = 'held'`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (s *Store) ReleaseLocks(ctx context.Context, jobID, workerID string) error {
@@ -322,6 +374,10 @@ func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, r
 }
 
 func (s *Store) AddEvent(ctx context.Context, event Event) error {
+	return s.addEvent(ctx, s.handle.DB, event)
+}
+
+func (s *Store) addEvent(ctx context.Context, exec sqlExecutor, event Event) error {
 	if event.ID == "" {
 		event.ID = newID("event")
 	}
@@ -333,7 +389,7 @@ func (s *Store) AddEvent(ctx context.Context, event Event) error {
 	if s.handle.Provider == "postgres" {
 		query = `INSERT INTO job_events (id, job_id, job_group_id, event_type, status, worker_id, metric_name, metric_value, payload, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
 	}
-	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	_, err := exec.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -348,6 +404,50 @@ func (s *Store) LatestEvent(ctx context.Context, jobID string) (*Event, error) {
 		return nil, nil
 	}
 	return &ev, err
+}
+
+func (s *Store) ListEvents(ctx context.Context, jobID string) ([]Event, error) {
+	query := `SELECT id, job_id, COALESCE(job_group_id, ''), event_type, COALESCE(status, ''), COALESCE(worker_id, ''), COALESCE(metric_name, ''), metric_value, COALESCE(payload, ''), ` + s.timeExpr("created_at") + ` FROM job_events WHERE job_id = ? ORDER BY created_at ASC, id ASC`
+	args := []any{jobID}
+	if s.handle.Provider == "postgres" {
+		query = `SELECT id, job_id, COALESCE(job_group_id, ''), event_type, COALESCE(status, ''), COALESCE(worker_id, ''), COALESCE(metric_name, ''), metric_value, COALESCE(payload::text, ''), ` + s.timeExpr("created_at") + ` FROM job_events WHERE job_id = $1 ORDER BY created_at ASC, id ASC`
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Event
+	for rows.Next() {
+		ev, err := scanEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListLocks(ctx context.Context, jobID string) ([]Lock, error) {
+	query := `SELECT id, lock_key, job_id, owner, status, created_at, expires_at, COALESCE(released_at, '') FROM job_locks WHERE job_id = ? ORDER BY created_at ASC, id ASC`
+	args := []any{jobID}
+	if s.handle.Provider == "postgres" {
+		query = `SELECT id, lock_key, job_id, owner, status, created_at::text, expires_at::text, COALESCE(released_at::text, '') FROM job_locks WHERE job_id = $1 ORDER BY created_at ASC, id ASC`
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Lock
+	for rows.Next() {
+		item, err := scanLock(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) findByIdempotency(ctx context.Context, actor, jobType, key string) (Job, error) {
@@ -410,6 +510,18 @@ func scanEvent(row interface{ Scan(dest ...any) error }) (Event, error) {
 	return ev, nil
 }
 
+func scanLock(row interface{ Scan(dest ...any) error }) (Lock, error) {
+	var item Lock
+	var created, expires, released string
+	if err := row.Scan(&item.ID, &item.LockKey, &item.JobID, &item.Owner, &item.Status, &created, &expires, &released); err != nil {
+		return Lock{}, err
+	}
+	item.CreatedAt, _ = parseTime(created)
+	item.ExpiresAt, _ = parseTime(expires)
+	item.ReleasedAt = parseTimePtr(released)
+	return item, nil
+}
+
 func (s *Store) placeholder(idx int) string {
 	if s.handle.Provider == "postgres" {
 		return fmt.Sprintf("$%d", idx)
@@ -464,6 +576,50 @@ func workflowTypeForJobType(jobType string) string {
 	}
 }
 
+func validatePayloadSchema(jobType string, payload json.RawMessage) error {
+	expected := payloadSchemaForJobType(jobType)
+	if expected == "" {
+		return nil
+	}
+	var envelope struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return fmt.Errorf("invalid job payload: %w", err)
+	}
+	if envelope.SchemaVersion != expected {
+		return fmt.Errorf("invalid job payload schema_version for %s: got %q want %q", jobType, envelope.SchemaVersion, expected)
+	}
+	return nil
+}
+
+func payloadSchemaForJobType(jobType string) string {
+	switch jobType {
+	case "global_scan":
+		return "jobs.global_scan.payload.v1"
+	case "project_discovery":
+		return "jobs.project_discovery.payload.v1"
+	case "project_scan":
+		return "jobs.project_scan.payload.v1"
+	case "security_validation_scan":
+		return "jobs.security_validation_scan.payload.v1"
+	case "repo_clone":
+		return "jobs.repo_clone.payload.v1"
+	case "repo_pull":
+		return "jobs.repo_pull.payload.v1"
+	case "repo_sync":
+		return "jobs.repo_sync.payload.v1"
+	case "config_reload":
+		return "jobs.config_reload.payload.v1"
+	case "module_restart":
+		return "jobs.module_restart.payload.v1"
+	case "scim_sync":
+		return "jobs.scim_sync.payload.v1"
+	default:
+		return ""
+	}
+}
+
 func nullEmpty(value string) any {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -481,6 +637,17 @@ func nullJSON(value json.RawMessage) any {
 func eventPayload(message string) json.RawMessage {
 	data, _ := json.Marshal(map[string]any{"schema_version": "job_events.payload.v1", "message": message, "details": map[string]any{}})
 	return data
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unique constraint") ||
+		strings.Contains(message, "duplicate key value") ||
+		strings.Contains(message, "constraint failed: unique") ||
+		strings.Contains(message, "sqlite_constraint_unique")
 }
 
 func formatTime(t time.Time) string {
