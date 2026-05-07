@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	ErrNotFound             = errors.New("job not found")
-	ErrIdempotencyConflict  = errors.New("idempotency conflict")
-	ErrInvalidCursor        = errors.New("invalid cursor")
+	ErrNotFound            = errors.New("job not found")
+	ErrIdempotencyConflict = errors.New("idempotency conflict")
+	ErrInvalidCursor       = errors.New("invalid cursor")
 )
 
 type Store struct {
@@ -368,6 +368,7 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	if len(result) == 0 {
 		result = json.RawMessage(`{}`)
 	}
+	message = safeMessage(message)
 	now := time.Now().UTC()
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -408,6 +409,7 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 
 func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, runAfter time.Time) error {
 	now := time.Now().UTC()
+	reason = safeMessage(reason)
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -430,7 +432,7 @@ func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, r
 	if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
 		return err
 	}
-	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayload(reason)}); err != nil {
+	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayloadDetails(reason, map[string]any{"error_code": reason, "lock_key": job.LockKey, "retry_after": runAfter})}); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -711,7 +713,14 @@ func nullJSON(value json.RawMessage) any {
 }
 
 func eventPayload(message string) json.RawMessage {
-	data, _ := json.Marshal(map[string]any{"schema_version": "job_events.payload.v1", "message": message, "details": map[string]any{}})
+	return eventPayloadDetails(message, map[string]any{})
+}
+
+func eventPayloadDetails(message string, details map[string]any) json.RawMessage {
+	if details == nil {
+		details = map[string]any{}
+	}
+	data, _ := json.Marshal(map[string]any{"schema_version": "job_events.payload.v1", "message": safeMessage(message), "details": details})
 	return data
 }
 

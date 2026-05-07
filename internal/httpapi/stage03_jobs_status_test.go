@@ -74,6 +74,16 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	if runtimeStatus.SchemaVersion != "runtime_status.v1" || runtimeStatus.Jobs[jobs.StatusQueued] != 1 {
 		t.Fatalf("unexpected runtime status: %+v", runtimeStatus)
 	}
+	for _, key := range []string{jobs.StatusQueued, jobs.StatusRunning, jobs.StatusSucceeded, jobs.StatusFailed, jobs.StatusCancelled} {
+		if _, ok := runtimeStatus.Jobs[key]; !ok {
+			t.Fatalf("runtime status missing jobs key %q: %+v", key, runtimeStatus.Jobs)
+		}
+	}
+	for _, key := range []string{"running", "stopped", "failed", "unavailable"} {
+		if _, ok := runtimeStatus.Modules[key]; !ok {
+			t.Fatalf("runtime status missing modules key %q: %+v", key, runtimeStatus.Modules)
+		}
+	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/jobs/"+ref.JobID, nil))

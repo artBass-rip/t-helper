@@ -47,23 +47,45 @@ func (s *Store) RefreshWorkflowStatus(ctx context.Context, jobGroupID, workflowI
 	if jobGroupID == "" {
 		return nil
 	}
-	page, err := s.list(ctx, ListFilters{JobGroupID: jobGroupID, Limit: 1000}, 1000)
+	sample, err := s.firstWorkflowJob(ctx, jobGroupID)
 	if err != nil {
 		return err
 	}
-	jobs := page.Items
-	if len(jobs) == 0 {
+	if sample.ID == "" {
 		return nil
 	}
 	if workflowID == "" {
-		workflowID = workflowIDForJob(jobs[0])
+		workflowID = workflowIDForJob(sample)
 	}
-	workflowType := workflowTypeForJobType(jobs[0].JobType)
+	workflowType := workflowTypeForJobType(sample.JobType)
 	counts := map[string]int{StatusQueued: 0, StatusRunning: 0, StatusSucceeded: 0, StatusFailed: 0, StatusCancelled: 0}
-	for _, job := range jobs {
-		counts[job.Status]++
+	total := 0
+	query := "SELECT status, count(*) FROM jobs WHERE job_group_id = ? GROUP BY status"
+	args := []any{jobGroupID}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT status, count(*) FROM jobs WHERE job_group_id = $1 GROUP BY status"
 	}
-	aggregate := aggregateStatus(counts, len(jobs))
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			rows.Close()
+			return err
+		}
+		counts[status] = count
+		total += count
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if total == 0 {
+		return nil
+	}
+	aggregate := aggregateStatus(counts, total)
 	progressCurrent := counts[StatusSucceeded] + counts[StatusFailed] + counts[StatusCancelled]
 	latest, err := s.latestEventForGroup(ctx, jobGroupID)
 	if err != nil {
@@ -85,10 +107,10 @@ func (s *Store) RefreshWorkflowStatus(ctx context.Context, jobGroupID, workflowI
 	}
 	now := time.Now().UTC()
 	id := "workflow_" + jobGroupID
-	query := `INSERT INTO workflow_statuses (id, workflow_type, workflow_id, job_group_id, aggregate_status, progress_current, progress_total, summary_payload, updated_at)
+	query = `INSERT INTO workflow_statuses (id, workflow_type, workflow_id, job_group_id, aggregate_status, progress_current, progress_total, summary_payload, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (job_group_id) DO UPDATE SET workflow_type = excluded.workflow_type, workflow_id = excluded.workflow_id, aggregate_status = excluded.aggregate_status, progress_current = excluded.progress_current, progress_total = excluded.progress_total, summary_payload = excluded.summary_payload, updated_at = excluded.updated_at`
-	args := []any{id, workflowType, workflowID, jobGroupID, aggregate, progressCurrent, len(jobs), string(payload), formatTime(now)}
+	args = []any{id, workflowType, workflowID, jobGroupID, aggregate, progressCurrent, total, string(payload), formatTime(now)}
 	if s.handle.Provider == "postgres" {
 		query = `INSERT INTO workflow_statuses (id, workflow_type, workflow_id, job_group_id, aggregate_status, progress_current, progress_total, summary_payload, updated_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -96,6 +118,19 @@ ON CONFLICT (job_group_id) DO UPDATE SET workflow_type = EXCLUDED.workflow_type,
 	}
 	_, err = s.handle.DB.ExecContext(ctx, query, args...)
 	return err
+}
+
+func (s *Store) firstWorkflowJob(ctx context.Context, jobGroupID string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_group_id = ? ORDER BY created_at ASC, id ASC LIMIT 1"
+	args := []any{jobGroupID}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_group_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1"
+	}
+	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, nil
+	}
+	return job, err
 }
 
 func (s *Store) ReconcileWorkflowStatuses(ctx context.Context) error {
@@ -157,9 +192,9 @@ func (s *Store) CleanupRetention(ctx context.Context, cutoff time.Time) (Retenti
 func (s *Store) RuntimeStatus(ctx context.Context) (RuntimeStatus, error) {
 	status := RuntimeStatus{
 		AggregateStatus: "running",
-		Jobs:            map[string]int{StatusQueued: 0, StatusRunning: 0, StatusFailed: 0},
+		Jobs:            map[string]int{StatusQueued: 0, StatusRunning: 0, StatusSucceeded: 0, StatusFailed: 0, StatusCancelled: 0},
 		Workers:         map[string]int{"active": 0, "stale": 0},
-		Modules:         map[string]int{},
+		Modules:         map[string]int{"running": 0, "stopped": 0, "failed": 0, "unavailable": 0},
 		UpdatedAt:       time.Now().UTC(),
 		SchemaVersion:   "runtime_status.v1",
 	}

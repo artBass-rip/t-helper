@@ -32,6 +32,9 @@ type Runtime struct {
 	pollInterval      time.Duration
 	leaseDuration     time.Duration
 	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
+	retentionInterval time.Duration
+	retentionTTL      time.Duration
 }
 
 type RuntimeOptions struct {
@@ -42,6 +45,9 @@ type RuntimeOptions struct {
 	PollInterval      time.Duration
 	LeaseDuration     time.Duration
 	HeartbeatInterval time.Duration
+	HeartbeatTimeout  time.Duration
+	RetentionInterval time.Duration
+	RetentionTTL      time.Duration
 }
 
 func NewRuntime(opts RuntimeOptions) *Runtime {
@@ -60,6 +66,15 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 	if opts.HeartbeatInterval <= 0 {
 		opts.HeartbeatInterval = 10 * time.Second
 	}
+	if opts.HeartbeatTimeout <= 0 {
+		opts.HeartbeatTimeout = 5 * time.Second
+	}
+	if opts.RetentionInterval <= 0 {
+		opts.RetentionInterval = time.Hour
+	}
+	if opts.RetentionTTL <= 0 {
+		opts.RetentionTTL = 30 * 24 * time.Hour
+	}
 	return &Runtime{
 		store:             opts.Store,
 		handlers:          opts.Handlers,
@@ -68,6 +83,9 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 		pollInterval:      opts.PollInterval,
 		leaseDuration:     opts.LeaseDuration,
 		heartbeatInterval: opts.HeartbeatInterval,
+		heartbeatTimeout:  opts.HeartbeatTimeout,
+		retentionInterval: opts.RetentionInterval,
+		retentionTTL:      opts.RetentionTTL,
 	}
 }
 
@@ -77,7 +95,18 @@ func (r *Runtime) Run(ctx context.Context) error {
 	}
 	ticker := time.NewTicker(r.pollInterval)
 	defer ticker.Stop()
+	nextRetentionCleanup := time.Now().UTC().Add(r.retentionInterval)
 	for {
+		now := time.Now().UTC()
+		if !now.Before(nextRetentionCleanup) {
+			result, err := r.store.CleanupRetention(ctx, now.Add(-r.retentionTTL))
+			if err != nil {
+				r.logger.Warn("job retention cleanup failed", "error", err)
+			} else {
+				r.logger.Info("job retention cleanup completed", "deleted_job_events", result.DeletedJobEvents, "deleted_job_locks", result.DeletedJobLocks)
+			}
+			nextRetentionCleanup = now.Add(r.retentionInterval)
+		}
 		if err := r.RecoverExpiredLeases(ctx); err != nil {
 			r.logger.Warn("recover expired leases failed", "error", err)
 		}
@@ -102,13 +131,13 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		return ok, err
 	}
 	if locked, err := r.store.AcquireLock(ctx, job, r.workerID, r.leaseDuration); err != nil {
-		return true, err
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	} else if !locked {
 		runAfter := time.Now().UTC().Add(backoff(job.AttemptCount))
 		return true, r.store.Requeue(ctx, job, r.workerID, "lock_contention", runAfter)
 	}
 	if err := r.store.Start(ctx, job, r.workerID); err != nil {
-		return true, err
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
 
 	handler := r.handlers[job.JobType]
@@ -125,10 +154,10 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		return true, r.store.Complete(ctx, job, r.workerID, StatusFailed, result, "unknown job type")
 	}
 	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
-		return true, err
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
 	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
-		return true, err
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
 
 	heartbeatCtx, stop := context.WithCancel(ctx)
@@ -152,7 +181,7 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 			WorkerID:      r.workerID,
 			Attempt:       job.AttemptCount,
 			ErrorCode:     classified.Code,
-			Message:       classified.Message,
+			Message:       safeMessage(classified.Message),
 			Retryable:     false,
 		})
 		return true, r.store.Complete(ctx, job, r.workerID, StatusCancelled, failure, classified.Message)
@@ -163,10 +192,30 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		WorkerID:      r.workerID,
 		Attempt:       job.AttemptCount,
 		ErrorCode:     classified.Code,
-		Message:       classified.Message,
+		Message:       safeMessage(classified.Message),
 		Retryable:     false,
 	})
 	return true, r.store.Complete(ctx, job, r.workerID, StatusFailed, failure, classified.Message)
+}
+
+func (r *Runtime) runtimeRequeue(ctx context.Context, job Job, code string, err error) error {
+	message := code
+	if err != nil {
+		message = code + ": " + safeMessage(err.Error())
+	}
+	if job.AttemptCount >= job.MaxAttempts {
+		failure, _ := json.Marshal(FailureResult{
+			SchemaVersion: ResultFailureSchemaVersion,
+			JobType:       job.JobType,
+			WorkerID:      r.workerID,
+			Attempt:       job.AttemptCount,
+			ErrorCode:     code,
+			Message:       message,
+			Retryable:     false,
+		})
+		return r.store.Complete(ctx, job, r.workerID, StatusFailed, failure, message)
+	}
+	return r.store.Requeue(ctx, job, r.workerID, code, time.Now().UTC().Add(backoff(job.AttemptCount)))
 }
 
 func (r *Runtime) heartbeatLoop(ctx context.Context, jobID string, done chan<- struct{}) {
@@ -178,9 +227,11 @@ func (r *Runtime) heartbeatLoop(ctx context.Context, jobID string, done chan<- s
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := r.store.Heartbeat(context.Background(), jobID, r.workerID, r.leaseDuration); err != nil {
+			heartbeatCtx, cancel := context.WithTimeout(context.Background(), r.heartbeatTimeout)
+			if err := r.store.Heartbeat(heartbeatCtx, jobID, r.workerID, r.leaseDuration); err != nil {
 				r.logger.Warn("job heartbeat failed", "job_id", jobID, "error", err)
 			}
+			cancel()
 		}
 	}
 }
@@ -275,6 +326,7 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 	defer tx.Rollback()
 	query := `UPDATE jobs SET status = 'failed', result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND status = 'running'`
 	now := time.Now().UTC()
+	message = safeMessage(message)
 	args := []any{string(result), message, formatTime(now), formatTime(now), job.ID}
 	if r.store.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = 'failed', result_payload = $1, error_message = $2, finished_at = $3, updated_at = $4 WHERE id = $5 AND status = 'running'`
@@ -304,37 +356,37 @@ func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) ma
 	return map[string]Handler{
 		"config_reload": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
 			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
-				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}
 			var payload struct {
 				Keys []string `json:"keys"`
 			}
 			if err := json.Unmarshal(job.Payload, &payload); err != nil {
-				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}
 			result, err := configStore.Reload(ctx, payload.Keys)
 			if err != nil {
-				return nil, HandlerError{Code: "handler_failed", Message: err.Error(), Retryable: true}
+				return nil, HandlerError{Code: "handler_failed", Message: safeMessage(err.Error()), Retryable: true}
 			}
 			result.SchemaVersion = "jobs.config_reload.result.v1"
 			return json.Marshal(result)
 		}),
 		"module_restart": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
 			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
-				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}
 			var payload struct {
 				ModuleName string `json:"module_name"`
 			}
 			if err := json.Unmarshal(job.Payload, &payload); err != nil {
-				return nil, HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}
 			if payload.ModuleName == "" {
 				return nil, HandlerError{Code: "validation_error", Message: "module_name is required", Retryable: false}
 			}
 			result, err := moduleStore.Restart(ctx, payload.ModuleName, "job:"+job.ID)
 			if err != nil {
-				return nil, HandlerError{Code: "handler_failed", Message: err.Error(), Retryable: false}
+				return nil, HandlerError{Code: "handler_failed", Message: safeMessage(err.Error()), Retryable: false}
 			}
 			result.SchemaVersion = "jobs.module_restart.result.v1"
 			return json.Marshal(result)
@@ -345,12 +397,13 @@ func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) ma
 func classifyError(err error) HandlerError {
 	var classified HandlerError
 	if errors.As(err, &classified) {
+		classified.Message = safeMessage(classified.Message)
 		return classified
 	}
 	if errors.Is(err, context.Canceled) {
-		return HandlerError{Code: "cancelled", Message: err.Error(), Retryable: false}
+		return HandlerError{Code: "cancelled", Message: safeMessage(err.Error()), Retryable: false}
 	}
-	return HandlerError{Code: "handler_failed", Message: err.Error(), Retryable: true}
+	return HandlerError{Code: "handler_failed", Message: safeMessage(err.Error()), Retryable: true}
 }
 
 func backoff(attempt int) time.Duration {
@@ -366,7 +419,11 @@ func backoff(attempt int) time.Duration {
 		}
 	}
 	jitter := 0.8 + rand.Float64()*0.4
-	return time.Duration(float64(delay) * jitter)
+	withJitter := time.Duration(float64(delay) * jitter)
+	if withJitter > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return withJitter
 }
 
 func NewWorkerID() string {

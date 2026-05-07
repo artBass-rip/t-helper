@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,42 @@ func TestReconcileWorkflowStatusesRebuildsMissingReadModel(t *testing.T) {
 	}
 	if status.AggregateStatus != StatusQueued || status.ProgressCurrent != 0 || status.ProgressTotal != 1 {
 		t.Fatalf("unexpected workflow status: %+v", status)
+	}
+}
+
+func TestRefreshWorkflowStatusAggregatesMoreThanOneThousandJobs(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	groupID := "config_operation:bulk"
+	for i := 0; i < 1005; i++ {
+		ref, err := store.Enqueue(ctx, EnqueueRequest{
+			JobType:    "config_reload",
+			JobGroupID: groupID,
+			WorkflowID: "bulk",
+			Payload:    json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		})
+		if err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+		if i < 1000 {
+			claimed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Minute})
+			if err != nil || !ok || claimed.ID != ref.JobID {
+				t.Fatalf("claim %d: ok=%v job=%+v err=%v", i, ok, claimed, err)
+			}
+			if err := store.Complete(ctx, claimed, "host:1:worker", StatusSucceeded, json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), ""); err != nil {
+				t.Fatalf("complete %d: %v", i, err)
+			}
+		}
+	}
+	if err := store.RefreshWorkflowStatus(ctx, groupID, "bulk"); err != nil {
+		t.Fatalf("refresh workflow: %v", err)
+	}
+	status, err := store.WorkflowStatus(ctx, groupID)
+	if err != nil {
+		t.Fatalf("workflow status: %v", err)
+	}
+	if status.ProgressTotal != 1005 || status.ProgressCurrent != 1000 || status.AggregateStatus != StatusQueued {
+		t.Fatalf("unexpected aggregate: %+v", status)
 	}
 }
 
@@ -90,12 +127,24 @@ func TestWorkerIDAndBackoffDefaults(t *testing.T) {
 	for attempt, bounds := range map[int][2]time.Duration{
 		1: {4 * time.Second, 6 * time.Second},
 		2: {8 * time.Second, 12 * time.Second},
-		7: {4 * time.Minute, 6 * time.Minute},
+		7: {4 * time.Minute, 5 * time.Minute},
 	} {
 		delay := backoff(attempt)
 		if delay < bounds[0] || delay > bounds[1] {
 			t.Fatalf("backoff(%d) = %s, want within [%s, %s]", attempt, delay, bounds[0], bounds[1])
 		}
+	}
+}
+
+func TestSafeMessageRedactsSecretLikeValues(t *testing.T) {
+	message := safeMessage("failed password=hunter2 token:abc https://user:pass@example.test/repo.git secretref://env/API_TOKEN")
+	for _, leaked := range []string{"hunter2", "abc", "user:pass", "API_TOKEN"} {
+		if strings.Contains(message, leaked) {
+			t.Fatalf("message leaked %q: %s", leaked, message)
+		}
+	}
+	if !strings.Contains(message, "[redacted]") {
+		t.Fatalf("expected redaction marker in %q", message)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -243,6 +244,17 @@ func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 		if event.EventType == jobs.EventStarted {
 			t.Fatalf("lock-contention job wrote started event: %+v", events)
 		}
+		if event.EventType == jobs.EventRetryScheduled {
+			var payload struct {
+				Details map[string]any `json:"details"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				t.Fatalf("decode retry payload: %v", err)
+			}
+			if payload.Details["error_code"] != "lock_contention" || payload.Details["lock_key"] != "resource:one" {
+				t.Fatalf("retry payload missing machine-readable lock contention details: %+v", payload.Details)
+			}
+		}
 	}
 }
 
@@ -333,6 +345,41 @@ func TestRuntimeCancellationAndRetryExhaustion(t *testing.T) {
 	}
 	if failure.SchemaVersion != jobs.ResultFailureSchemaVersion || failure.ErrorCode != "handler_failed" || failure.Attempt != 1 {
 		t.Fatalf("unexpected failure result: %+v", failure)
+	}
+}
+
+func TestRuntimeFailurePayloadRedactsSecretLikeValues(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType:     "config_reload",
+		MaxAttempts: 1,
+		Payload:     json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:worker",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+				return nil, errors.New("failed password=hunter2 token:abc https://user:pass@example.test/repo.git")
+			}),
+		},
+	})
+	if ran, err := runtime.RunOnce(ctx); err != nil || !ran {
+		t.Fatalf("run once: ran=%v err=%v", ran, err)
+	}
+	failed, err := store.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get failed: %v", err)
+	}
+	raw := string(failed.ResultPayload) + failed.ErrorMessage
+	for _, leaked := range []string{"hunter2", "abc", "user:pass"} {
+		if strings.Contains(raw, leaked) {
+			t.Fatalf("failure payload leaked %q: %s", leaked, raw)
+		}
 	}
 }
 
