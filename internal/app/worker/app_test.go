@@ -114,12 +114,20 @@ func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 	if err := registry.Migrate(ctx, target); err != nil {
 		t.Fatalf("migrate target: %v", err)
 	}
-	ref, err := jobs.NewStore(target).Enqueue(ctx, jobs.EnqueueRequest{
+	targetStore := jobs.NewStore(target)
+	reloadRef, err := targetStore.Enqueue(ctx, jobs.EnqueueRequest{
 		JobType: "config_reload",
 		Payload: []byte(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`),
 	})
 	if err != nil {
-		t.Fatalf("enqueue target job: %v", err)
+		t.Fatalf("enqueue target reload job: %v", err)
+	}
+	restartRef, err := targetStore.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "module_restart",
+		Payload: []byte(`{"schema_version":"jobs.module_restart.payload.v1","module_name":"core"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue target restart job: %v", err)
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -135,19 +143,22 @@ func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 		errCh <- app.Run(runCtx)
 	}()
 
-	targetJobs := jobs.NewStore(target)
 	deadline := time.After(2 * time.Second)
 	for {
-		job, err := targetJobs.Get(ctx, ref.JobID)
+		reloadJob, err := targetStore.Get(ctx, reloadRef.JobID)
 		if err != nil {
-			t.Fatalf("get target job: %v", err)
+			t.Fatalf("get target reload job: %v", err)
 		}
-		if job.Status == jobs.StatusSucceeded {
+		restartJob, err := targetStore.Get(ctx, restartRef.JobID)
+		if err != nil {
+			t.Fatalf("get target restart job: %v", err)
+		}
+		if reloadJob.Status == jobs.StatusSucceeded && restartJob.Status == jobs.StatusSucceeded {
 			break
 		}
 		select {
 		case <-deadline:
-			t.Fatalf("target job was not processed by worker: %+v", job)
+			t.Fatalf("target jobs were not processed by worker: reload=%+v restart=%+v", reloadJob, restartJob)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
@@ -161,8 +172,11 @@ func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 		t.Fatal("worker did not stop after cancellation")
 	}
 
-	if _, err := jobs.NewStore(source).Get(ctx, ref.JobID); !errors.Is(err, jobs.ErrNotFound) {
-		t.Fatalf("job should belong to active target database, source lookup err=%v", err)
+	if _, err := jobs.NewStore(source).Get(ctx, reloadRef.JobID); !errors.Is(err, jobs.ErrNotFound) {
+		t.Fatalf("reload job should belong to active target database, source lookup err=%v", err)
+	}
+	if _, err := jobs.NewStore(source).Get(ctx, restartRef.JobID); !errors.Is(err, jobs.ErrNotFound) {
+		t.Fatalf("restart job should belong to active target database, source lookup err=%v", err)
 	}
 }
 

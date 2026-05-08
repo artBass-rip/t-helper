@@ -60,6 +60,60 @@ func TestEnqueueIdempotencyIsScopedByActorAndJobType(t *testing.T) {
 	}
 }
 
+func TestConcurrentEnqueueWithSameIdempotencyKeyReplaysJobRef(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	payload := json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`)
+	const workers = 16
+	refs := make(chan jobs.JobRef, workers)
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+				JobType:        "config_reload",
+				Actor:          "alice",
+				IdempotencyKey: "concurrent",
+				Payload:        payload,
+			})
+			if err != nil {
+				errs <- err
+				return
+			}
+			refs <- ref
+		}()
+	}
+	wg.Wait()
+	close(refs)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("enqueue failed: %v", err)
+	}
+	var first string
+	count := 0
+	for ref := range refs {
+		if first == "" {
+			first = ref.JobID
+		}
+		if ref.JobID != first {
+			t.Fatalf("got job id %q, want replay of %q", ref.JobID, first)
+		}
+		count++
+	}
+	if count != workers {
+		t.Fatalf("refs = %d, want %d", count, workers)
+	}
+	items, err := store.List(ctx, jobs.ListFilters{})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("jobs created = %d, want 1: %+v", len(items), items)
+	}
+}
+
 func TestClaimHeartbeatCompleteAndStatus(t *testing.T) {
 	ctx := context.Background()
 	store := openStore(t)
@@ -226,7 +280,7 @@ func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 		Store:    store,
 		WorkerID: "host:1:second",
 		Handlers: map[string]jobs.Handler{
-			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 				handled++
 				return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
 			}),
@@ -265,6 +319,95 @@ func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 				t.Fatalf("retry payload missing machine-readable lock contention details: %+v", payload.Details)
 			}
 		}
+	}
+}
+
+func TestRuntimeLockContentionExhaustsAttempts(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	firstRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		LockKey: "resource:exhausted",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue first: %v", err)
+	}
+	secondRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType:     "config_reload",
+		LockKey:     "resource:exhausted",
+		MaxAttempts: 1,
+		Payload:     json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue second: %v", err)
+	}
+	first, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:first", LeaseDuration: time.Minute})
+	if err != nil || !ok || first.ID != firstRef.JobID {
+		t.Fatalf("claim first: ok=%v job=%+v err=%v", ok, first, err)
+	}
+	if locked, err := store.AcquireLock(ctx, first, "host:1:first", time.Minute); err != nil || !locked {
+		t.Fatalf("acquire first: locked=%v err=%v", locked, err)
+	}
+
+	handled := false
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:second",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
+				handled = true
+				return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
+			}),
+		},
+	})
+	ran, err := runtime.RunOnce(ctx)
+	if err != nil || !ran {
+		t.Fatalf("run once: ran=%v err=%v", ran, err)
+	}
+	if handled {
+		t.Fatal("handler ran despite lock contention")
+	}
+	second, err := store.Get(ctx, secondRef.JobID)
+	if err != nil {
+		t.Fatalf("get second: %v", err)
+	}
+	if second.Status != jobs.StatusFailed || second.AttemptCount != 1 {
+		t.Fatalf("expected failed exhausted lock contention job, got %+v", second)
+	}
+	var failure jobs.FailureResult
+	if err := json.Unmarshal(second.ResultPayload, &failure); err != nil {
+		t.Fatalf("decode failure: %v", err)
+	}
+	if failure.ErrorCode != "lock_contention" || failure.Retryable {
+		t.Fatalf("unexpected failure result: %+v", failure)
+	}
+}
+
+func TestClaimNextSkipsQueuedJobsWithExhaustedAttempts(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType:     "config_reload",
+		MaxAttempts: 1,
+		Payload:     json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	claimed, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:first", LeaseDuration: time.Minute})
+	if err != nil || !ok || claimed.ID != ref.JobID {
+		t.Fatalf("claim first: ok=%v job=%+v err=%v", ok, claimed, err)
+	}
+	if err := store.Requeue(ctx, claimed, "host:1:first", "transient_error", time.Now().UTC()); err != nil {
+		t.Fatalf("requeue exhausted job: %v", err)
+	}
+	claimed, ok, err = store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:second", LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatalf("claim exhausted: %v", err)
+	}
+	if ok {
+		t.Fatalf("claimed exhausted queued job: %+v", claimed)
 	}
 }
 
@@ -310,7 +453,7 @@ func TestRuntimeCancellationAndRetryExhaustion(t *testing.T) {
 		Store:    store,
 		WorkerID: "host:1:worker",
 		Handlers: map[string]jobs.Handler{
-			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 				return nil, context.Canceled
 			}),
 		},
@@ -334,7 +477,7 @@ func TestRuntimeCancellationAndRetryExhaustion(t *testing.T) {
 		Store:    store,
 		WorkerID: "host:1:worker",
 		Handlers: map[string]jobs.Handler{
-			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 				return nil, errors.New("temporary problem")
 			}),
 		},
@@ -358,6 +501,35 @@ func TestRuntimeCancellationAndRetryExhaustion(t *testing.T) {
 	}
 }
 
+func TestRuntimeFinalizesCancelledHandlerAfterContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	store := openStore(t)
+	ref, err := store.Enqueue(context.Background(), jobs.EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`)})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:worker",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
+				cancel()
+				return nil, context.Canceled
+			}),
+		},
+	})
+	if ran, err := runtime.RunOnce(ctx); err != nil || !ran {
+		t.Fatalf("run cancelled: ran=%v err=%v", ran, err)
+	}
+	cancelled, err := store.Get(context.Background(), ref.JobID)
+	if err != nil {
+		t.Fatalf("get cancelled: %v", err)
+	}
+	if cancelled.Status != jobs.StatusCancelled || cancelled.FinishedAt == nil {
+		t.Fatalf("job was not finalized after context cancellation: %+v", cancelled)
+	}
+}
+
 func TestRuntimeFailurePayloadRedactsSecretLikeValues(t *testing.T) {
 	ctx := context.Background()
 	store := openStore(t)
@@ -373,7 +545,7 @@ func TestRuntimeFailurePayloadRedactsSecretLikeValues(t *testing.T) {
 		Store:    store,
 		WorkerID: "host:1:worker",
 		Handlers: map[string]jobs.Handler{
-			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 				return nil, errors.New("failed password=hunter2 token:abc https://user:pass@example.test/repo.git")
 			}),
 		},
@@ -390,6 +562,50 @@ func TestRuntimeFailurePayloadRedactsSecretLikeValues(t *testing.T) {
 		if strings.Contains(raw, leaked) {
 			t.Fatalf("failure payload leaked %q: %s", leaked, raw)
 		}
+	}
+}
+
+func TestRuntimePassesHandlerEnvironment(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:worker",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": jobs.HandlerFunc(func(ctx context.Context, env jobs.HandlerEnv, job jobs.Job) (json.RawMessage, error) {
+				if env.WorkerID != "host:1:worker" || env.Store == nil || env.Logger == nil {
+					t.Fatalf("handler environment was not populated: %+v", env)
+				}
+				if err := env.EmitProgress(ctx, job, "handler progress", map[string]any{"phase": "test"}); err != nil {
+					return nil, err
+				}
+				return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
+			}),
+		},
+	})
+	ran, err := runtime.RunOnce(ctx)
+	if err != nil || !ran {
+		t.Fatalf("run once: ran=%v err=%v", ran, err)
+	}
+	events, err := store.ListEvents(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	found := false
+	for _, event := range events {
+		if event.EventType == jobs.EventProgress && strings.Contains(string(event.Payload), "handler progress") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("handler progress event not found: %+v", events)
 	}
 }
 
@@ -524,7 +740,7 @@ func TestConcurrentRuntimeWorkersRunNonConflictingLocks(t *testing.T) {
 	}
 
 	var handled atomic.Int32
-	handler := jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+	handler := jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 		handled.Add(1)
 		time.Sleep(10 * time.Millisecond)
 		return json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), nil
@@ -582,7 +798,7 @@ func TestRuntimeRunHonorsInProcessConcurrency(t *testing.T) {
 	var active atomic.Int32
 	var maxActive atomic.Int32
 	done := make(chan struct{}, 2)
-	handler := jobs.HandlerFunc(func(context.Context, jobs.Job) (json.RawMessage, error) {
+	handler := jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
 		current := active.Add(1)
 		for {
 			previous := maxActive.Load()

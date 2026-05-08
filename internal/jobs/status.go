@@ -360,6 +360,17 @@ func (s *Store) WorkflowStatusesPage(ctx context.Context, workflowType, aggregat
 }
 
 func (s *Store) WorkflowStatus(ctx context.Context, jobGroupID string) (WorkflowStatus, error) {
+	item, err := s.workflowStatus(ctx, jobGroupID)
+	if errors.Is(err, ErrNotFound) {
+		if refreshErr := s.RefreshWorkflowStatus(ctx, jobGroupID, ""); refreshErr != nil {
+			return WorkflowStatus{}, refreshErr
+		}
+		return s.workflowStatus(ctx, jobGroupID)
+	}
+	return item, err
+}
+
+func (s *Store) workflowStatus(ctx context.Context, jobGroupID string) (WorkflowStatus, error) {
 	query := "SELECT " + s.workflowSelectColumns() + " FROM workflow_statuses WHERE job_group_id = ?"
 	args := []any{jobGroupID}
 	if s.handle.Provider == "postgres" {

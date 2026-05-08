@@ -57,7 +57,7 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 		req.JobGroupID = defaultJobGroupID(req.JobType, req.ID)
 	}
 	if req.WorkflowID == "" {
-		req.WorkflowID = req.ID
+		req.WorkflowID = workflowIDFromGroupID(req.JobGroupID, req.ID)
 	}
 
 	if req.IdempotencyKey != "" {
@@ -88,6 +88,10 @@ VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		if req.IdempotencyKey != "" && isUniqueConstraintError(err) {
+			_ = tx.Rollback()
+			return s.idempotentReplay(ctx, req)
+		}
 		return JobRef{}, err
 	}
 	if err := s.addEvent(ctx, tx, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
@@ -96,10 +100,23 @@ VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14
 	if err := tx.Commit(); err != nil {
 		return JobRef{}, err
 	}
-	if err := s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID); err != nil {
+	_ = s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID)
+	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+}
+
+func (s *Store) idempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey)
+	if err != nil {
 		return JobRef{}, err
 	}
-	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+	samePayload, err := sameJSON(existing.Payload, req.Payload)
+	if err != nil {
+		return JobRef{}, err
+	}
+	if !samePayload {
+		return JobRef{}, fmt.Errorf("%w for %s/%s", ErrIdempotencyConflict, req.JobType, req.IdempotencyKey)
+	}
+	return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, nil
 }
 
 func (s *Store) Get(ctx context.Context, id string) (Job, error) {
@@ -215,23 +232,35 @@ func (s *Store) ClaimNext(ctx context.Context, opts ClaimOptions) (Job, bool, er
 	}
 	leaseExpires := opts.Now.Add(opts.LeaseDuration)
 	if s.handle.Provider == "postgres" {
+		tx, err := s.handle.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return Job{}, false, err
+		}
+		defer tx.Rollback()
 		query := `UPDATE jobs SET status = 'running', leased_by = $1, lease_expires_at = $2, heartbeat_at = $3, started_at = COALESCE(started_at, $3), attempt_count = attempt_count + 1, updated_at = $3
 WHERE id = (
   SELECT id FROM jobs
-  WHERE status = 'queued' AND run_after <= $3
+	  WHERE status = 'queued' AND run_after <= $3 AND attempt_count < max_attempts
   ORDER BY run_after ASC, priority DESC, created_at ASC
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
 RETURNING ` + s.jobSelectColumns()
-		job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now)))
+		job, err := scanJob(tx.QueryRowContext(ctx, query, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now)))
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, false, nil
 		}
 		if err != nil {
 			return Job{}, false, err
 		}
-		return s.afterClaim(ctx, job, opts.WorkerID)
+		if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventClaimed, Status: StatusRunning, WorkerID: opts.WorkerID}); err != nil {
+			return Job{}, false, err
+		}
+		if err := tx.Commit(); err != nil {
+			return Job{}, false, err
+		}
+		_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+		return job, true, nil
 	}
 
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
@@ -241,7 +270,7 @@ RETURNING ` + s.jobSelectColumns()
 	defer tx.Rollback()
 	var candidateID string
 	selectCandidate := `SELECT id FROM jobs
-WHERE status = 'queued' AND run_after <= ?
+WHERE status = 'queued' AND run_after <= ? AND attempt_count < max_attempts
 ORDER BY run_after ASC, priority DESC, created_at ASC
 LIMIT 1`
 	err = tx.QueryRowContext(ctx, selectCandidate, formatTime(opts.Now)).Scan(&candidateID)
@@ -268,19 +297,13 @@ WHERE id = ? AND status = 'queued'`
 	if err != nil {
 		return Job{}, false, err
 	}
+	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventClaimed, Status: StatusRunning, WorkerID: opts.WorkerID}); err != nil {
+		return Job{}, false, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Job{}, false, err
 	}
-	return s.afterClaim(ctx, job, opts.WorkerID)
-}
-
-func (s *Store) afterClaim(ctx context.Context, job Job, workerID string) (Job, bool, error) {
-	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventClaimed, Status: StatusRunning, WorkerID: workerID}); err != nil {
-		return Job{}, false, err
-	}
-	if err := s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
-		return Job{}, false, err
-	}
+	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
 	return job, true, nil
 }
 
@@ -288,7 +311,8 @@ func (s *Store) Start(ctx context.Context, job Job, workerID string) error {
 	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
 		return err
 	}
-	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	return nil
 }
 
 func (s *Store) Heartbeat(ctx context.Context, jobID, workerID string, leaseDuration time.Duration) error {
@@ -408,7 +432,8 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	return nil
 }
 
 func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, runAfter time.Time) error {
@@ -442,7 +467,8 @@ func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, r
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	return nil
 }
 
 func (s *Store) releaseLocks(ctx context.Context, exec sqlExecutor, jobID, workerID string, releasedAt time.Time) error {
@@ -630,13 +656,17 @@ func defaultJobGroupID(jobType, id string) string {
 }
 
 func workflowIDForJob(job Job) string {
-	if strings.Contains(job.JobGroupID, ":") {
-		parts := strings.SplitN(job.JobGroupID, ":", 2)
-		if parts[1] != "" && parts[1] != job.ID {
+	return workflowIDFromGroupID(job.JobGroupID, job.ID)
+}
+
+func workflowIDFromGroupID(jobGroupID, fallback string) string {
+	if strings.Contains(jobGroupID, ":") {
+		parts := strings.SplitN(jobGroupID, ":", 2)
+		if parts[1] != "" {
 			return parts[1]
 		}
 	}
-	return job.ID
+	return fallback
 }
 
 func workflowTypeForJobType(jobType string) string {

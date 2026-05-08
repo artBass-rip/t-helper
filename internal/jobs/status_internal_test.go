@@ -34,6 +34,25 @@ func TestReconcileWorkflowStatusesRebuildsMissingReadModel(t *testing.T) {
 	}
 }
 
+func TestWorkflowStatusSelfHealsMissingReadModel(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	ref, err := store.Enqueue(ctx, EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`)})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if _, err := store.handle.DB.ExecContext(ctx, "DELETE FROM workflow_statuses"); err != nil {
+		t.Fatalf("delete workflow statuses: %v", err)
+	}
+	status, err := store.WorkflowStatus(ctx, "config_operation:"+ref.JobID)
+	if err != nil {
+		t.Fatalf("workflow status: %v", err)
+	}
+	if status.AggregateStatus != StatusQueued || status.ProgressTotal != 1 {
+		t.Fatalf("unexpected workflow status: %+v", status)
+	}
+}
+
 func TestRefreshWorkflowStatusAggregatesMoreThanOneThousandJobs(t *testing.T) {
 	ctx := context.Background()
 	store := openInternalStore(t)
@@ -67,6 +86,32 @@ func TestRefreshWorkflowStatusAggregatesMoreThanOneThousandJobs(t *testing.T) {
 	}
 	if status.ProgressTotal != 1005 || status.ProgressCurrent != 1000 || status.AggregateStatus != StatusQueued {
 		t.Fatalf("unexpected aggregate: %+v", status)
+	}
+}
+
+func TestGroupedWorkflowIDIsStableAcrossChildJobs(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	groupID := "project_scan:scan_123"
+	for _, id := range []string{"job_project_parent", "job_project_child"} {
+		if _, err := store.Enqueue(ctx, EnqueueRequest{
+			ID:         id,
+			JobType:    "project_scan",
+			JobGroupID: groupID,
+			Payload:    json.RawMessage(`{"schema_version":"jobs.project_scan.payload.v1","project_id":"project_1","scan_type":"full"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", id, err)
+		}
+	}
+	status, err := store.WorkflowStatus(ctx, groupID)
+	if err != nil {
+		t.Fatalf("workflow status: %v", err)
+	}
+	if status.WorkflowID != "scan_123" {
+		t.Fatalf("workflow id = %q, want scan_123", status.WorkflowID)
+	}
+	if status.ProgressTotal != 2 {
+		t.Fatalf("progress total = %d, want 2", status.ProgressTotal)
 	}
 }
 

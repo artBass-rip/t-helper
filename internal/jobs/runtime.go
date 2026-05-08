@@ -16,13 +16,44 @@ import (
 )
 
 type Handler interface {
-	Handle(ctx context.Context, job Job) (json.RawMessage, error)
+	Handle(ctx context.Context, env HandlerEnv, job Job) (json.RawMessage, error)
 }
 
-type HandlerFunc func(ctx context.Context, job Job) (json.RawMessage, error)
+type HandlerFunc func(ctx context.Context, env HandlerEnv, job Job) (json.RawMessage, error)
 
-func (f HandlerFunc) Handle(ctx context.Context, job Job) (json.RawMessage, error) {
-	return f(ctx, job)
+func (f HandlerFunc) Handle(ctx context.Context, env HandlerEnv, job Job) (json.RawMessage, error) {
+	return f(ctx, env, job)
+}
+
+type HandlerEnv struct {
+	WorkerID string
+	Logger   *slog.Logger
+	Store    *Store
+}
+
+func (e HandlerEnv) EmitProgress(ctx context.Context, job Job, message string, details map[string]any) error {
+	return e.emit(ctx, job, EventProgress, message, details)
+}
+
+func (e HandlerEnv) EmitChildCreated(ctx context.Context, job Job, message string, details map[string]any) error {
+	return e.emit(ctx, job, EventChildCreated, message, details)
+}
+
+func (e HandlerEnv) emit(ctx context.Context, job Job, eventType, message string, details map[string]any) error {
+	if e.Store == nil {
+		return fmt.Errorf("handler environment store is nil")
+	}
+	if err := e.Store.AddEvent(ctx, Event{
+		JobID:      job.ID,
+		JobGroupID: job.JobGroupID,
+		EventType:  eventType,
+		Status:     job.Status,
+		WorkerID:   e.WorkerID,
+		Payload:    eventPayloadDetails(message, details),
+	}); err != nil {
+		return err
+	}
+	return e.Store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
 }
 
 type Runtime struct {
@@ -166,8 +197,7 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	if locked, err := r.store.AcquireLock(ctx, job, r.workerID, r.leaseDuration); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	} else if !locked {
-		runAfter := time.Now().UTC().Add(backoff(job.AttemptCount))
-		return true, r.store.Requeue(ctx, job, r.workerID, "lock_contention", runAfter)
+		return true, r.runtimeRequeue(ctx, job, "lock_contention", nil)
 	}
 	if err := r.store.Start(ctx, job, r.workerID); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
@@ -189,23 +219,24 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
-	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
-		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
-	}
+	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
 
 	heartbeatCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go r.heartbeatLoop(heartbeatCtx, job.ID, done)
-	result, handleErr := handler.Handle(ctx, job)
+	env := HandlerEnv{WorkerID: r.workerID, Logger: r.logger, Store: r.store}
+	result, handleErr := handler.Handle(ctx, env, job)
 	stop()
 	<-done
+	finalCtx, cancelFinal := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFinal()
 
 	if handleErr == nil {
-		return true, r.store.Complete(ctx, job, r.workerID, StatusSucceeded, result, "")
+		return true, r.store.Complete(finalCtx, job, r.workerID, StatusSucceeded, result, "")
 	}
 	classified := classifyError(handleErr)
 	if classified.Retryable && job.AttemptCount < job.MaxAttempts {
-		return true, r.store.Requeue(ctx, job, r.workerID, classified.Code, time.Now().UTC().Add(backoff(job.AttemptCount)))
+		return true, r.store.Requeue(finalCtx, job, r.workerID, classified.Code, time.Now().UTC().Add(backoff(job.AttemptCount)))
 	}
 	if classified.Code == "cancelled" {
 		failure, _ := json.Marshal(FailureResult{
@@ -217,7 +248,7 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 			Message:       safeMessage(classified.Message),
 			Retryable:     false,
 		})
-		return true, r.store.Complete(ctx, job, r.workerID, StatusCancelled, failure, classified.Message)
+		return true, r.store.Complete(finalCtx, job, r.workerID, StatusCancelled, failure, classified.Message)
 	}
 	failure, _ := json.Marshal(FailureResult{
 		SchemaVersion: ResultFailureSchemaVersion,
@@ -228,7 +259,7 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		Message:       safeMessage(classified.Message),
 		Retryable:     false,
 	})
-	return true, r.store.Complete(ctx, job, r.workerID, StatusFailed, failure, classified.Message)
+	return true, r.store.Complete(finalCtx, job, r.workerID, StatusFailed, failure, classified.Message)
 }
 
 func (r *Runtime) runtimeRequeue(ctx context.Context, job Job, code string, err error) error {
@@ -348,7 +379,8 @@ func (r *Runtime) recoverToQueued(ctx context.Context, job Job, runAfter time.Ti
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	return nil
 }
 
 func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage, message string) error {
@@ -382,12 +414,13 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	return nil
 }
 
 func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) map[string]Handler {
 	return map[string]Handler{
-		"config_reload": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
+		"config_reload": HandlerFunc(func(ctx context.Context, env HandlerEnv, job Job) (json.RawMessage, error) {
 			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
 				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}
@@ -404,7 +437,7 @@ func ModuleHandlers(configStore *appconfig.Store, moduleStore *modules.Store) ma
 			result.SchemaVersion = "jobs.config_reload.result.v1"
 			return json.Marshal(result)
 		}),
-		"module_restart": HandlerFunc(func(ctx context.Context, job Job) (json.RawMessage, error) {
+		"module_restart": HandlerFunc(func(ctx context.Context, env HandlerEnv, job Job) (json.RawMessage, error) {
 			if err := validatePayloadSchema(job.JobType, job.Payload); err != nil {
 				return nil, HandlerError{Code: "validation_error", Message: safeMessage(err.Error()), Retryable: false}
 			}

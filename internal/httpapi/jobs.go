@@ -29,7 +29,7 @@ func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Cursor:      r.URL.Query().Get("cursor"),
 	})
 	if err != nil {
-		if err.Error() == "invalid cursor" {
+		if errors.Is(err, jobs.ErrInvalidCursor) {
 			writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
 			return
 		}
@@ -73,7 +73,7 @@ func (h *StatusHandler) Workflows(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	page, err := h.store.WorkflowStatusesPage(r.Context(), r.URL.Query().Get("workflow_type"), r.URL.Query().Get("aggregate_status"), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
-		if err.Error() == "invalid cursor" {
+		if errors.Is(err, jobs.ErrInvalidCursor) {
 			writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
 			return
 		}
