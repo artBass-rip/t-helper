@@ -62,7 +62,11 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 
 	if req.IdempotencyKey != "" {
 		if existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey); err == nil {
-			if string(existing.Payload) != string(req.Payload) {
+			samePayload, err := sameJSON(existing.Payload, req.Payload)
+			if err != nil {
+				return JobRef{}, err
+			}
+			if !samePayload {
 				return JobRef{}, fmt.Errorf("%w for %s/%s", ErrIdempotencyConflict, req.JobType, req.IdempotencyKey)
 			}
 			return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, nil
@@ -710,6 +714,30 @@ func nullJSON(value json.RawMessage) any {
 		return nil
 	}
 	return string(value)
+}
+
+func sameJSON(left, right json.RawMessage) (bool, error) {
+	leftCanonical, err := canonicalJSON(left)
+	if err != nil {
+		return false, err
+	}
+	rightCanonical, err := canonicalJSON(right)
+	if err != nil {
+		return false, err
+	}
+	return leftCanonical == rightCanonical, nil
+}
+
+func canonicalJSON(raw json.RawMessage) (string, error) {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", fmt.Errorf("invalid job payload: %w", err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 func eventPayload(message string) json.RawMessage {

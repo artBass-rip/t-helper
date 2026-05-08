@@ -31,6 +31,16 @@ func TestEnqueueIdempotencyIsScopedByActorAndJobType(t *testing.T) {
 	if replay.JobID != first.JobID {
 		t.Fatalf("replay job id = %q, want %q", replay.JobID, first.JobID)
 	}
+	replayWithDifferentJSONFormatting, err := store.Enqueue(ctx, jobs.EnqueueRequest{JobType: "config_reload", Actor: "alice", IdempotencyKey: "same", Payload: json.RawMessage(`{
+		"keys": ["logging.level"],
+		"schema_version": "jobs.config_reload.payload.v1"
+	}`)})
+	if err != nil {
+		t.Fatalf("enqueue replay with different JSON formatting: %v", err)
+	}
+	if replayWithDifferentJSONFormatting.JobID != first.JobID {
+		t.Fatalf("formatted replay job id = %q, want %q", replayWithDifferentJSONFormatting.JobID, first.JobID)
+	}
 	if _, err := store.Enqueue(ctx, jobs.EnqueueRequest{JobType: "config_reload", Actor: "alice", IdempotencyKey: "same", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.format"]}`)}); err == nil {
 		t.Fatal("expected idempotency conflict for different payload")
 	}

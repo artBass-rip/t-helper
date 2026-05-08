@@ -2,11 +2,12 @@
 
 `t-helper` - on-premise платформа для обнаружения Terraform-проектов, учёта репозиториев, локального security-анализа и централизованного управления конфигурацией, доступом и модулями.
 
-Репозиторий находится на Stage 02 executable baseline: backend entrypoints,
+Репозиторий находится на Stage 03 executable baseline: backend entrypoints,
 storage foundation, migrations, health endpoint, persisted runtime
-configuration, module lifecycle, singleton runtime lock, tests and CI are
-implemented. Jobs/workers execution, scanner, repository manager, auth and
-frontend remain stage-owned by later roadmap stages.
+configuration, module lifecycle, singleton runtime lock, jobs/workers
+execution, status read models, tests and CI are implemented. Scanner,
+repository manager, auth and frontend remain stage-owned by later roadmap
+stages.
 
 ## License
 
@@ -27,11 +28,12 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - `thelper-worker` - отдельный worker process для выполнения background jobs
 - `thelper-ctl` - административный CLI
 
-Stage 02 реализует executable backend baseline. `thelper` starts the HTTP
-runtime, applies Stage 01-02 migrations and exposes `GET /api/health`,
-`GET/PUT /api/config`, `GET /api/modules`, `POST /api/modules/reload` and
-`POST /api/modules/restart`.
-`thelper-worker` is a buildable scaffold; job execution starts in Stage 03.
+Stage 03 реализует executable backend baseline. `thelper` starts the HTTP
+runtime, applies Stage 01-03 migrations and exposes `GET /api/health`,
+Stage 02 config/modules API, `GET /api/jobs`, `GET /api/jobs/{id}` and
+`GET /api/status*`.
+`thelper-worker` executes queued background jobs through persistent leases,
+heartbeats, retry/backoff and `job_locks`.
 `thelper-ctl` includes provider diagnostics, config import, synchronous reload,
 module restart and controlled storage migration commands.
 
@@ -71,7 +73,9 @@ module restart and controlled storage migration commands.
 - Stage 02 schema ownership: `config_entries`, `storage_profiles`,
   `storage_provider_settings`, `module_states` and imported system
   `ignore_rules`.
-- Stage 03+ product tables are intentionally not created yet.
+- Stage 03 schema ownership: `jobs`, `job_locks`, `job_events` and
+  `workflow_statuses`.
+- Stage 04+ product tables are intentionally not created yet.
 - CI: GitHub Actions `ci / go` runs format check, `go test ./...` with
   PostgreSQL service and build checks for all three entrypoints.
 

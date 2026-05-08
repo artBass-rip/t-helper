@@ -165,11 +165,11 @@ type RetentionCleanupResult struct {
 
 func (s *Store) CleanupRetention(ctx context.Context, cutoff time.Time) (RetentionCleanupResult, error) {
 	var result RetentionCleanupResult
-	eventQuery := "DELETE FROM job_events WHERE created_at < ?"
+	eventQuery := "DELETE FROM job_events WHERE created_at < ? AND job_id IN (SELECT id FROM jobs WHERE status IN ('succeeded', 'failed', 'cancelled'))"
 	lockQuery := "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < ?"
 	args := []any{formatTime(cutoff)}
 	if s.handle.Provider == "postgres" {
-		eventQuery = "DELETE FROM job_events WHERE created_at < $1"
+		eventQuery = "DELETE FROM job_events WHERE created_at < $1 AND job_id IN (SELECT id FROM jobs WHERE status IN ('succeeded', 'failed', 'cancelled'))"
 		lockQuery = "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < $1"
 	}
 	res, err := s.handle.DB.ExecContext(ctx, eventQuery, args...)
@@ -273,17 +273,12 @@ func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	seen := map[string]bool{}
 	var out []WorkerStatus
 	for rows.Next() {
 		job, err := scanJob(rows)
 		if err != nil {
 			return nil, err
 		}
-		if seen[job.LeasedBy] {
-			continue
-		}
-		seen[job.LeasedBy] = true
 		state := "stale"
 		if job.LeaseExpiresAt != nil && job.LeaseExpiresAt.After(now) {
 			state = "active"

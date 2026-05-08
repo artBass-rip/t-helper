@@ -89,6 +89,20 @@ func TestCleanupRetentionDeletesOnlyOldInactiveRows(t *testing.T) {
 	if err := store.AddEvent(ctx, Event{JobID: claimed.ID, JobGroupID: claimed.JobGroupID, EventType: EventProgress, Status: StatusRunning, CreatedAt: old}); err != nil {
 		t.Fatalf("add old event: %v", err)
 	}
+	completedRef, err := store.Enqueue(ctx, EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`)})
+	if err != nil {
+		t.Fatalf("enqueue completed: %v", err)
+	}
+	completed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker-completed", LeaseDuration: time.Hour})
+	if err != nil || !ok || completed.ID != completedRef.JobID {
+		t.Fatalf("claim completed: ok=%v job=%+v err=%v", ok, completed, err)
+	}
+	if err := store.Complete(ctx, completed, "host:1:worker-completed", StatusSucceeded, json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), ""); err != nil {
+		t.Fatalf("complete job: %v", err)
+	}
+	if err := store.AddEvent(ctx, Event{JobID: completed.ID, JobGroupID: completed.JobGroupID, EventType: EventProgress, Status: StatusSucceeded, CreatedAt: old}); err != nil {
+		t.Fatalf("add old completed event: %v", err)
+	}
 	_, err = store.handle.DB.ExecContext(ctx, `INSERT INTO job_locks (id, lock_key, job_id, owner, status, created_at, expires_at, released_at) VALUES (?, ?, ?, ?, 'released', ?, ?, ?)`,
 		newID("lock"), "resource:old", claimed.ID, "host:1:old", formatTime(old), formatTime(old), formatTime(old))
 	if err != nil {
@@ -100,6 +114,19 @@ func TestCleanupRetentionDeletesOnlyOldInactiveRows(t *testing.T) {
 	}
 	if result.DeletedJobEvents == 0 || result.DeletedJobLocks != 1 {
 		t.Fatalf("unexpected cleanup result: %+v", result)
+	}
+	activeEvents, err := store.ListEvents(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list active events: %v", err)
+	}
+	foundOldActiveEvent := false
+	for _, event := range activeEvents {
+		if event.EventType == EventProgress && event.CreatedAt.Equal(old) {
+			foundOldActiveEvent = true
+		}
+	}
+	if !foundOldActiveEvent {
+		t.Fatalf("old event for active job was deleted: %+v", activeEvents)
 	}
 	locks, err := store.ListLocks(ctx, claimed.ID)
 	if err != nil {
@@ -116,6 +143,42 @@ func TestCleanupRetentionDeletesOnlyOldInactiveRows(t *testing.T) {
 	}
 	if active != 1 {
 		t.Fatalf("active lock was not preserved: %+v", locks)
+	}
+}
+
+func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	for _, id := range []string{"job_worker_status_1", "job_worker_status_2"} {
+		if _, err := store.Enqueue(ctx, EnqueueRequest{
+			ID:      id,
+			JobType: "config_reload",
+			Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", id, err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Hour}); err != nil || !ok {
+			t.Fatalf("claim %d: ok=%v err=%v", i, ok, err)
+		}
+	}
+	workers, err := store.WorkerStatuses(ctx)
+	if err != nil {
+		t.Fatalf("worker statuses: %v", err)
+	}
+	if len(workers) != 2 {
+		t.Fatalf("worker status rows = %d, want one per running lease: %+v", len(workers), workers)
+	}
+	seen := map[string]bool{}
+	for _, worker := range workers {
+		if worker.WorkerID != "host:1:worker" || worker.Status != "active" {
+			t.Fatalf("unexpected worker status: %+v", worker)
+		}
+		seen[worker.RunningJobID] = true
+	}
+	if !seen["job_worker_status_1"] || !seen["job_worker_status_2"] {
+		t.Fatalf("missing running jobs in worker statuses: %+v", workers)
 	}
 }
 

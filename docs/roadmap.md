@@ -42,11 +42,13 @@ Status: completed.
 
 ### Stage 03. Jobs, workers and status foundation
 
-- реализовать `jobs`, `job_locks`, `job_events`, `workflow_statuses`;
-- реализовать atomic job claim, leases, heartbeat, expired lease recovery и retry/backoff;
-- вынести выполнение long-running operations в `thelper-worker`;
-- реализовать worker handlers минимум для `config_reload` и `module_restart`;
-- поднять базовый `status-monitor` для jobs/workers/modules.
+Status: completed.
+
+- реализованы `jobs`, `job_locks`, `job_events`, `workflow_statuses`;
+- реализованы atomic job claim, leases, heartbeat, expired lease recovery и retry/backoff;
+- выполнение background jobs вынесено в `thelper-worker`;
+- реализованы worker handlers для `config_reload` и `module_restart`;
+- поднят базовый `status-monitor` для jobs/workers/modules.
 
 ### Stage 04. Scanner and registry MVP
 
