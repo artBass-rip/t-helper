@@ -110,12 +110,17 @@ func (h *StatusHandler) Job(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StatusHandler) Workers(w http.ResponseWriter, r *http.Request) {
-	items, err := h.store.WorkerStatuses(r.Context())
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	page, err := h.store.WorkerStatusesPage(r.Context(), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
+		if errors.Is(err, jobs.ErrInvalidCursor) {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
+			return
+		}
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": nil})
+	writeJSON(w, http.StatusOK, map[string]any{"items": page.Items, "next_cursor": nullString(page.NextCursor)})
 }
 
 func nullString(value string) any {

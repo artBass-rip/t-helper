@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/httpapi"
@@ -143,5 +144,26 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 	}
 	if len(workers.Items) != 0 {
 		t.Fatalf("expected no idle workers in Stage 03, got %+v", workers)
+	}
+
+	if _, ok, err := jobStore.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Minute}); err != nil || !ok {
+		t.Fatalf("claim worker status job: ok=%v err=%v", ok, err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workers?limit=1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/status/workers?limit=1 status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&workers); err != nil {
+		t.Fatalf("decode paged workers: %v", err)
+	}
+	if len(workers.Items) != 1 || workers.Items[0].WorkerID != "host:1:worker" {
+		t.Fatalf("unexpected paged workers: %+v", workers)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workers?cursor=not-a-cursor", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/status/workers invalid cursor status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }

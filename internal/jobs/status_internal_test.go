@@ -34,6 +34,34 @@ func TestReconcileWorkflowStatusesRebuildsMissingReadModel(t *testing.T) {
 	}
 }
 
+func TestReconcileWorkflowStatusesProcessesBatches(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	for i := 0; i < reconcileWorkflowBatchSize+7; i++ {
+		if _, err := store.Enqueue(ctx, EnqueueRequest{
+			ID:         newID("job"),
+			JobType:    "config_reload",
+			JobGroupID: "config_operation:batch_" + newID("group"),
+			Payload:    json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	if _, err := store.handle.DB.ExecContext(ctx, "DELETE FROM workflow_statuses"); err != nil {
+		t.Fatalf("delete workflow statuses: %v", err)
+	}
+	if err := store.ReconcileWorkflowStatuses(ctx); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var count int
+	if err := store.handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM workflow_statuses").Scan(&count); err != nil {
+		t.Fatalf("count workflow statuses: %v", err)
+	}
+	if count != reconcileWorkflowBatchSize+7 {
+		t.Fatalf("workflow statuses = %d, want %d", count, reconcileWorkflowBatchSize+7)
+	}
+}
+
 func TestWorkflowStatusSelfHealsMissingReadModel(t *testing.T) {
 	ctx := context.Background()
 	store := openInternalStore(t)
@@ -289,6 +317,42 @@ func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
 	}
 	if !seen["job_worker_status_1"] || !seen["job_worker_status_2"] {
 		t.Fatalf("missing running jobs in worker statuses: %+v", workers)
+	}
+}
+
+func TestWorkerStatusesPageUsesCursor(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	for _, id := range []string{"job_worker_page_1", "job_worker_page_2", "job_worker_page_3"} {
+		if _, err := store.Enqueue(ctx, EnqueueRequest{
+			ID:      id,
+			JobType: "config_reload",
+			Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+		}); err != nil {
+			t.Fatalf("enqueue %s: %v", id, err)
+		}
+		claimed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:" + id, LeaseDuration: time.Hour})
+		if err != nil || !ok || claimed.ID != id {
+			t.Fatalf("claim %s: ok=%v job=%+v err=%v", id, ok, claimed, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	first, err := store.WorkerStatusesPage(ctx, 2, "")
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("unexpected first page: %+v", first)
+	}
+	second, err := store.WorkerStatusesPage(ctx, 2, first.NextCursor)
+	if err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if len(second.Items) != 1 || second.NextCursor != "" {
+		t.Fatalf("unexpected second page: %+v", second)
+	}
+	if _, err := store.WorkerStatusesPage(ctx, 2, "not-a-cursor"); err != ErrInvalidCursor {
+		t.Fatalf("invalid cursor error = %v, want %v", err, ErrInvalidCursor)
 	}
 }
 

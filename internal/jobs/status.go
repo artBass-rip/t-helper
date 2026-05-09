@@ -11,6 +11,7 @@ import (
 )
 
 const retentionCleanupBatchSize = 500
+const reconcileWorkflowBatchSize = 500
 
 type RuntimeStatus struct {
 	AggregateStatus string         `json:"aggregate_status"`
@@ -137,28 +138,50 @@ func (s *Store) firstWorkflowJob(ctx context.Context, jobGroupID string) (Job, e
 }
 
 func (s *Store) ReconcileWorkflowStatuses(ctx context.Context) error {
-	rows, err := s.handle.DB.QueryContext(ctx, "SELECT DISTINCT job_group_id FROM jobs WHERE job_group_id IS NOT NULL AND job_group_id <> ''")
-	if err != nil {
-		return err
+	var after string
+	for {
+		groups, err := s.workflowGroupsPage(ctx, after, reconcileWorkflowBatchSize)
+		if err != nil {
+			return err
+		}
+		if len(groups) == 0 {
+			return nil
+		}
+		for _, group := range groups {
+			if err := s.RefreshWorkflowStatus(ctx, group, ""); err != nil {
+				return err
+			}
+		}
+		if len(groups) < reconcileWorkflowBatchSize {
+			return nil
+		}
+		after = groups[len(groups)-1]
 	}
+}
+
+func (s *Store) workflowGroupsPage(ctx context.Context, after string, limit int) ([]string, error) {
+	var args []any
+	query := "SELECT DISTINCT job_group_id FROM jobs WHERE job_group_id IS NOT NULL AND job_group_id <> ''"
+	if after != "" {
+		args = append(args, after)
+		query += " AND job_group_id > " + s.placeholder(len(args))
+	}
+	args = append(args, limit)
+	query += " ORDER BY job_group_id ASC LIMIT " + s.placeholder(len(args))
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 	var groups []string
 	for rows.Next() {
 		var group string
 		if err := rows.Scan(&group); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		groups = append(groups, group)
 	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, group := range groups {
-		if err := s.RefreshWorkflowStatus(ctx, group, ""); err != nil {
-			return err
-		}
-	}
-	return nil
+	return groups, rows.Err()
 }
 
 type RetentionCleanupResult struct {
@@ -331,18 +354,50 @@ func (s *Store) JobStatus(ctx context.Context, id string) (JobStatus, error) {
 }
 
 func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
+	var out []WorkerStatus
+	cursor := ""
+	for {
+		page, err := s.WorkerStatusesPage(ctx, 200, cursor)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, page.Items...)
+		if page.NextCursor == "" {
+			return out, nil
+		}
+		cursor = page.NextCursor
+	}
+}
+
+func (s *Store) WorkerStatusesPage(ctx context.Context, limit int, cursorValue string) (Page[WorkerStatus], error) {
 	now := time.Now().UTC()
-	query := "SELECT id, job_type, COALESCE(leased_by, ''), COALESCE(" + s.timeExpr("heartbeat_at") + ", ''), COALESCE(" + s.timeExpr("lease_expires_at") + ", '') FROM jobs WHERE status = 'running' AND leased_by IS NOT NULL ORDER BY leased_by, updated_at DESC"
-	rows, err := s.handle.DB.QueryContext(ctx, query)
+	var where []string
+	var args []any
+	where = append(where, "status = 'running'", "leased_by IS NOT NULL")
+	if cursorValue != "" {
+		cursor, err := decodeCursor(cursorValue)
+		if err != nil {
+			return Page[WorkerStatus]{}, err
+		}
+		args = append(args, formatTime(cursor.Time), formatTime(cursor.Time), cursor.ID)
+		where = append(where, fmt.Sprintf("(updated_at < %s OR (updated_at = %s AND id < %s))", s.placeholder(len(args)-2), s.placeholder(len(args)-1), s.placeholder(len(args))))
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	query := "SELECT id, job_type, COALESCE(leased_by, ''), COALESCE(" + s.timeExpr("heartbeat_at") + ", ''), COALESCE(" + s.timeExpr("lease_expires_at") + ", ''), " + s.timeExpr("updated_at") + " FROM jobs WHERE " + strings.Join(where, " AND ") + " ORDER BY updated_at DESC, id DESC LIMIT " + s.placeholder(len(args)+1)
+	args = append(args, limit+1)
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return Page[WorkerStatus]{}, err
 	}
 	defer rows.Close()
 	var out []WorkerStatus
+	var cursors []listCursor
 	for rows.Next() {
-		job, err := scanWorkerStatusJob(rows)
+		job, updatedAt, err := scanWorkerStatusJob(rows)
 		if err != nil {
-			return nil, err
+			return Page[WorkerStatus]{}, err
 		}
 		state := "stale"
 		if job.LeaseExpiresAt != nil && job.LeaseExpiresAt.After(now) {
@@ -357,19 +412,30 @@ func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 			LeaseExpiresAt:  job.LeaseExpiresAt,
 			SchemaVersion:   "worker_status.v1",
 		})
+		cursors = append(cursors, listCursor{Time: updatedAt, ID: job.ID})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return Page[WorkerStatus]{}, err
+	}
+	var next string
+	if len(out) > limit {
+		out = out[:limit]
+		last := cursors[limit-1]
+		next = encodeCursor(last.Time, last.ID)
+	}
+	return Page[WorkerStatus]{Items: out, NextCursor: next}, nil
 }
 
-func scanWorkerStatusJob(row interface{ Scan(dest ...any) error }) (Job, error) {
+func scanWorkerStatusJob(row interface{ Scan(dest ...any) error }) (Job, time.Time, error) {
 	var job Job
-	var heartbeat, lease string
-	if err := row.Scan(&job.ID, &job.JobType, &job.LeasedBy, &heartbeat, &lease); err != nil {
-		return Job{}, err
+	var heartbeat, lease, updated string
+	if err := row.Scan(&job.ID, &job.JobType, &job.LeasedBy, &heartbeat, &lease, &updated); err != nil {
+		return Job{}, time.Time{}, err
 	}
 	job.HeartbeatAt = parseTimePtr(heartbeat)
 	job.LeaseExpiresAt = parseTimePtr(lease)
-	return job, nil
+	updatedAt, _ := parseTime(updated)
+	return job, updatedAt, nil
 }
 
 func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateStatus string, limit int) ([]WorkflowStatus, error) {

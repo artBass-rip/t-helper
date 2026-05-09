@@ -69,11 +69,18 @@ func TestStage03ReadPathIndexesExistForSQLite(t *testing.T) {
 		"jobs": {
 			"jobs_claim_idx",
 			"jobs_worker_status_idx",
+			"jobs_worker_status_page_idx",
 			"jobs_leased_by_status_idx",
 		},
 		"workflow_statuses": {
 			"workflow_statuses_updated_at_idx",
 			"workflow_statuses_filter_updated_at_idx",
+		},
+		"job_events": {
+			"job_events_created_at_idx",
+		},
+		"job_locks": {
+			"job_locks_cleanup_idx",
 		},
 	} {
 		got := sqliteIndexes(t, db, table)

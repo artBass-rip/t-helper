@@ -37,6 +37,7 @@ CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs (status, run_after ASC, priori
 CREATE INDEX IF NOT EXISTS jobs_lease_expires_at_idx ON jobs (lease_expires_at);
 CREATE INDEX IF NOT EXISTS jobs_leased_by_status_idx ON jobs (leased_by, status);
 CREATE INDEX IF NOT EXISTS jobs_worker_status_idx ON jobs (status, leased_by, updated_at DESC);
+CREATE INDEX IF NOT EXISTS jobs_worker_status_page_idx ON jobs (status, updated_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS job_locks (
   id TEXT PRIMARY KEY,
@@ -55,6 +56,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS job_locks_held_lock_key_unique
 
 CREATE INDEX IF NOT EXISTS job_locks_job_id_idx ON job_locks (job_id);
 CREATE INDEX IF NOT EXISTS job_locks_expires_at_idx ON job_locks (expires_at);
+CREATE INDEX IF NOT EXISTS job_locks_cleanup_idx
+  ON job_locks (status, released_at, expires_at, created_at, id);
 
 CREATE TABLE IF NOT EXISTS job_events (
   id TEXT PRIMARY KEY,
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS job_events (
 
 CREATE INDEX IF NOT EXISTS job_events_group_created_at_idx ON job_events (job_group_id, created_at);
 CREATE INDEX IF NOT EXISTS job_events_job_created_at_idx ON job_events (job_id, created_at);
+CREATE INDEX IF NOT EXISTS job_events_created_at_idx ON job_events (created_at, id);
 
 CREATE TABLE IF NOT EXISTS workflow_statuses (
   id TEXT PRIMARY KEY,
@@ -106,14 +110,17 @@ DROP INDEX IF EXISTS workflow_statuses_filter_updated_at_idx;
 DROP INDEX IF EXISTS workflow_statuses_updated_at_idx;
 DROP INDEX IF EXISTS workflow_statuses_type_id_unique;
 DROP TABLE IF EXISTS workflow_statuses;
+DROP INDEX IF EXISTS job_events_created_at_idx;
 DROP INDEX IF EXISTS job_events_job_created_at_idx;
 DROP INDEX IF EXISTS job_events_group_created_at_idx;
 DROP TABLE IF EXISTS job_events;
 DROP INDEX IF EXISTS job_locks_expires_at_idx;
+DROP INDEX IF EXISTS job_locks_cleanup_idx;
 DROP INDEX IF EXISTS job_locks_job_id_idx;
 DROP INDEX IF EXISTS job_locks_held_lock_key_unique;
 DROP TABLE IF EXISTS job_locks;
 DROP INDEX IF EXISTS jobs_leased_by_status_idx;
+DROP INDEX IF EXISTS jobs_worker_status_page_idx;
 DROP INDEX IF EXISTS jobs_worker_status_idx;
 DROP INDEX IF EXISTS jobs_lease_expires_at_idx;
 DROP INDEX IF EXISTS jobs_claim_idx;

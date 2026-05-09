@@ -219,7 +219,9 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
-	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
+		r.logger.Warn("refresh workflow status failed", "job_group_id", job.JobGroupID, "job_id", job.ID, "error", err)
+	}
 
 	heartbeatCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -385,7 +387,9 @@ func (r *Runtime) recoverToQueued(ctx context.Context, job Job, runAfter time.Ti
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
+		r.logger.Warn("refresh workflow status failed", "job_group_id", job.JobGroupID, "job_id", job.ID, "error", err)
+	}
 	return nil
 }
 
@@ -426,7 +430,9 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	_ = r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
+	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
+		r.logger.Warn("refresh workflow status failed", "job_group_id", job.JobGroupID, "job_id", job.ID, "error", err)
+	}
 	return nil
 }
 
