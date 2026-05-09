@@ -452,6 +452,20 @@ func TestSafeMessageRedactsSecretLikeValues(t *testing.T) {
 	}
 }
 
+func TestEnqueueRejectsUnsafeSecretLikePayload(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	for name, payload := range map[string]json.RawMessage{
+		"secret key":   json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","api_token":"abc123"}`),
+		"url userinfo": json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","source":"https://user:pass@example.test/repo.git"}`),
+		"secret ref":   json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","source":"secretref://env/API_TOKEN"}`),
+	} {
+		if _, err := store.Enqueue(ctx, EnqueueRequest{JobType: "config_reload", Payload: payload}); err == nil {
+			t.Fatalf("%s: expected unsafe payload to be rejected", name)
+		}
+	}
+}
+
 func TestResultAndEventPayloadsRedactSecretLikeValues(t *testing.T) {
 	ctx := context.Background()
 	store := openInternalStore(t)

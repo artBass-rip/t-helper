@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"time"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
@@ -22,6 +24,7 @@ type Config struct {
 	LeaseDuration     time.Duration
 	HeartbeatInterval time.Duration
 	Concurrency       int
+	WorkerLockDir     string
 }
 
 func DefaultConfig() Config {
@@ -30,6 +33,7 @@ func DefaultConfig() Config {
 		StorageDSN:      ".artifacts/dev/sqlite/t-helper.db",
 		LogLevel:        "info",
 		PollInterval:    time.Second,
+		WorkerLockDir:   ".artifacts/runtime",
 	}
 }
 
@@ -73,6 +77,11 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	lock, err := a.acquireProcessLimitLock(ctx, handle, runtimeOptions.WorkerID, configStore)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
 	runtime := jobs.NewRuntime(runtimeOptions)
 	a.logger.Info("thelper-worker started", "provider", handle.Provider, "concurrency", runtimeOptions.Concurrency)
 	return runtime.Run(ctx)
@@ -101,15 +110,48 @@ func (a *App) runtimeOptions(ctx context.Context, provider string, configStore *
 	if provider == "sqlite" && concurrency != 1 {
 		return jobs.RuntimeOptions{}, fmt.Errorf("sqlite_worker_concurrency_unsupported")
 	}
+	workerID := jobs.NewWorkerID()
 	return jobs.RuntimeOptions{
 		Store:             jobStore,
 		Handlers:          jobs.ModuleHandlers(configStore, moduleStore),
+		WorkerID:          workerID,
 		Logger:            a.logger,
 		PollInterval:      cfg.PollInterval,
 		LeaseDuration:     cfg.LeaseDuration,
 		HeartbeatInterval: cfg.HeartbeatInterval,
 		Concurrency:       concurrency,
 	}, nil
+}
+
+func (a *App) acquireProcessLimitLock(ctx context.Context, handle *storage.Handle, workerID string, configStore *appconfig.Store) (*workerProcessLock, error) {
+	settings, err := configStore.CurrentWorkerProviderSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if handle.Provider != "sqlite" || settings.WorkerProcessLimit <= 0 {
+		return nil, nil
+	}
+	if settings.WorkerProcessLimit != 1 {
+		return nil, fmt.Errorf("sqlite_worker_process_limit_unsupported")
+	}
+	lockDir := a.cfg.WorkerLockDir
+	if strings.TrimSpace(lockDir) == "" {
+		lockDir = DefaultConfig().WorkerLockDir
+	}
+	path := filepath.Join(lockDir, "thelper-worker-"+safeLockName(handle.Fingerprint)+".lock")
+	return acquireWorkerProcessLock(path, workerLockMetadata{
+		WorkerID:            workerID,
+		DatabaseFingerprint: handle.Fingerprint,
+	})
+}
+
+func safeLockName(value string) string {
+	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_", " ", "_")
+	value = strings.TrimSpace(replacer.Replace(value))
+	if value == "" {
+		return "unknown"
+	}
+	return value
 }
 
 func (a *App) resolveCurrentProfileHandle(ctx context.Context, bootstrap *storage.Handle) (*storage.Handle, error) {

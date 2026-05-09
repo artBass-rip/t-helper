@@ -53,6 +53,9 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 	if err := validatePayloadSchema(req.JobType, req.Payload); err != nil {
 		return JobRef{}, err
 	}
+	if err := validateSafeJobPayload(req.Payload); err != nil {
+		return JobRef{}, err
+	}
 	if req.JobGroupID == "" {
 		req.JobGroupID = defaultJobGroupID(req.JobType, req.ID)
 	}

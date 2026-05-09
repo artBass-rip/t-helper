@@ -16,6 +16,9 @@ grouped by completed roadmap stages and merge commits.
   deletes old routine events for terminal jobs.
 - Stage 03 worker status now reports each running lease, including concurrent
   jobs owned by the same worker process.
+- Stage 03 SQLite workers now enforce the configured one-process limit with a
+  database-fingerprint worker lock, and job enqueue rejects secret-like payloads
+  before persistence.
 - Stage 02 storage profile imports now keep active `current` storage stable
   until successful `thelper-ctl -migrate-db`, including initial imports with
   `external_databases.enabled = true`.

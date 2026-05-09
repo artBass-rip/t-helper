@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -76,6 +77,81 @@ func TestRuntimeOptionsRejectSQLiteConcurrencyOverride(t *testing.T) {
 	}
 }
 
+func TestSQLiteWorkerProcessLimitLockRejectsSecondActiveWorker(t *testing.T) {
+	ctx := context.Background()
+	registry := storageproviders.MVPRegistry()
+	handle, err := registry.Open(ctx, storage.Config{Provider: "sqlite", DSN: filepath.Join(t.TempDir(), "worker.db")})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer handle.Close()
+	if err := registry.Migrate(ctx, handle); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	configStore := appconfig.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	app := New(Config{WorkerLockDir: t.TempDir()}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	opts, err := app.runtimeOptions(ctx, handle.Provider, configStore, jobs.NewStore(handle), moduleStore)
+	if err != nil {
+		t.Fatalf("runtime options: %v", err)
+	}
+	first, err := app.acquireProcessLimitLock(ctx, handle, opts.WorkerID, configStore)
+	if err != nil {
+		t.Fatalf("acquire first worker lock: %v", err)
+	}
+	if _, err := app.acquireProcessLimitLock(ctx, handle, "host:2:worker_conflict", configStore); err == nil {
+		t.Fatal("expected second active SQLite worker to be rejected")
+	}
+	if err := first.Release(); err != nil {
+		t.Fatalf("release first worker lock: %v", err)
+	}
+	second, err := app.acquireProcessLimitLock(ctx, handle, "host:2:worker_next", configStore)
+	if err != nil {
+		t.Fatalf("acquire after release: %v", err)
+	}
+	if err := second.Release(); err != nil {
+		t.Fatalf("release second worker lock: %v", err)
+	}
+}
+
+func TestWorkerProcessLockReplacesStaleLock(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "worker.lock")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create stale lock: %v", err)
+	}
+	if err := json.NewEncoder(file).Encode(workerLockMetadata{
+		SchemaVersion:       workerLockSchemaVersion,
+		PID:                 -1,
+		WorkerID:            "host:1:stale",
+		DatabaseFingerprint: "db_stale",
+		StartedAt:           time.Now().UTC().Add(-time.Hour),
+		UpdatedAt:           time.Now().UTC().Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("write stale lock: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close stale lock: %v", err)
+	}
+	lock, err := acquireWorkerProcessLock(path, workerLockMetadata{
+		WorkerID:            "host:2:fresh",
+		DatabaseFingerprint: "db_stale",
+	})
+	if err != nil {
+		t.Fatalf("acquire after stale lock: %v", err)
+	}
+	defer lock.Release()
+	metadata, err := readWorkerProcessLock(path)
+	if err != nil {
+		t.Fatalf("read replaced lock: %v", err)
+	}
+	if metadata.WorkerID != "host:2:fresh" || metadata.PID != os.Getpid() {
+		t.Fatalf("stale worker lock was not replaced: %+v", metadata)
+	}
+}
+
 func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 	ctx := context.Background()
 	registry := storageproviders.MVPRegistry()
@@ -137,6 +213,7 @@ func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 		StorageDSN:        sourcePath,
 		PollInterval:      5 * time.Millisecond,
 		HeartbeatInterval: 5 * time.Millisecond,
+		WorkerLockDir:     t.TempDir(),
 	}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	errCh := make(chan error, 1)
 	go func() {

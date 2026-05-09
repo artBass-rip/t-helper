@@ -24,6 +24,7 @@ func main() {
 	flag.DurationVar(&cfg.LeaseDuration, "lease-duration", cfg.LeaseDuration, "job lease duration")
 	flag.DurationVar(&cfg.HeartbeatInterval, "heartbeat-interval", cfg.HeartbeatInterval, "job heartbeat interval")
 	flag.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "jobs to execute concurrently in this worker process; 0 uses active storage profile defaults")
+	flag.StringVar(&cfg.WorkerLockDir, "worker-lock-dir", cfg.WorkerLockDir, "directory for local worker process limit locks")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

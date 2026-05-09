@@ -259,7 +259,8 @@ Stage 01 implemented coverage:
 - Проверить lock contention: worker не запускает handler, очищает lease, возвращает job в `queued`, выставляет `run_after` и пишет `job_events`.
 - Проверить retention cleanup: old `job_events` и released/expired `job_locks` старше retention удаляются, active jobs/locks и `audit_log` не удаляются.
 - Проверить, что остановка worker-процесса не останавливает `thelper` API runtime.
-- Для SQLite проверить effective `workers.concurrency = 1`, one active worker process, `journal_mode = WAL`, `foreign_keys = ON`, configured `busy_timeout`, and rejection `sqlite_worker_concurrency_unsupported` when applying higher concurrency to active SQLite profile.
+- Для SQLite проверить effective `workers.concurrency = 1`, one active worker process via database-fingerprint worker lock, `journal_mode = WAL`, `foreign_keys = ON`, configured `busy_timeout`, rejection `sqlite_worker_concurrency_unsupported` when applying higher concurrency to active SQLite profile, and stale worker lock replacement after the original process is gone.
+- Проверить, что enqueue rejects `jobs.payload` with secret-like JSON keys, URL userinfo or unresolved `secretref://...` values before persistence.
 - Для PostgreSQL проверить, что provider-specific concurrency может быть выше SQLite without changing SQLite provider settings.
 
 ### Singleton runtime

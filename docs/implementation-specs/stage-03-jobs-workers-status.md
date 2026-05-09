@@ -23,6 +23,7 @@
 - `workflow_statuses`;
 - atomic job claim;
 - heartbeat, lease expiry recovery, retry/backoff;
+- SQLite worker process limit enforcement;
 - worker handlers для `config_reload` и `module_restart`;
 - basic status-monitor для jobs/workers/modules;
 - status API endpoints.
@@ -53,10 +54,16 @@
 - Stage 03 derives `worker_status.v1` from running jobs and their leases.
   Idle workers are not reported until a later worker heartbeat registry is
   introduced.
+- For SQLite active profiles, Stage 03 enforces `worker_process_limit = 1`
+  with a local worker process lock keyed by the active database fingerprint.
+  The lock is separate from `job_locks`: it limits local SQLite worker process
+  count, while `job_locks` serialize business resources.
 - `Idempotency-Key` uniqueness is scoped by operation owner, not global across
   all jobs. Stage 03 stores `idempotency_key` on `jobs` and enforces uniqueness
   on `(actor, job_type, idempotency_key)` for non-null keys. Empty actor is
   normalized to `system` at enqueue time.
+- `jobs.payload` is validated before persistence and rejected if it contains
+  secret-like JSON keys, URL userinfo or unresolved `secretref://...` values.
 
 ## Worker handler contract
 

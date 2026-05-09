@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -51,6 +52,51 @@ func safeJSONPayload(payload json.RawMessage) json.RawMessage {
 		return payload
 	}
 	return out
+}
+
+func validateSafeJobPayload(payload json.RawMessage) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	var value any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return err
+	}
+	return validateSafeJSONValue(value, "")
+}
+
+func validateSafeJSONValue(value any, key string) error {
+	if secretLikeJSONKeyPattern.MatchString(key) {
+		return fmt.Errorf("job payload contains unsafe secret-like key %q", key)
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		for childKey, childValue := range typed {
+			if err := validateSafeJSONValue(childValue, childKey); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, childValue := range typed {
+			if err := validateSafeJSONValue(childValue, key); err != nil {
+				return err
+			}
+		}
+	case string:
+		if containsSecretLikeString(typed) {
+			return fmt.Errorf("job payload contains unsafe secret-like string")
+		}
+	}
+	return nil
+}
+
+func containsSecretLikeString(value string) bool {
+	for _, pattern := range secretLikeMessagePatterns {
+		if pattern.MatchString(value) {
+			return true
+		}
+	}
+	return false
 }
 
 func sanitizeJSONValue(value any, key string) any {
