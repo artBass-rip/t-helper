@@ -92,6 +92,80 @@ func runJobStoreContract(t *testing.T, store *jobs.Store) {
 	if workflow.AggregateStatus != jobs.StatusSucceeded || workflow.ProgressCurrent != 1 || workflow.ProgressTotal != 1 {
 		t.Fatalf("unexpected workflow status: %+v", workflow)
 	}
+
+	firstRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		LockKey: "resource:contract",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue first locked job: %v", err)
+	}
+	secondRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		LockKey: "resource:contract",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue second locked job: %v", err)
+	}
+	first, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:first", LeaseDuration: time.Minute})
+	if err != nil || !ok || first.ID != firstRef.JobID {
+		t.Fatalf("claim first locked job: ok=%v job=%+v err=%v", ok, first, err)
+	}
+	locked, err := store.AcquireLock(ctx, first, "host:1:first", time.Minute)
+	if err != nil || !locked {
+		t.Fatalf("acquire first lock: locked=%v err=%v", locked, err)
+	}
+	second, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:second", LeaseDuration: time.Minute})
+	if err != nil || !ok || second.ID != secondRef.JobID {
+		t.Fatalf("claim second locked job: ok=%v job=%+v err=%v", ok, second, err)
+	}
+	locked, err = store.AcquireLock(ctx, second, "host:1:second", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire second lock: %v", err)
+	}
+	if locked {
+		t.Fatal("second worker acquired conflicting held lock")
+	}
+	if err := store.Requeue(ctx, second, "host:1:second", "lock_contention", time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("requeue second locked job: %v", err)
+	}
+	if err := store.Complete(ctx, first, "host:1:first", jobs.StatusSucceeded, json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), ""); err != nil {
+		t.Fatalf("complete first locked job: %v", err)
+	}
+	requeued, err := store.Get(ctx, secondRef.JobID)
+	if err != nil {
+		t.Fatalf("get requeued locked job: %v", err)
+	}
+	if requeued.Status != jobs.StatusQueued || requeued.LeasedBy != "" {
+		t.Fatalf("unexpected requeued locked job: %+v", requeued)
+	}
+
+	expiredRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType:     "config_reload",
+		MaxAttempts: 2,
+		Payload:     json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue expired job: %v", err)
+	}
+	expired, ok, err := store.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:1:expired", LeaseDuration: time.Millisecond})
+	if err != nil || !ok || expired.ID != expiredRef.JobID {
+		t.Fatalf("claim expired job: ok=%v job=%+v err=%v", ok, expired, err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: store, WorkerID: "host:1:recovery", LeaseDuration: time.Minute})
+	if err := runtime.RecoverExpiredLeases(ctx); err != nil {
+		t.Fatalf("recover expired leases: %v", err)
+	}
+	recovered, err := store.Get(ctx, expiredRef.JobID)
+	if err != nil {
+		t.Fatalf("get recovered job: %v", err)
+	}
+	if recovered.Status != jobs.StatusQueued || recovered.LeasedBy != "" || recovered.AttemptCount != 1 {
+		t.Fatalf("unexpected recovered job: %+v", recovered)
+	}
 }
 
 func requirePostgresTestDatabase(t *testing.T, dsn string) {
