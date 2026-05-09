@@ -501,7 +501,7 @@ func TestRuntimeCancellationAndRetryExhaustion(t *testing.T) {
 	}
 }
 
-func TestRuntimeFinalizesCancelledHandlerAfterContextCancellation(t *testing.T) {
+func TestRuntimeShutdownCancellationLeavesJobForLeaseRecovery(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	store := openStore(t)
 	ref, err := store.Enqueue(context.Background(), jobs.EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`)})
@@ -521,12 +521,12 @@ func TestRuntimeFinalizesCancelledHandlerAfterContextCancellation(t *testing.T) 
 	if ran, err := runtime.RunOnce(ctx); err != nil || !ran {
 		t.Fatalf("run cancelled: ran=%v err=%v", ran, err)
 	}
-	cancelled, err := store.Get(context.Background(), ref.JobID)
+	current, err := store.Get(context.Background(), ref.JobID)
 	if err != nil {
-		t.Fatalf("get cancelled: %v", err)
+		t.Fatalf("get job: %v", err)
 	}
-	if cancelled.Status != jobs.StatusCancelled || cancelled.FinishedAt == nil {
-		t.Fatalf("job was not finalized after context cancellation: %+v", cancelled)
+	if current.Status != jobs.StatusRunning || current.FinishedAt != nil {
+		t.Fatalf("shutdown cancellation should leave job for lease recovery: %+v", current)
 	}
 }
 

@@ -235,6 +235,9 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		return true, r.store.Complete(finalCtx, job, r.workerID, StatusSucceeded, result, "")
 	}
 	classified := classifyError(handleErr)
+	if classified.Code == "cancelled" && ctx.Err() != nil {
+		return true, nil
+	}
 	if classified.Retryable && job.AttemptCount < job.MaxAttempts {
 		return true, r.store.Requeue(finalCtx, job, r.workerID, classified.Code, time.Now().UTC().Add(backoff(job.AttemptCount)))
 	}
@@ -324,9 +327,6 @@ func (r *Runtime) RecoverExpiredLeases(ctx context.Context) error {
 		return err
 	}
 	for _, job := range expiredJobs {
-		if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventLeaseExpired, Status: StatusRunning, WorkerID: job.LeasedBy}); err != nil {
-			return err
-		}
 		if job.AttemptCount < job.MaxAttempts {
 			if err := r.recoverToQueued(ctx, job, now.Add(backoff(job.AttemptCount))); err != nil {
 				return err
@@ -355,11 +355,14 @@ func (r *Runtime) recoverToQueued(ctx context.Context, job Job, runAfter time.Ti
 		return err
 	}
 	defer tx.Rollback()
-	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, updated_at = ? WHERE id = ? AND status = 'running'`
+	if job.LeaseExpiresAt == nil {
+		return nil
+	}
+	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, updated_at = ? WHERE id = ? AND status = 'running' AND leased_by = ? AND lease_expires_at = ?`
 	now := time.Now().UTC()
-	args := []any{formatTime(runAfter), formatTime(now), job.ID}
+	args := []any{formatTime(runAfter), formatTime(now), job.ID, job.LeasedBy, formatTime(*job.LeaseExpiresAt)}
 	if r.store.handle.Provider == "postgres" {
-		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`
+		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, updated_at = $2 WHERE id = $3 AND status = 'running' AND leased_by = $4 AND lease_expires_at = $5`
 	}
 	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -368,9 +371,12 @@ func (r *Runtime) recoverToQueued(ctx context.Context, job Job, runAfter time.Ti
 	if affected, err := res.RowsAffected(); err != nil {
 		return err
 	} else if affected == 0 {
-		return fmt.Errorf("expired job %s is no longer running", job.ID)
+		return nil
 	}
 	if err := r.store.expireJobLocks(ctx, tx, job.ID); err != nil {
+		return err
+	}
+	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventLeaseExpired, Status: StatusRunning, WorkerID: job.LeasedBy}); err != nil {
 		return err
 	}
 	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: r.workerID}); err != nil {
@@ -389,12 +395,15 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 		return err
 	}
 	defer tx.Rollback()
-	query := `UPDATE jobs SET status = 'failed', result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND status = 'running'`
+	if job.LeaseExpiresAt == nil {
+		return nil
+	}
+	query := `UPDATE jobs SET status = 'failed', result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND status = 'running' AND leased_by = ? AND lease_expires_at = ?`
 	now := time.Now().UTC()
 	message = safeMessage(message)
-	args := []any{string(result), message, formatTime(now), formatTime(now), job.ID}
+	args := []any{string(result), message, formatTime(now), formatTime(now), job.ID, job.LeasedBy, formatTime(*job.LeaseExpiresAt)}
 	if r.store.handle.Provider == "postgres" {
-		query = `UPDATE jobs SET status = 'failed', result_payload = $1, error_message = $2, finished_at = $3, updated_at = $4 WHERE id = $5 AND status = 'running'`
+		query = `UPDATE jobs SET status = 'failed', result_payload = $1, error_message = $2, finished_at = $3, updated_at = $4 WHERE id = $5 AND status = 'running' AND leased_by = $6 AND lease_expires_at = $7`
 	}
 	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -403,9 +412,12 @@ func (r *Runtime) forceFail(ctx context.Context, job Job, result json.RawMessage
 	if affected, err := res.RowsAffected(); err != nil {
 		return err
 	} else if affected == 0 {
-		return fmt.Errorf("expired job %s is no longer running", job.ID)
+		return nil
 	}
 	if err := r.store.expireJobLocks(ctx, tx, job.ID); err != nil {
+		return err
+	}
+	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventLeaseExpired, Status: StatusRunning, WorkerID: job.LeasedBy}); err != nil {
 		return err
 	}
 	if err := r.store.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventFailed, Status: StatusFailed, WorkerID: r.workerID}); err != nil {

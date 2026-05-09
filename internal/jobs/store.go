@@ -396,6 +396,7 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	if len(result) == 0 {
 		result = json.RawMessage(`{}`)
 	}
+	result = safeJSONPayload(result)
 	message = safeMessage(message)
 	now := time.Now().UTC()
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
@@ -492,6 +493,7 @@ func (s *Store) addEvent(ctx context.Context, exec sqlExecutor, event Event) err
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
 	}
+	event.Payload = safeJSONPayload(event.Payload)
 	query := `INSERT INTO job_events (id, job_id, job_group_id, event_type, status, worker_id, metric_name, metric_value, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	args := []any{event.ID, event.JobID, nullEmpty(event.JobGroupID), event.EventType, nullEmpty(event.Status), nullEmpty(event.WorkerID), nullEmpty(event.MetricName), event.MetricValue, nullJSON(event.Payload), formatTime(event.CreatedAt)}
 	if s.handle.Provider == "postgres" {
@@ -573,7 +575,7 @@ func (s *Store) findByIdempotency(ctx context.Context, actor, jobType, key strin
 
 func (s *Store) jobSelectColumns() string {
 	if s.handle.Provider == "postgres" {
-		return `id, job_type, status, COALESCE(actor, ''), COALESCE(correlation_id, ''), COALESCE(idempotency_key, ''), COALESCE(parent_job_id, ''), COALESCE(job_group_id, ''), COALESCE(lock_key, ''), attempt_count, max_attempts, COALESCE(leased_by, ''), lease_expires_at::text, heartbeat_at::text, run_after::text, priority, payload::text, COALESCE(result_payload::text, ''), created_at::text, started_at::text, finished_at::text, COALESCE(error_message, ''), updated_at::text`
+		return `id, job_type, status, COALESCE(actor, ''), COALESCE(correlation_id, ''), COALESCE(idempotency_key, ''), COALESCE(parent_job_id, ''), COALESCE(job_group_id, ''), COALESCE(lock_key, ''), attempt_count, max_attempts, COALESCE(leased_by, ''), COALESCE(lease_expires_at::text, ''), COALESCE(heartbeat_at::text, ''), run_after::text, priority, payload::text, COALESCE(result_payload::text, ''), created_at::text, COALESCE(started_at::text, ''), COALESCE(finished_at::text, ''), COALESCE(error_message, ''), updated_at::text`
 	}
 	return `id, job_type, status, COALESCE(actor, ''), COALESCE(correlation_id, ''), COALESCE(idempotency_key, ''), COALESCE(parent_job_id, ''), COALESCE(job_group_id, ''), COALESCE(lock_key, ''), attempt_count, max_attempts, COALESCE(leased_by, ''), COALESCE(lease_expires_at, ''), COALESCE(heartbeat_at, ''), run_after, priority, payload, COALESCE(result_payload, ''), created_at, COALESCE(started_at, ''), COALESCE(finished_at, ''), COALESCE(error_message, ''), updated_at`
 }

@@ -320,10 +320,13 @@ Stage 03 workflow type mapping:
 - `config_reload` -> `config_operation`;
 - `module_restart` -> `module_operation`;
 - `global_scan` -> `global_scan`;
+- `project_discovery` -> `project_discovery`;
 - `project_scan` and `security_validation_scan` -> `project_scan`;
 - `repo_clone`, `repo_pull` and `repo_sync` -> `repository_operation`;
 - `scim_sync` -> `scim_sync`;
-- unknown future job types use `job_type` as fallback `workflow_type`.
+- future job types require a schema migration before enqueueing; once admitted
+  by the physical schema, unrecognized types use `job_type` as fallback
+  `workflow_type`.
 
 For single-job workflows, `workflow_id` is the job ID. For grouped workflows
 introduced by later stages, the parent/orchestrator creation path owns

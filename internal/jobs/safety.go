@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -10,6 +11,8 @@ var secretLikeMessagePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(https?|ssh)://[^@\s]+@`),
 	regexp.MustCompile(`(?i)secretref://[^\s,]+`),
 }
+
+var secretLikeJSONKeyPattern = regexp.MustCompile(`(?i)(password|passwd|pwd|token|secret|private[_ -]?key|authorization|bearer)`)
 
 func safeMessage(message string) string {
 	message = strings.TrimSpace(message)
@@ -32,4 +35,44 @@ func safeMessage(message string) string {
 		message = message[:500] + "..."
 	}
 	return message
+}
+
+func safeJSONPayload(payload json.RawMessage) json.RawMessage {
+	if len(payload) == 0 {
+		return payload
+	}
+	var value any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return payload
+	}
+	sanitized := sanitizeJSONValue(value, "")
+	out, err := json.Marshal(sanitized)
+	if err != nil {
+		return payload
+	}
+	return out
+}
+
+func sanitizeJSONValue(value any, key string) any {
+	if secretLikeJSONKeyPattern.MatchString(key) {
+		return "[redacted]"
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for childKey, childValue := range typed {
+			out[childKey] = sanitizeJSONValue(childValue, childKey)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for i, childValue := range typed {
+			out[i] = sanitizeJSONValue(childValue, key)
+		}
+		return out
+	case string:
+		return safeMessage(typed)
+	default:
+		return typed
+	}
 }

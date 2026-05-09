@@ -227,6 +227,25 @@ func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
 	}
 }
 
+func TestRuntimeStatusReportsFailedWhenAllRunningModulesAreFailed(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	if _, err := store.handle.DB.ExecContext(ctx, `INSERT INTO module_states (id, module_name, state, details, updated_at) VALUES (?, ?, 'failed', '{}', ?)`,
+		newID("module_state"), "core", formatTime(time.Now().UTC())); err != nil {
+		t.Fatalf("mark modules failed: %v", err)
+	}
+	status, err := store.RuntimeStatus(ctx)
+	if err != nil {
+		t.Fatalf("runtime status: %v", err)
+	}
+	if status.Modules["failed"] == 0 {
+		t.Fatalf("test did not mark any module failed: %+v", status.Modules)
+	}
+	if status.AggregateStatus != "failed" {
+		t.Fatalf("aggregate status = %q, want failed: %+v", status.AggregateStatus, status)
+	}
+}
+
 func TestWorkerIDAndBackoffDefaults(t *testing.T) {
 	workerID := NewWorkerID()
 	if !regexp.MustCompile(`^[^:]+:\d+:worker_[0-9a-f]{32}$`).MatchString(workerID) {
@@ -244,6 +263,54 @@ func TestWorkerIDAndBackoffDefaults(t *testing.T) {
 	}
 }
 
+func TestExpiredLeaseRecoveryDoesNotOverrideFreshHeartbeat(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	ref, err := store.Enqueue(ctx, EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	claimed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Millisecond})
+	if err != nil || !ok || claimed.ID != ref.JobID {
+		t.Fatalf("claim: ok=%v job=%+v err=%v", ok, claimed, err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	staleSnapshot, err := store.Get(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("get stale snapshot: %v", err)
+	}
+	if staleSnapshot.LeaseExpiresAt == nil || staleSnapshot.LeaseExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("test did not produce an expired snapshot: %+v", staleSnapshot)
+	}
+	if err := store.Heartbeat(ctx, claimed.ID, "host:1:worker", time.Hour); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+
+	runtime := NewRuntime(RuntimeOptions{Store: store, WorkerID: "host:1:recovery", LeaseDuration: time.Minute})
+	if err := runtime.recoverToQueued(ctx, staleSnapshot, time.Now().UTC()); err != nil {
+		t.Fatalf("recover stale snapshot: %v", err)
+	}
+	current, err := store.Get(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("get current: %v", err)
+	}
+	if current.Status != StatusRunning || current.LeasedBy != "host:1:worker" || current.LeaseExpiresAt == nil || !current.LeaseExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("fresh heartbeat was overridden by stale recovery: %+v", current)
+	}
+	events, err := store.ListEvents(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	for _, event := range events {
+		if event.EventType == EventLeaseExpired {
+			t.Fatalf("stale recovery wrote lease_expired event: %+v", events)
+		}
+	}
+}
+
 func TestSafeMessageRedactsSecretLikeValues(t *testing.T) {
 	message := safeMessage("failed password=hunter2 token:abc https://user:pass@example.test/repo.git secretref://env/API_TOKEN")
 	for _, leaked := range []string{"hunter2", "abc", "user:pass", "API_TOKEN"} {
@@ -253,6 +320,54 @@ func TestSafeMessageRedactsSecretLikeValues(t *testing.T) {
 	}
 	if !strings.Contains(message, "[redacted]") {
 		t.Fatalf("expected redaction marker in %q", message)
+	}
+}
+
+func TestResultAndEventPayloadsRedactSecretLikeValues(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	ref, err := store.Enqueue(ctx, EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	claimed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Minute})
+	if err != nil || !ok || claimed.ID != ref.JobID {
+		t.Fatalf("claim: ok=%v job=%+v err=%v", ok, claimed, err)
+	}
+	if err := store.AddEvent(ctx, Event{
+		JobID:      claimed.ID,
+		JobGroupID: claimed.JobGroupID,
+		EventType:  EventProgress,
+		Status:     StatusRunning,
+		Payload:    json.RawMessage(`{"message":"using https://user:pass@example.test/repo.git","details":{"api_token":"abc123"}}`),
+	}); err != nil {
+		t.Fatalf("add event: %v", err)
+	}
+	if err := store.Complete(ctx, claimed, "host:1:worker", StatusSucceeded, json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1","token":"secret-token","url":"https://user:pass@example.test/repo.git"}`), ""); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	done, err := store.Get(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	events, err := store.ListEvents(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	raw := string(done.ResultPayload)
+	for _, event := range events {
+		raw += string(event.Payload)
+	}
+	for _, leaked := range []string{"abc123", "secret-token", "user:pass"} {
+		if strings.Contains(raw, leaked) {
+			t.Fatalf("payload leaked %q: %s", leaked, raw)
+		}
+	}
+	if !strings.Contains(raw, "[redacted]") {
+		t.Fatalf("payloads did not include redaction marker: %s", raw)
 	}
 }
 

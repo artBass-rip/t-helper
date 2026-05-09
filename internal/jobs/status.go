@@ -234,7 +234,9 @@ func (s *Store) RuntimeStatus(ctx context.Context) (RuntimeStatus, error) {
 		}
 		status.Modules[key] = count
 	}
-	if status.Jobs[StatusFailed] > 0 || status.Workers["stale"] > 0 || status.Modules["failed"] > 0 {
+	if status.Modules["failed"] > 0 && status.Modules["running"] == 0 {
+		status.AggregateStatus = "failed"
+	} else if status.Jobs[StatusFailed] > 0 || status.Workers["stale"] > 0 || status.Modules["failed"] > 0 {
 		status.AggregateStatus = "degraded"
 	}
 	return status, moduleRows.Err()
