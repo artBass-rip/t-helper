@@ -37,6 +37,7 @@ CREATE INDEX IF NOT EXISTS jobs_lock_status_idx ON jobs (lock_key, status);
 CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs (status, run_after ASC, priority DESC, created_at ASC);
 CREATE INDEX IF NOT EXISTS jobs_lease_expires_at_idx ON jobs (lease_expires_at);
 CREATE INDEX IF NOT EXISTS jobs_leased_by_status_idx ON jobs (leased_by, status);
+CREATE INDEX IF NOT EXISTS jobs_worker_status_idx ON jobs (status, leased_by, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS job_locks (
   id TEXT PRIMARY KEY,
@@ -93,11 +94,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS workflow_statuses_type_id_unique
 CREATE UNIQUE INDEX IF NOT EXISTS workflow_statuses_job_group_id_unique
   ON workflow_statuses (job_group_id);
 
+CREATE INDEX IF NOT EXISTS workflow_statuses_updated_at_idx
+  ON workflow_statuses (updated_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS workflow_statuses_filter_updated_at_idx
+  ON workflow_statuses (workflow_type, aggregate_status, updated_at DESC, id DESC);
+
 UPDATE system_metadata SET value = 'stage-03', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   WHERE key = 'schema_version';
 
 -- +goose Down
 DROP INDEX IF EXISTS workflow_statuses_job_group_id_unique;
+DROP INDEX IF EXISTS workflow_statuses_filter_updated_at_idx;
+DROP INDEX IF EXISTS workflow_statuses_updated_at_idx;
 DROP INDEX IF EXISTS workflow_statuses_type_id_unique;
 DROP TABLE IF EXISTS workflow_statuses;
 DROP INDEX IF EXISTS job_events_job_created_at_idx;
@@ -108,6 +117,7 @@ DROP INDEX IF EXISTS job_locks_job_id_idx;
 DROP INDEX IF EXISTS job_locks_held_lock_key_unique;
 DROP TABLE IF EXISTS job_locks;
 DROP INDEX IF EXISTS jobs_leased_by_status_idx;
+DROP INDEX IF EXISTS jobs_worker_status_idx;
 DROP INDEX IF EXISTS jobs_lease_expires_at_idx;
 DROP INDEX IF EXISTS jobs_claim_idx;
 DROP INDEX IF EXISTS jobs_lock_status_idx;

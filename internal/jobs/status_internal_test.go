@@ -191,6 +191,71 @@ func TestCleanupRetentionDeletesOnlyOldInactiveRows(t *testing.T) {
 	}
 }
 
+func TestCleanupRetentionDeletesOldInactiveRowsAcrossBatches(t *testing.T) {
+	ctx := context.Background()
+	store := openInternalStore(t)
+	old := time.Now().UTC().Add(-60 * 24 * time.Hour)
+	cutoff := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	ref, err := store.Enqueue(ctx, EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	claimed, ok, err := store.ClaimNext(ctx, ClaimOptions{WorkerID: "host:1:worker", LeaseDuration: time.Hour})
+	if err != nil || !ok || claimed.ID != ref.JobID {
+		t.Fatalf("claim: ok=%v job=%+v err=%v", ok, claimed, err)
+	}
+	if err := store.Complete(ctx, claimed, "host:1:worker", StatusSucceeded, json.RawMessage(`{"schema_version":"jobs.config_reload.result.v1"}`), ""); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	for i := 0; i < retentionCleanupBatchSize*2+7; i++ {
+		if err := store.AddEvent(ctx, Event{
+			ID:         newID("event"),
+			JobID:      claimed.ID,
+			JobGroupID: claimed.JobGroupID,
+			EventType:  EventProgress,
+			Status:     StatusSucceeded,
+			CreatedAt:  old.Add(time.Duration(i) * time.Millisecond),
+		}); err != nil {
+			t.Fatalf("add old event %d: %v", i, err)
+		}
+	}
+	for i := 0; i < retentionCleanupBatchSize+3; i++ {
+		_, err := store.handle.DB.ExecContext(ctx, `INSERT INTO job_locks (id, lock_key, job_id, owner, status, created_at, expires_at, released_at) VALUES (?, ?, ?, ?, 'released', ?, ?, ?)`,
+			newID("lock"), "resource:old:"+newID("key"), claimed.ID, "host:1:old", formatTime(old), formatTime(old), formatTime(old))
+		if err != nil {
+			t.Fatalf("insert old released lock %d: %v", i, err)
+		}
+	}
+	result, err := store.CleanupRetention(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if result.DeletedJobEvents < retentionCleanupBatchSize*2+7 || result.DeletedJobLocks != retentionCleanupBatchSize+3 {
+		t.Fatalf("cleanup did not process all eligible rows across batches: %+v", result)
+	}
+	events, err := store.ListEvents(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	for _, event := range events {
+		if event.EventType == EventProgress && event.CreatedAt.Before(cutoff) {
+			t.Fatalf("old inactive event survived cleanup: %+v", event)
+		}
+	}
+	locks, err := store.ListLocks(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("list locks: %v", err)
+	}
+	for _, lock := range locks {
+		if lock.Status == "released" && lock.ReleasedAt != nil && lock.ReleasedAt.Before(cutoff) {
+			t.Fatalf("old released lock survived cleanup: %+v", lock)
+		}
+	}
+}
+
 func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
 	ctx := context.Background()
 	store := openInternalStore(t)

@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
+
+const retentionCleanupBatchSize = 500
 
 type RuntimeStatus struct {
 	AggregateStatus string         `json:"aggregate_status"`
@@ -165,28 +168,88 @@ type RetentionCleanupResult struct {
 
 func (s *Store) CleanupRetention(ctx context.Context, cutoff time.Time) (RetentionCleanupResult, error) {
 	var result RetentionCleanupResult
-	eventQuery := "DELETE FROM job_events WHERE created_at < ? AND job_id IN (SELECT id FROM jobs WHERE status IN ('succeeded', 'failed', 'cancelled'))"
-	lockQuery := "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < ?"
-	args := []any{formatTime(cutoff)}
-	if s.handle.Provider == "postgres" {
-		eventQuery = "DELETE FROM job_events WHERE created_at < $1 AND job_id IN (SELECT id FROM jobs WHERE status IN ('succeeded', 'failed', 'cancelled'))"
-		lockQuery = "DELETE FROM job_locks WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < $1"
+	for {
+		deleted, err := s.cleanupRetentionBatch(ctx, "job_events", cutoff)
+		if err != nil {
+			return result, err
+		}
+		result.DeletedJobEvents += deleted
+		if deleted < retentionCleanupBatchSize {
+			break
+		}
 	}
-	res, err := s.handle.DB.ExecContext(ctx, eventQuery, args...)
-	if err != nil {
-		return result, err
-	}
-	if n, err := res.RowsAffected(); err == nil {
-		result.DeletedJobEvents = int(n)
-	}
-	res, err = s.handle.DB.ExecContext(ctx, lockQuery, args...)
-	if err != nil {
-		return result, err
-	}
-	if n, err := res.RowsAffected(); err == nil {
-		result.DeletedJobLocks = int(n)
+	for {
+		deleted, err := s.cleanupRetentionBatch(ctx, "job_locks", cutoff)
+		if err != nil {
+			return result, err
+		}
+		result.DeletedJobLocks += deleted
+		if deleted < retentionCleanupBatchSize {
+			break
+		}
 	}
 	return result, nil
+}
+
+func (s *Store) cleanupRetentionBatch(ctx context.Context, table string, cutoff time.Time) (int, error) {
+	selectQuery := ""
+	args := []any{formatTime(cutoff), retentionCleanupBatchSize}
+	switch table {
+	case "job_events":
+		selectQuery = `SELECT job_events.id
+FROM job_events
+JOIN jobs ON jobs.id = job_events.job_id
+WHERE job_events.created_at < ? AND jobs.status IN ('succeeded', 'failed', 'cancelled')
+ORDER BY job_events.created_at ASC, job_events.id ASC
+LIMIT ?`
+	case "job_locks":
+		selectQuery = `SELECT id
+FROM job_locks
+WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < ?
+ORDER BY COALESCE(released_at, expires_at, created_at) ASC, id ASC
+LIMIT ?`
+	default:
+		return 0, fmt.Errorf("unsupported retention cleanup table %q", table)
+	}
+	if s.handle.Provider == "postgres" {
+		selectQuery = strings.ReplaceAll(selectQuery, "?", "%s")
+		selectQuery = fmt.Sprintf(selectQuery, "$1", "$2")
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, selectQuery, args...)
+	if err != nil {
+		return 0, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(ids))
+	deleteArgs := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = s.placeholder(i + 1)
+		deleteArgs[i] = id
+	}
+	deleteQuery := fmt.Sprintf("DELETE FROM %s WHERE id IN (%s)", table, strings.Join(placeholders, ", "))
+	res, err := s.handle.DB.ExecContext(ctx, deleteQuery, deleteArgs...)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return len(ids), nil
+	}
+	return int(affected), nil
 }
 
 func (s *Store) RuntimeStatus(ctx context.Context) (RuntimeStatus, error) {
@@ -269,7 +332,7 @@ func (s *Store) JobStatus(ctx context.Context, id string) (JobStatus, error) {
 
 func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 	now := time.Now().UTC()
-	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE status = 'running' AND leased_by IS NOT NULL ORDER BY leased_by, updated_at DESC"
+	query := "SELECT id, job_type, COALESCE(leased_by, ''), COALESCE(" + s.timeExpr("heartbeat_at") + ", ''), COALESCE(" + s.timeExpr("lease_expires_at") + ", '') FROM jobs WHERE status = 'running' AND leased_by IS NOT NULL ORDER BY leased_by, updated_at DESC"
 	rows, err := s.handle.DB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -277,7 +340,7 @@ func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 	defer rows.Close()
 	var out []WorkerStatus
 	for rows.Next() {
-		job, err := scanJob(rows)
+		job, err := scanWorkerStatusJob(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -296,6 +359,17 @@ func (s *Store) WorkerStatuses(ctx context.Context) ([]WorkerStatus, error) {
 		})
 	}
 	return out, rows.Err()
+}
+
+func scanWorkerStatusJob(row interface{ Scan(dest ...any) error }) (Job, error) {
+	var job Job
+	var heartbeat, lease string
+	if err := row.Scan(&job.ID, &job.JobType, &job.LeasedBy, &heartbeat, &lease); err != nil {
+		return Job{}, err
+	}
+	job.HeartbeatAt = parseTimePtr(heartbeat)
+	job.LeaseExpiresAt = parseTimePtr(lease)
+	return job, nil
 }
 
 func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateStatus string, limit int) ([]WorkflowStatus, error) {

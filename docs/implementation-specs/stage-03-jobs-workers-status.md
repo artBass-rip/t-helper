@@ -214,6 +214,7 @@ Dialect storage rules:
 - worker claim index on `(status, run_after, priority, created_at)`;
 - index on `lease_expires_at`;
 - index on `(leased_by, status)`.
+- read-path index for derived worker status on `(status, leased_by, updated_at)`.
 
 Worker claim ordering is `run_after ASC`, `priority DESC`, `created_at ASC`.
 The exact SQL may differ by dialect, but the index and query must support this
@@ -291,6 +292,9 @@ ordering.
 - `summary_payload` must be valid JSON;
 - unique index on `(workflow_type, workflow_id)`;
 - unique index on `job_group_id`.
+- read-path index on `(updated_at, id)` for paginated workflow status listing;
+- read-path index on `(workflow_type, aggregate_status, updated_at, id)` for
+  filtered workflow status listing.
 
 Runtime timestamp rules:
 

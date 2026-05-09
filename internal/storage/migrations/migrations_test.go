@@ -54,6 +54,62 @@ func TestApplyIsIdempotentForSQLite(t *testing.T) {
 	}
 }
 
+func TestStage03ReadPathIndexesExistForSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := Apply(context.Background(), db, "sqlite"); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	for table, names := range map[string][]string{
+		"jobs": {
+			"jobs_claim_idx",
+			"jobs_worker_status_idx",
+			"jobs_leased_by_status_idx",
+		},
+		"workflow_statuses": {
+			"workflow_statuses_updated_at_idx",
+			"workflow_statuses_filter_updated_at_idx",
+		},
+	} {
+		got := sqliteIndexes(t, db, table)
+		for _, name := range names {
+			if !got[name] {
+				t.Fatalf("missing index %s on %s; got indexes %#v", name, table, got)
+			}
+		}
+	}
+}
+
+func sqliteIndexes(t *testing.T, db *sql.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.Query("PRAGMA index_list(" + table + ")")
+	if err != nil {
+		t.Fatalf("list indexes for %s: %v", table, err)
+	}
+	defer rows.Close()
+	indexes := map[string]bool{}
+	for rows.Next() {
+		var seq int
+		var name string
+		var unique int
+		var origin string
+		var partial int
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+			t.Fatalf("scan index for %s: %v", table, err)
+		}
+		indexes[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate indexes for %s: %v", table, err)
+	}
+	return indexes
+}
+
 func migrationVersions(t *testing.T, dialect string) []string {
 	t.Helper()
 	entries, err := fs.ReadDir(files, dialect)
