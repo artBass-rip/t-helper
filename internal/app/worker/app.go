@@ -81,7 +81,9 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Release()
+	if lock != nil {
+		defer lock.Release()
+	}
 	runtime := jobs.NewRuntime(runtimeOptions)
 	a.logger.Info("thelper-worker started", "provider", handle.Provider, "concurrency", runtimeOptions.Concurrency)
 	return runtime.Run(ctx)

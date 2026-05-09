@@ -240,7 +240,7 @@ func (s *Store) ClaimNext(ctx context.Context, opts ClaimOptions) (Job, bool, er
 			return Job{}, false, err
 		}
 		defer tx.Rollback()
-		query := `UPDATE jobs SET status = 'running', leased_by = $1, lease_expires_at = $2, heartbeat_at = $3, started_at = COALESCE(started_at, $3), attempt_count = attempt_count + 1, updated_at = $3
+		query := `UPDATE jobs SET status = 'running', leased_by = $1, lease_expires_at = $2, heartbeat_at = $3, attempt_count = attempt_count + 1, updated_at = $3
 WHERE id = (
   SELECT id FROM jobs
 	  WHERE status = 'queued' AND run_after <= $3 AND attempt_count < max_attempts
@@ -283,9 +283,9 @@ LIMIT 1`
 	if err != nil {
 		return Job{}, false, err
 	}
-	update := `UPDATE jobs SET status = 'running', leased_by = ?, lease_expires_at = ?, heartbeat_at = ?, started_at = COALESCE(started_at, ?), attempt_count = attempt_count + 1, updated_at = ?
+	update := `UPDATE jobs SET status = 'running', leased_by = ?, lease_expires_at = ?, heartbeat_at = ?, attempt_count = attempt_count + 1, updated_at = ?
 WHERE id = ? AND status = 'queued'`
-	res, err := tx.ExecContext(ctx, update, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now), formatTime(opts.Now), formatTime(opts.Now), candidateID)
+	res, err := tx.ExecContext(ctx, update, opts.WorkerID, formatTime(leaseExpires), formatTime(opts.Now), formatTime(opts.Now), candidateID)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -311,7 +311,30 @@ WHERE id = ? AND status = 'queued'`
 }
 
 func (s *Store) Start(ctx context.Context, job Job, workerID string) error {
-	if err := s.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
+	now := time.Now().UTC()
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	query := `UPDATE jobs SET started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
+	args := []any{formatTime(now), formatTime(now), job.ID, workerID}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE jobs SET started_at = COALESCE(started_at, $1), updated_at = $2 WHERE id = $3 AND leased_by = $4 AND status = 'running'`
+	}
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+	}
+	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))

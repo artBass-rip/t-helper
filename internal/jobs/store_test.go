@@ -300,6 +300,9 @@ func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 	if second.Status != jobs.StatusQueued || second.LeasedBy != "" || !second.RunAfter.After(time.Now().UTC()) {
 		t.Fatalf("unexpected requeued job: %+v", second)
 	}
+	if second.StartedAt != nil {
+		t.Fatalf("lock-contention job was marked started despite handler not running: %+v", second)
+	}
 	events, err := store.ListEvents(ctx, second.ID)
 	if err != nil {
 		t.Fatalf("list events: %v", err)
@@ -319,6 +322,46 @@ func TestRuntimeLockContentionDoesNotStartHandler(t *testing.T) {
 				t.Fatalf("retry payload missing machine-readable lock contention details: %+v", payload.Details)
 			}
 		}
+	}
+}
+
+func TestRuntimeUnknownJobTypeFailsWithoutRetry(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "repo_clone",
+		Payload: json.RawMessage(`{"schema_version":"jobs.repo_clone.payload.v1","provider":"generic","protocol":"https","clone_scope":"single_repository","full_path":"example/repo","target_directory":"/tmp/repo"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue unknown-handler job: %v", err)
+	}
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    store,
+		WorkerID: "host:1:worker",
+		Handlers: map[string]jobs.Handler{
+			"config_reload": jobs.HandlerFunc(func(context.Context, jobs.HandlerEnv, jobs.Job) (json.RawMessage, error) {
+				t.Fatal("config_reload handler should not run for repo_clone")
+				return nil, nil
+			}),
+		},
+	})
+	ran, err := runtime.RunOnce(ctx)
+	if err != nil || !ran {
+		t.Fatalf("run once: ran=%v err=%v", ran, err)
+	}
+	job, err := store.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.Status != jobs.StatusFailed || job.AttemptCount != 1 {
+		t.Fatalf("unexpected unknown handler job: %+v", job)
+	}
+	var failure jobs.FailureResult
+	if err := json.Unmarshal(job.ResultPayload, &failure); err != nil {
+		t.Fatalf("decode failure: %v", err)
+	}
+	if failure.SchemaVersion != jobs.ResultFailureSchemaVersion || failure.ErrorCode != "unknown_job_type" || failure.Retryable {
+		t.Fatalf("unexpected failure payload: %+v", failure)
 	}
 }
 

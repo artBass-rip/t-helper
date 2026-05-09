@@ -115,6 +115,30 @@ func TestSQLiteWorkerProcessLimitLockRejectsSecondActiveWorker(t *testing.T) {
 	}
 }
 
+func TestNonSQLiteWorkerProcessLimitLockIsNotRequired(t *testing.T) {
+	ctx := context.Background()
+	registry := storageproviders.MVPRegistry()
+	handle, err := registry.Open(ctx, storage.Config{Provider: "sqlite", DSN: filepath.Join(t.TempDir(), "worker.db")})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer handle.Close()
+	if err := registry.Migrate(ctx, handle); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	handle.Provider = "postgres"
+
+	configStore := appconfig.NewStore(handle)
+	app := New(Config{WorkerLockDir: t.TempDir()}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	lock, err := app.acquireProcessLimitLock(ctx, handle, "host:1:worker", configStore)
+	if err != nil {
+		t.Fatalf("acquire non-sqlite worker lock: %v", err)
+	}
+	if lock != nil {
+		t.Fatalf("non-sqlite worker should not acquire local process lock: %+v", lock)
+	}
+}
+
 func TestWorkerProcessLockReplacesStaleLock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "worker.lock")

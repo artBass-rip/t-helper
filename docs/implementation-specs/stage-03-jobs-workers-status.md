@@ -422,6 +422,35 @@ Refresh behavior:
 
 - нет Stage 03 blockers после ADR 0011.
 
+## Implementation verification
+
+Status: completed.
+
+Code coverage:
+
+- Storage and migrations: `internal/storage/migrations/*000003*`,
+  `internal/jobs/store.go`, `internal/jobs/status.go`;
+- Worker runtime: `internal/jobs/runtime.go`, `internal/app/worker/app.go`;
+- HTTP API: `internal/httpapi/jobs.go`, `internal/httpapi/router.go`;
+- CLI/API lifecycle compatibility: `internal/app/ctl`, `internal/httpapi`,
+  `internal/app/server`.
+
+Verification:
+
+- `go test ./internal/jobs ./internal/httpapi ./internal/app/worker ./internal/storage/migrations`;
+- `go test ./...`;
+- PostgreSQL jobs/storage contracts run in CI and local environments when
+  `THELPER_POSTGRES_DSN` is set.
+
+Regression coverage added for 100% Stage 03 closure:
+
+- lock-contention jobs are requeued without `started_at` and without
+  `started` events;
+- unknown admitted job types fail without retry using
+  `jobs.failure.result.v1` and `error_code = "unknown_job_type"`;
+- non-SQLite worker profiles do not require the local SQLite worker process
+  lock.
+
 ## Traceability
 
 - Roadmap: Stage 03.
