@@ -120,7 +120,7 @@ HTTP conventions, response schemas и endpoint skeleton описаны в [`api.
 - Отдельный `/api/security/scans` не вводится, чтобы не дублировать `project_scans` в модели данных.
 - `GET /api/health` является confirmed safe unauthenticated endpoint для локального discovery singleton runtime и не раскрывает config, paths, DSN, secrets, users или object-scoped details.
 - Runtime auth endpoints (`login`, `logout`, `session`, password reset/change) отделены от administrative auth endpoints (`users`, `groups`, `roles`, `role-bindings`, `SCIM`).
-- Write endpoints, которые запускают фоновые операции, создают `jobs` и возвращают `job_id`. Stage 02 config/module lifecycle endpoints are explicit synchronous exceptions until Stage 03 job-backed handlers are introduced.
+- Write endpoints, которые запускают фоновые операции, создают `jobs` и возвращают `job_id`. Stage 02 config/module lifecycle endpoints are explicit synchronous exceptions until an async variant or documented contract migration is introduced; Stage 03 job-backed handlers exist for framework validation and future workflow integration without changing those public sync contracts.
 - Write endpoints, которые меняют справочники или конфигурацию, обновляют сущности идемпотентно там, где это применимо.
 - Confirmed MVP behavior: bulk `PUT` endpoints are non-destructive idempotent upserts by stable identity or `id`; omitted records are not deleted.
 - Confirmed MVP behavior: public `DELETE` endpoints are out of scope for MVP even though delete permissions are seeded for future lifecycle expansion.
