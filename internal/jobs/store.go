@@ -53,6 +53,9 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 	if err := validatePayloadSchema(req.JobType, req.Payload); err != nil {
 		return JobRef{}, err
 	}
+	if err := validatePayloadContract(req.JobType, req.Payload); err != nil {
+		return JobRef{}, err
+	}
 	if err := validateSafeJobPayload(req.Payload); err != nil {
 		return JobRef{}, err
 	}
@@ -729,6 +732,126 @@ func validatePayloadSchema(jobType string, payload json.RawMessage) error {
 	}
 	if envelope.SchemaVersion != expected {
 		return fmt.Errorf("invalid job payload schema_version for %s: got %q want %q", jobType, envelope.SchemaVersion, expected)
+	}
+	return nil
+}
+
+func validatePayloadContract(jobType string, payload json.RawMessage) error {
+	var value map[string]any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return fmt.Errorf("invalid job payload: %w", err)
+	}
+	requiredString := func(key string) error {
+		raw, ok := value[key]
+		if !ok {
+			return fmt.Errorf("invalid job payload for %s: %s is required", jobType, key)
+		}
+		text, ok := raw.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return fmt.Errorf("invalid job payload for %s: %s must be a non-empty string", jobType, key)
+		}
+		return nil
+	}
+	optionalBoolFalse := func(key string) error {
+		raw, ok := value[key]
+		if !ok || raw == nil {
+			return nil
+		}
+		flag, ok := raw.(bool)
+		if !ok {
+			return fmt.Errorf("invalid job payload for %s: %s must be a boolean", jobType, key)
+		}
+		if flag {
+			return fmt.Errorf("invalid job payload for %s: %s=true is not supported", jobType, key)
+		}
+		return nil
+	}
+	optionalStringArray := func(key string) error {
+		raw, ok := value[key]
+		if !ok || raw == nil {
+			return nil
+		}
+		items, ok := raw.([]any)
+		if !ok {
+			return fmt.Errorf("invalid job payload for %s: %s must be an array", jobType, key)
+		}
+		for _, item := range items {
+			text, ok := item.(string)
+			if !ok || strings.TrimSpace(text) == "" {
+				return fmt.Errorf("invalid job payload for %s: %s must contain only non-empty strings", jobType, key)
+			}
+		}
+		return nil
+	}
+	oneOfString := func(key string, allowed ...string) error {
+		if err := requiredString(key); err != nil {
+			return err
+		}
+		text := strings.TrimSpace(value[key].(string))
+		for _, candidate := range allowed {
+			if text == candidate {
+				return nil
+			}
+		}
+		return fmt.Errorf("invalid job payload for %s: unsupported %s %q", jobType, key, text)
+	}
+
+	switch jobType {
+	case "global_scan":
+		if err := optionalStringArray("root_path_ids"); err != nil {
+			return err
+		}
+		return optionalBoolFalse("follow_symlinks")
+	case "project_discovery":
+		for _, key := range []string{"project_id", "root_path_id", "relative_path"} {
+			if err := requiredString(key); err != nil {
+				return err
+			}
+		}
+	case "project_scan":
+		for _, key := range []string{"project_id", "project_scan_id", "scan_type"} {
+			if err := requiredString(key); err != nil {
+				return err
+			}
+		}
+	case "security_validation_scan":
+		for _, key := range []string{"project_id", "project_scan_id"} {
+			if err := requiredString(key); err != nil {
+				return err
+			}
+		}
+		if err := optionalStringArray("enabled_modules"); err != nil {
+			return err
+		}
+	case "repo_clone":
+		for _, key := range []string{"provider", "protocol", "clone_scope", "full_path"} {
+			if err := requiredString(key); err != nil {
+				return err
+			}
+		}
+		if err := oneOfString("clone_scope", "single_repository"); err != nil {
+			return err
+		}
+		if value["root_path_id"] == nil && value["new_root_path"] == nil {
+			return fmt.Errorf("invalid job payload for %s: root_path_id or new_root_path is required", jobType)
+		}
+		if value["target_directory"] == nil && value["new_target_directory"] == nil {
+			return fmt.Errorf("invalid job payload for %s: target_directory or new_target_directory is required", jobType)
+		}
+	case "repo_pull", "repo_sync":
+		if err := requiredString("repository_id"); err != nil {
+			return err
+		}
+	case "config_reload":
+		return optionalStringArray("keys")
+	case "module_restart":
+		if err := requiredString("module_name"); err != nil {
+			return err
+		}
+	case "scim_sync":
+		if err := requiredString("provider"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

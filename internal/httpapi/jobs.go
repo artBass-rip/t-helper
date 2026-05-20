@@ -71,6 +71,10 @@ func (h *StatusHandler) Runtime(w http.ResponseWriter, r *http.Request) {
 
 func (h *StatusHandler) Workflows(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err := h.store.ReconcileWorkflowStatuses(r.Context()); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
 	page, err := h.store.WorkflowStatusesPage(r.Context(), r.URL.Query().Get("workflow_type"), r.URL.Query().Get("aggregate_status"), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
 		if errors.Is(err, jobs.ErrInvalidCursor) {

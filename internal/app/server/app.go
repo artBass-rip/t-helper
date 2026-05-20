@@ -162,6 +162,9 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 	if err := moduleStore.Seed(ctx, settings.EnabledModules); err != nil {
 		return nil, err
 	}
+	if err := jobStore.ReconcileWorkflowStatuses(ctx); err != nil {
+		a.logger.Warn("reconcile workflow statuses failed", "error", err)
+	}
 	return httpapi.New(
 		httpapi.NewHealthHandler(health),
 		httpapi.NewConfigHandler(configStore),

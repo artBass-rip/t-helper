@@ -330,7 +330,7 @@ func TestRuntimeUnknownJobTypeFailsWithoutRetry(t *testing.T) {
 	store := openStore(t)
 	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
 		JobType: "repo_clone",
-		Payload: json.RawMessage(`{"schema_version":"jobs.repo_clone.payload.v1","provider":"generic","protocol":"https","clone_scope":"single_repository","full_path":"example/repo","target_directory":"/tmp/repo"}`),
+		Payload: json.RawMessage(`{"schema_version":"jobs.repo_clone.payload.v1","provider":"generic","protocol":"https","clone_scope":"single_repository","full_path":"example/repo","root_path_id":"root_1","target_directory":"/tmp/repo"}`),
 	})
 	if err != nil {
 		t.Fatalf("enqueue unknown-handler job: %v", err)
@@ -658,6 +658,59 @@ func TestEnqueueRejectsWrongPayloadSchemaVersion(t *testing.T) {
 	_, err := store.Enqueue(ctx, jobs.EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"wrong.v1"}`)})
 	if err == nil {
 		t.Fatal("expected schema validation error")
+	}
+}
+
+func TestEnqueueRejectsInvalidAdmittedJobPayloadContract(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	cases := []struct {
+		name    string
+		jobType string
+		payload json.RawMessage
+	}{
+		{
+			name:    "global scan symlinks",
+			jobType: "global_scan",
+			payload: json.RawMessage(`{"schema_version":"jobs.global_scan.payload.v1","follow_symlinks":true}`),
+		},
+		{
+			name:    "project discovery missing project",
+			jobType: "project_discovery",
+			payload: json.RawMessage(`{"schema_version":"jobs.project_discovery.payload.v1","root_path_id":"root_1","relative_path":"team/service"}`),
+		},
+		{
+			name:    "project scan missing scan id",
+			jobType: "project_scan",
+			payload: json.RawMessage(`{"schema_version":"jobs.project_scan.payload.v1","project_id":"project_1","scan_type":"terraform_full"}`),
+		},
+		{
+			name:    "repo clone missing root",
+			jobType: "repo_clone",
+			payload: json.RawMessage(`{"schema_version":"jobs.repo_clone.payload.v1","provider":"generic","protocol":"https","clone_scope":"single_repository","full_path":"example/repo","target_directory":"repo"}`),
+		},
+		{
+			name:    "repo pull missing repository",
+			jobType: "repo_pull",
+			payload: json.RawMessage(`{"schema_version":"jobs.repo_pull.payload.v1"}`),
+		},
+		{
+			name:    "module restart missing module",
+			jobType: "module_restart",
+			payload: json.RawMessage(`{"schema_version":"jobs.module_restart.payload.v1"}`),
+		},
+		{
+			name:    "scim sync missing provider",
+			jobType: "scim_sync",
+			payload: json.RawMessage(`{"schema_version":"jobs.scim_sync.payload.v1"}`),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := store.Enqueue(ctx, jobs.EnqueueRequest{JobType: tc.jobType, Payload: tc.payload}); err == nil {
+				t.Fatal("expected payload contract validation error")
+			}
+		})
 	}
 }
 

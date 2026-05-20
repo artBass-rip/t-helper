@@ -64,6 +64,10 @@
   normalized to `system` at enqueue time.
 - `jobs.payload` is validated before persistence and rejected if it contains
   secret-like JSON keys, URL userinfo or unresolved `secretref://...` values.
+- `jobs.payload` is also validated against the minimum admitted job-type
+  contract from `docs/payload-schemas.md` before persistence. This prevents a
+  job type admitted by the physical schema from being queued with a valid
+  `schema_version` but missing required routing/domain fields.
 
 ## Worker handler contract
 
@@ -383,6 +387,9 @@ Refresh behavior:
 - `status-monitor` must also support reconciliation from `jobs` and
   `job_events` so read models can be rebuilt after crashes or missed inline
   refreshes;
+- API/server startup and `GET /api/status/workflows` trigger reconciliation so
+  workflow listing self-heals after crashes or missed inline refreshes even
+  before a worker process starts;
 - refresh writes `workflow_statuses` using `workflow_status.summary.v1`.
 
 ## Non-goals
@@ -450,6 +457,10 @@ Regression coverage added for 100% Stage 03 closure:
   `jobs.failure.result.v1` and `error_code = "unknown_job_type"`;
 - non-SQLite worker profiles do not require the local SQLite worker process
   lock.
+- admitted job payloads are rejected before persistence when required
+  job-type fields are missing or unsupported Stage 03 values are requested;
+- workflow status listing reconciles missing `workflow_statuses` read models
+  before returning results.
 
 ## Traceability
 

@@ -131,6 +131,24 @@ func TestStage03JobsAndStatusEndpoints(t *testing.T) {
 		t.Fatalf("GET /api/status/workflows invalid cursor status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
+	if _, err := handle.DB.ExecContext(ctx, "DELETE FROM workflow_statuses"); err != nil {
+		t.Fatalf("delete workflow statuses: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workflows", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/status/workflows self-heal status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var healedWorkflows struct {
+		Items []jobs.WorkflowStatus `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&healedWorkflows); err != nil {
+		t.Fatalf("decode healed workflows: %v", err)
+	}
+	if len(healedWorkflows.Items) != 1 || healedWorkflows.Items[0].JobGroupID != "config_operation:"+ref.JobID {
+		t.Fatalf("workflow list did not reconcile missing read model: %+v", healedWorkflows)
+	}
+
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/status/workers", nil))
 	if rec.Code != http.StatusOK {

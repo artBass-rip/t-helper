@@ -126,7 +126,7 @@ func TestGroupedWorkflowIDIsStableAcrossChildJobs(t *testing.T) {
 			ID:         id,
 			JobType:    "project_scan",
 			JobGroupID: groupID,
-			Payload:    json.RawMessage(`{"schema_version":"jobs.project_scan.payload.v1","project_id":"project_1","scan_type":"full"}`),
+			Payload:    json.RawMessage(`{"schema_version":"jobs.project_scan.payload.v1","project_id":"project_1","project_scan_id":"scan_123","scan_type":"full"}`),
 		}); err != nil {
 			t.Fatalf("enqueue %s: %v", id, err)
 		}
