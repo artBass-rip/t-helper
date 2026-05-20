@@ -75,7 +75,8 @@ module restart and controlled storage migration commands.
   `ignore_rules`.
 - Stage 03 schema ownership: `jobs`, `job_locks`, `job_events` and
   `workflow_statuses`.
-- Stage 04+ product tables are intentionally not created yet.
+- Stage 04 schema ownership: `root_paths`, `projects`, `project_links`,
+  minimal `repositories`, `environments` and `workspaces`.
 - CI: GitHub Actions `ci / go` runs format check, `go test ./...` with
   PostgreSQL service and build checks for all three entrypoints.
 
@@ -102,7 +103,7 @@ docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 - Stage 01: completed backend skeleton, `thelper`, `thelper-worker`, `thelper-ctl`, storage abstraction, `SQLite`, `PostgreSQL`, migrations и HTTP skeleton.
 - Stage 02: completed runtime configuration, `config_entries`, module lifecycle, reload/restart и singleton runtime policy.
 - Stage 03: jobs framework, worker execution model, leases, `job_locks`, `job_events` и базовый `status-monitor`.
-- Stage 04: `global-scanner`, `root_paths`, ignore rules, Terraform project discovery, background `project_discovery`, registry `projects`/`project_links`/`repositories`, `environments`/`workspaces` backend API.
+- Stage 04: completed `global-scanner`, `root_paths`, ignore rules, Terraform project discovery, background `project_discovery`, registry `projects`/`project_links`/`repositories`, `environments`/`workspaces` backend API.
 - Stage 05: repository manager MVP, generic Git + GitLab/GitHub single-repository `clone`/`pull`/`sync`, target path safety, credentials и serialization через `job_locks`.
 - Stage 06A: full external toolchain profile runtime, registry, validator, certified profiles and optional analyzer for `terraform validate`, `TFLint` and `Trivy`.
 - Stage 06B: project/security scans MVP, `terraform validate`, `TFLint`, `Trivy` как обязательный MVP security scanner, rule set registry, findings и parent-child scan workflow.

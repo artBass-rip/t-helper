@@ -100,7 +100,7 @@ func InitialRegistry() []Definition {
 		{Name: "config-manager", Available: true, Lifecycle: noop},
 		{Name: "module-runtime", Available: true, Lifecycle: noop},
 		{Name: "status-monitor", Available: true, Lifecycle: noop},
-		{Name: "global-scanner", Available: false},
+		{Name: "global-scanner", Available: true, Lifecycle: noop},
 		{Name: "repository-manager", Available: false},
 		{Name: "project-scanner", Available: false},
 		{Name: "security-validator", Available: false},

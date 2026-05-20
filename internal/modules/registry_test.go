@@ -42,14 +42,14 @@ func TestSeedListsUnavailableModulesAndRestartsAvailableModule(t *testing.T) {
 	}
 	foundUnavailable := false
 	for _, state := range states {
-		if state.ModuleName == "global-scanner" && state.State == modules.StateUnavailable {
+		if state.ModuleName == "project-scanner" && state.State == modules.StateUnavailable {
 			foundUnavailable = true
 		}
 	}
 	if !foundUnavailable {
-		t.Fatal("expected global-scanner to be unavailable in Stage 02")
+		t.Fatal("expected project-scanner to remain unavailable before Stage 06")
 	}
-	if _, err := store.Restart(ctx, "global-scanner", "test"); err == nil {
+	if _, err := store.Restart(ctx, "project-scanner", "test"); err == nil {
 		t.Fatal("expected unavailable module restart to fail")
 	}
 	result, err := store.Restart(ctx, "config-manager", "test")
@@ -89,7 +89,7 @@ func TestSeedUsesEnabledModulesAndReloadsAvailableModule(t *testing.T) {
 	if configManager.State != modules.StateStopped {
 		t.Fatalf("config-manager state = %q, want stopped", configManager.State)
 	}
-	if _, err := store.Reload(ctx, "global-scanner", "test"); err == nil {
+	if _, err := store.Reload(ctx, "project-scanner", "test"); err == nil {
 		t.Fatal("expected unavailable module reload to fail")
 	}
 	if _, err := store.Reload(ctx, "core", "test"); err != nil {

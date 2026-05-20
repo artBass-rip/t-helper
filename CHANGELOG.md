@@ -7,6 +7,19 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Stage 04 scanner/registry MVP is now implemented: `root_paths`,
+  `projects`, `project_links`, minimal generic `repositories`,
+  `environments`, `workspaces`, `/api/root-paths`, `/api/scans`,
+  `/api/projects`, `/api/ignore-rules`, `/api/environments` and
+  `/api/workspaces`.
+- `global-scanner` now discovers Terraform working directories by `*.tf`
+  filenames only, skips symlinked directories and `.git/`, preserves
+  `!pattern` ignore rules without applying them, marks missing projects, and
+  enqueues background `project_discovery` jobs.
+- `project_discovery` now handles the Stage 04 Git marker allowlist
+  (`.git/` directory and `.git` file with `gitdir:`), creates generic local
+  repository cards, and links separate projects from the same repository with
+  `same_repository` project links.
 - Stage 03 jobs/workers/status foundation is now implemented: persistent
   `jobs`, `job_locks`, `job_events`, `workflow_statuses`, atomic claim,
   leases, heartbeat, retry/backoff, worker execution and `/api/status*`.
@@ -51,7 +64,7 @@ grouped by completed roadmap stages and merge commits.
   formatting.
 - Module lifecycle errors are now joined with failed-state persistence errors
   when persisting `state = failed` also fails.
-- Next planned implementation stage: Stage 04 scanner and registry MVP.
+- Next planned implementation stage: Stage 05 repository manager MVP.
 
 ## Stage 02 Hardening and Documentation Alignment - 2026-05-06
 

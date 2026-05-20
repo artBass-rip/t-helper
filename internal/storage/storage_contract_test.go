@@ -37,7 +37,7 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	}
 	defer handle.Close()
 
-	resetStage01Tables(t, handle.DB)
+	resetStage01Tables(t, handle.DB, handle.Provider)
 	if err := registry.Migrate(ctx, handle); err != nil {
 		t.Fatalf("migrate storage: %v", err)
 	}
@@ -47,7 +47,8 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	assertSystemMetadata(t, handle.DB)
 	assertStage02TablesPresent(t, handle.DB, handle.Provider)
 	assertStage03TablesPresent(t, handle.DB, handle.Provider)
-	assertPostStage03TablesAbsent(t, handle.DB, handle.Provider)
+	assertStage04TablesPresent(t, handle.DB, handle.Provider)
+	assertPostStage04TablesAbsent(t, handle.DB, handle.Provider)
 	if handle.Fingerprint == "" {
 		t.Fatal("expected non-empty database fingerprint")
 	}
@@ -69,9 +70,27 @@ func requirePostgresTestDatabase(t *testing.T, dsn string) {
 	t.Fatalf("refusing destructive storage contract test against database %q; use a test database or set THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1", dbName)
 }
 
-func resetStage01Tables(t *testing.T, db *sql.DB) {
+func resetStage01Tables(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
-	for _, stmt := range []string{
+	stage04Drops := []string{
+		"DROP TABLE IF EXISTS project_links",
+		"DROP TABLE IF EXISTS projects",
+		"DROP TABLE IF EXISTS workspaces",
+		"DROP TABLE IF EXISTS repositories",
+		"DROP TABLE IF EXISTS environments",
+		"DROP TABLE IF EXISTS root_paths",
+	}
+	if provider == "postgres" {
+		stage04Drops = []string{
+			"DROP TABLE IF EXISTS project_links CASCADE",
+			"DROP TABLE IF EXISTS projects CASCADE",
+			"DROP TABLE IF EXISTS workspaces CASCADE",
+			"DROP TABLE IF EXISTS repositories CASCADE",
+			"DROP TABLE IF EXISTS environments CASCADE",
+			"DROP TABLE IF EXISTS root_paths CASCADE",
+		}
+	}
+	for _, stmt := range append(stage04Drops, []string{
 		"DROP TABLE IF EXISTS workflow_statuses",
 		"DROP TABLE IF EXISTS job_events",
 		"DROP TABLE IF EXISTS job_locks",
@@ -83,7 +102,7 @@ func resetStage01Tables(t *testing.T, db *sql.DB) {
 		"DROP TABLE IF EXISTS config_entries",
 		"DROP TABLE IF EXISTS system_metadata",
 		"DROP TABLE IF EXISTS goose_db_version",
-	} {
+	}...) {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("reset table with %q: %v", stmt, err)
 		}
@@ -119,17 +138,25 @@ func assertStage03TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	}
 }
 
-func assertPostStage03TablesAbsent(t *testing.T, db *sql.DB, provider string) {
+func assertStage04TablesPresent(t *testing.T, db *sql.DB, provider string) {
+	t.Helper()
+	for _, table := range []string{"root_paths", "projects", "project_links", "repositories", "environments", "workspaces"} {
+		if !tableExists(t, db, provider, table) {
+			t.Fatalf("Stage 04 table %q was not created", table)
+		}
+	}
+}
+
+func assertPostStage04TablesAbsent(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
 	laterStageTables := []string{
-		"root_paths",
-		"projects",
-		"repositories",
 		"users",
+		"project_scans",
+		"security_findings",
 	}
 	for _, table := range laterStageTables {
 		if tableExists(t, db, provider, table) {
-			t.Fatalf("post-Stage 02 table %q must not be created by Stage 02 migrations", table)
+			t.Fatalf("post-Stage 04 table %q must not be created by Stage 04 migrations", table)
 		}
 	}
 }
