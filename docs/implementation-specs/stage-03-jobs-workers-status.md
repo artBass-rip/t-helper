@@ -51,9 +51,9 @@
 - `GET /api/status`, `GET /api/status/jobs/{job_id}` and
   `GET /api/status/workers` use the `runtime_status.v1`, `job_status.v1` and
   `worker_status.v1` DTOs from `docs/api.md`.
-- Stage 03 derives `worker_status.v1` from running jobs and their leases.
-  Idle workers are not reported until a later worker heartbeat registry is
-  introduced.
+- Stage 03 derives `worker_status.v1` from running jobs and their leases,
+  aggregated by `worker_id`. Idle workers are not reported until a later worker
+  heartbeat registry is introduced.
 - For SQLite active profiles, Stage 03 enforces `worker_process_limit = 1`
   with a local worker process lock keyed by the active database fingerprint.
   The lock is separate from `job_locks`: it limits local SQLite worker process
@@ -461,6 +461,12 @@ Regression coverage added for 100% Stage 03 closure:
   job-type fields are missing or unsupported Stage 03 values are requested;
 - workflow status listing reconciles missing `workflow_statuses` read models
   before returning results.
+- `workers.enabled = false` prevents `thelper-worker` from claiming queued
+  jobs;
+- derived `worker_status.v1` is one row per `worker_id` with
+  `running_job_count` for concurrent worker slots;
+- unknown admitted job types fail without acquiring business `job_locks` and
+  without writing `started` events.
 
 ## Traceability
 

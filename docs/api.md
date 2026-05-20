@@ -143,6 +143,7 @@ workers are not reported until a later worker heartbeat registry is introduced.
   "status": "active",
   "running_job_id": "job_opaque_id",
   "running_job_type": "config_reload",
+  "running_job_count": 1,
   "last_heartbeat_at": "2026-04-08T00:00:00Z",
   "lease_expires_at": "2026-04-08T00:00:30Z",
   "schema_version": "worker_status.v1"
@@ -151,6 +152,10 @@ workers are not reported until a later worker heartbeat registry is introduced.
 
 `status` is `active` when `lease_expires_at` is in the future and `stale` when
 the lease is expired but recovery has not yet processed the job.
+When one worker process runs multiple jobs concurrently, Stage 03 returns one
+`worker_status.v1` row per `worker_id`; `running_job_id` and
+`running_job_type` identify the most recently updated running lease, and
+`running_job_count` reports the total running leases owned by that worker.
 
 `last_heartbeat_at` is read from `jobs.heartbeat_at`. A matching `heartbeat`
 event may exist for diagnostics, but clients must not require one heartbeat

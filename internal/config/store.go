@@ -70,6 +70,7 @@ type RuntimeSettings struct {
 	ListenAddress  string
 	Mode           string
 	LogLevel       string
+	WorkersEnabled bool
 	EnabledModules []string
 	Loaded         bool
 }
@@ -277,17 +278,17 @@ func (s *Store) ActiveConfig(ctx context.Context) (map[string]any, error) {
 }
 
 func (s *Store) RuntimeSettings(ctx context.Context) (RuntimeSettings, error) {
-	query := "SELECT key, value, value_type FROM config_entries WHERE scope = ? AND key IN (?, ?, ?, ?)"
-	args := []any{"system", "api.listen_address", "system_settings.mode", "logging.level", "modules.enabled"}
+	query := "SELECT key, value, value_type FROM config_entries WHERE scope = ? AND key IN (?, ?, ?, ?, ?)"
+	args := []any{"system", "api.listen_address", "system_settings.mode", "logging.level", "workers.enabled", "modules.enabled"}
 	if s.handle.Provider == "postgres" {
-		query = "SELECT key, value, value_type FROM config_entries WHERE scope = $1 AND key IN ($2, $3, $4, $5)"
+		query = "SELECT key, value, value_type FROM config_entries WHERE scope = $1 AND key IN ($2, $3, $4, $5, $6)"
 	}
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return RuntimeSettings{}, err
 	}
 	defer rows.Close()
-	settings := RuntimeSettings{}
+	settings := RuntimeSettings{WorkersEnabled: true}
 	for rows.Next() {
 		var key, value, valueType string
 		if err := rows.Scan(&key, &value, &valueType); err != nil {
@@ -301,6 +302,8 @@ func (s *Store) RuntimeSettings(ctx context.Context) (RuntimeSettings, error) {
 			settings.Mode = value
 		case "logging.level":
 			settings.LogLevel = value
+		case "workers.enabled":
+			settings.WorkersEnabled = value == "true"
 		case "modules.enabled":
 			if err := json.Unmarshal([]byte(value), &settings.EnabledModules); err != nil {
 				return RuntimeSettings{}, err

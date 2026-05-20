@@ -176,6 +176,52 @@ func TestWorkerProcessLockReplacesStaleLock(t *testing.T) {
 	}
 }
 
+func TestWorkerRunExitsWithoutClaimingJobsWhenDisabled(t *testing.T) {
+	ctx := context.Background()
+	registry := storageproviders.MVPRegistry()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "worker-disabled.db")
+	handle, err := registry.Open(ctx, storage.Config{Provider: "sqlite", DSN: dbPath})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer handle.Close()
+	if err := registry.Migrate(ctx, handle); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	cfg := loadExampleConfig(t)
+	cfg.Database.DatabasePath = dbPath
+	cfg.Workers.Enabled = false
+	if _, err := appconfig.NewStore(handle).Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("import config: %v", err)
+	}
+	store := jobs.NewStore(handle)
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1","keys":["logging.level"]}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue job: %v", err)
+	}
+
+	app := New(Config{
+		StorageProvider: "sqlite",
+		StorageDSN:      dbPath,
+		WorkerLockDir:   t.TempDir(),
+	}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := app.Run(ctx); err != nil {
+		t.Fatalf("worker run: %v", err)
+	}
+	job, err := store.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.Status != jobs.StatusQueued || job.LeasedBy != "" || job.AttemptCount != 0 {
+		t.Fatalf("disabled worker claimed job: %+v", job)
+	}
+}
+
 func TestWorkerRunConsumesJobsFromActiveStorageProfile(t *testing.T) {
 	ctx := context.Background()
 	registry := storageproviders.MVPRegistry()

@@ -194,15 +194,6 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil || !ok {
 		return ok, err
 	}
-	if locked, err := r.store.AcquireLock(ctx, job, r.workerID, r.leaseDuration); err != nil {
-		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
-	} else if !locked {
-		return true, r.runtimeRequeue(ctx, job, "lock_contention", nil)
-	}
-	if err := r.store.Start(ctx, job, r.workerID); err != nil {
-		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
-	}
-
 	handler := r.handlers[job.JobType]
 	if handler == nil {
 		result, _ := json.Marshal(FailureResult{
@@ -216,6 +207,15 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		})
 		return true, r.store.Complete(ctx, job, r.workerID, StatusFailed, result, "unknown job type")
 	}
+	if locked, err := r.store.AcquireLock(ctx, job, r.workerID, r.leaseDuration); err != nil {
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
+	} else if !locked {
+		return true, r.runtimeRequeue(ctx, job, "lock_contention", nil)
+	}
+	if err := r.store.Start(ctx, job, r.workerID); err != nil {
+		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
+	}
+
 	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}

@@ -69,6 +69,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if !settings.WorkersEnabled {
+		a.logger.Info("thelper-worker disabled by configuration")
+		return nil
+	}
 	if err := moduleStore.Seed(ctx, settings.EnabledModules); err != nil {
 		return err
 	}

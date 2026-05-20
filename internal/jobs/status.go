@@ -42,6 +42,7 @@ type WorkerStatus struct {
 	Status          string     `json:"status"`
 	RunningJobID    string     `json:"running_job_id"`
 	RunningJobType  string     `json:"running_job_type"`
+	RunningJobCount int        `json:"running_job_count"`
 	LastHeartbeatAt *time.Time `json:"last_heartbeat_at,omitempty"`
 	LeaseExpiresAt  *time.Time `json:"lease_expires_at,omitempty"`
 	SchemaVersion   string     `json:"schema_version"`
@@ -373,19 +374,25 @@ func (s *Store) WorkerStatusesPage(ctx context.Context, limit int, cursorValue s
 	now := time.Now().UTC()
 	var where []string
 	var args []any
-	where = append(where, "status = 'running'", "leased_by IS NOT NULL")
+	where = append(where, "j.status = 'running'", "j.leased_by IS NOT NULL", "j.leased_by <> ''", `NOT EXISTS (
+		SELECT 1 FROM jobs newer
+		WHERE newer.status = 'running'
+		  AND newer.leased_by = j.leased_by
+		  AND (newer.updated_at > j.updated_at OR (newer.updated_at = j.updated_at AND newer.id > j.id))
+	)`)
 	if cursorValue != "" {
 		cursor, err := decodeCursor(cursorValue)
 		if err != nil {
 			return Page[WorkerStatus]{}, err
 		}
 		args = append(args, formatTime(cursor.Time), formatTime(cursor.Time), cursor.ID)
-		where = append(where, fmt.Sprintf("(updated_at < %s OR (updated_at = %s AND id < %s))", s.placeholder(len(args)-2), s.placeholder(len(args)-1), s.placeholder(len(args))))
+		where = append(where, fmt.Sprintf("(j.updated_at < %s OR (j.updated_at = %s AND j.id < %s))", s.placeholder(len(args)-2), s.placeholder(len(args)-1), s.placeholder(len(args))))
 	}
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	query := "SELECT id, job_type, COALESCE(leased_by, ''), COALESCE(" + s.timeExpr("heartbeat_at") + ", ''), COALESCE(" + s.timeExpr("lease_expires_at") + ", ''), " + s.timeExpr("updated_at") + " FROM jobs WHERE " + strings.Join(where, " AND ") + " ORDER BY updated_at DESC, id DESC LIMIT " + s.placeholder(len(args)+1)
+	countExpr := "(SELECT count(*) FROM jobs counted WHERE counted.status = 'running' AND counted.leased_by = j.leased_by)"
+	query := "SELECT j.id, j.job_type, COALESCE(j.leased_by, ''), COALESCE(" + s.timeExpr("j.heartbeat_at") + ", ''), COALESCE(" + s.timeExpr("j.lease_expires_at") + ", ''), " + s.timeExpr("j.updated_at") + ", " + countExpr + " FROM jobs j WHERE " + strings.Join(where, " AND ") + " ORDER BY j.updated_at DESC, j.id DESC LIMIT " + s.placeholder(len(args)+1)
 	args = append(args, limit+1)
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -395,7 +402,7 @@ func (s *Store) WorkerStatusesPage(ctx context.Context, limit int, cursorValue s
 	var out []WorkerStatus
 	var cursors []listCursor
 	for rows.Next() {
-		job, updatedAt, err := scanWorkerStatusJob(rows)
+		job, updatedAt, runningCount, err := scanWorkerStatusJob(rows)
 		if err != nil {
 			return Page[WorkerStatus]{}, err
 		}
@@ -408,6 +415,7 @@ func (s *Store) WorkerStatusesPage(ctx context.Context, limit int, cursorValue s
 			Status:          state,
 			RunningJobID:    job.ID,
 			RunningJobType:  job.JobType,
+			RunningJobCount: runningCount,
 			LastHeartbeatAt: job.HeartbeatAt,
 			LeaseExpiresAt:  job.LeaseExpiresAt,
 			SchemaVersion:   "worker_status.v1",
@@ -426,16 +434,17 @@ func (s *Store) WorkerStatusesPage(ctx context.Context, limit int, cursorValue s
 	return Page[WorkerStatus]{Items: out, NextCursor: next}, nil
 }
 
-func scanWorkerStatusJob(row interface{ Scan(dest ...any) error }) (Job, time.Time, error) {
+func scanWorkerStatusJob(row interface{ Scan(dest ...any) error }) (Job, time.Time, int, error) {
 	var job Job
 	var heartbeat, lease, updated string
-	if err := row.Scan(&job.ID, &job.JobType, &job.LeasedBy, &heartbeat, &lease, &updated); err != nil {
-		return Job{}, time.Time{}, err
+	var runningCount int
+	if err := row.Scan(&job.ID, &job.JobType, &job.LeasedBy, &heartbeat, &lease, &updated, &runningCount); err != nil {
+		return Job{}, time.Time{}, 0, err
 	}
 	job.HeartbeatAt = parseTimePtr(heartbeat)
 	job.LeaseExpiresAt = parseTimePtr(lease)
 	updatedAt, _ := parseTime(updated)
-	return job, updatedAt, nil
+	return job, updatedAt, runningCount, nil
 }
 
 func (s *Store) WorkflowStatuses(ctx context.Context, workflowType, aggregateStatus string, limit int) ([]WorkflowStatus, error) {

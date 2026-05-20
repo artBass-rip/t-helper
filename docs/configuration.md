@@ -172,6 +172,9 @@ reloadable runtime settings и не должны переключать акти
 - `concurrency` - максимальное число jobs, одновременно выполняемых одним worker process.
 
 `thelper` не должен выполнять long-running jobs inline. Он создаёт jobs и отдаёт их на выполнение отдельным `thelper-worker` процессам.
+Если `workers.enabled = false`, `thelper-worker` exits without claiming queued
+jobs; existing jobs remain persisted for a later enabled worker or explicit
+operator action.
 
 Worker execution defaults are provider-specific. `workers.concurrency` в
 top-level config остаётся compatibility/default value для текущего active provider,

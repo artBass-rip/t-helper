@@ -108,6 +108,29 @@ func TestCurrentWorkerProviderSettingsUsesActiveProfile(t *testing.T) {
 	}
 }
 
+func TestRuntimeSettingsIncludeWorkersEnabled(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.Workers.Enabled = false
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("import config: %v", err)
+	}
+	settings, err := store.RuntimeSettings(ctx)
+	if err != nil {
+		t.Fatalf("runtime settings: %v", err)
+	}
+	if !settings.Loaded {
+		t.Fatal("expected runtime settings to be loaded")
+	}
+	if settings.WorkersEnabled {
+		t.Fatalf("workers enabled = true, want false: %+v", settings)
+	}
+}
+
 func TestStoreImportRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

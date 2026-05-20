@@ -284,7 +284,7 @@ func TestCleanupRetentionDeletesOldInactiveRowsAcrossBatches(t *testing.T) {
 	}
 }
 
-func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
+func TestWorkerStatusesAggregateRunningLeasesByWorkerID(t *testing.T) {
 	ctx := context.Background()
 	store := openInternalStore(t)
 	for _, id := range []string{"job_worker_status_1", "job_worker_status_2"} {
@@ -305,18 +305,14 @@ func TestWorkerStatusesReportEachRunningLease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("worker statuses: %v", err)
 	}
-	if len(workers) != 2 {
-		t.Fatalf("worker status rows = %d, want one per running lease: %+v", len(workers), workers)
+	if len(workers) != 1 {
+		t.Fatalf("worker status rows = %d, want one per worker id: %+v", len(workers), workers)
 	}
-	seen := map[string]bool{}
-	for _, worker := range workers {
-		if worker.WorkerID != "host:1:worker" || worker.Status != "active" {
-			t.Fatalf("unexpected worker status: %+v", worker)
-		}
-		seen[worker.RunningJobID] = true
+	if workers[0].WorkerID != "host:1:worker" || workers[0].Status != "active" || workers[0].RunningJobCount != 2 {
+		t.Fatalf("unexpected aggregated worker status: %+v", workers[0])
 	}
-	if !seen["job_worker_status_1"] || !seen["job_worker_status_2"] {
-		t.Fatalf("missing running jobs in worker statuses: %+v", workers)
+	if workers[0].RunningJobID == "" || workers[0].RunningJobType != "config_reload" {
+		t.Fatalf("missing representative running job: %+v", workers[0])
 	}
 }
 

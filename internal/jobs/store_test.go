@@ -330,6 +330,7 @@ func TestRuntimeUnknownJobTypeFailsWithoutRetry(t *testing.T) {
 	store := openStore(t)
 	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
 		JobType: "repo_clone",
+		LockKey: "repository:test",
 		Payload: json.RawMessage(`{"schema_version":"jobs.repo_clone.payload.v1","provider":"generic","protocol":"https","clone_scope":"single_repository","full_path":"example/repo","root_path_id":"root_1","target_directory":"/tmp/repo"}`),
 	})
 	if err != nil {
@@ -355,6 +356,25 @@ func TestRuntimeUnknownJobTypeFailsWithoutRetry(t *testing.T) {
 	}
 	if job.Status != jobs.StatusFailed || job.AttemptCount != 1 {
 		t.Fatalf("unexpected unknown handler job: %+v", job)
+	}
+	if job.StartedAt != nil {
+		t.Fatalf("unknown handler job should not be marked started: %+v", job)
+	}
+	locks, err := store.ListLocks(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("list locks: %v", err)
+	}
+	if len(locks) != 0 {
+		t.Fatalf("unknown handler job should not acquire business locks: %+v", locks)
+	}
+	events, err := store.ListEvents(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	for _, event := range events {
+		if event.EventType == jobs.EventStarted {
+			t.Fatalf("unknown handler job should not write started event: %+v", events)
+		}
 	}
 	var failure jobs.FailureResult
 	if err := json.Unmarshal(job.ResultPayload, &failure); err != nil {
