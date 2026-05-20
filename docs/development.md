@@ -93,14 +93,22 @@ Stage 02 migrations create:
 - `module_states`;
 - imported system `ignore_rules`.
 
-They must not create later-stage tables such as `jobs`, `root_paths`,
-`projects`, `repositories` or `users`.
+Stage 03 migrations create:
 
-## Stage 02 runtime behavior
+- `jobs`;
+- `job_locks`;
+- `job_events`;
+- `workflow_statuses`.
 
-- `cmd/thelper` applies Stage 01-02 migrations, starts the HTTP runtime and
+Stage 01-03 migrations must not create later-stage tables such as
+`root_paths`, `projects`, `repositories` or `users`.
+
+## Stage 03 runtime behavior
+
+- `cmd/thelper` applies Stage 01-03 migrations, starts the HTTP runtime and
   exposes `GET /api/health`, `GET/PUT /api/config`, `GET /api/modules`,
-  `POST /api/modules/reload` and `POST /api/modules/restart`.
+  `POST /api/modules/reload`, `POST /api/modules/restart`, `GET /api/jobs`,
+  `GET /api/jobs/{id}` and `GET /api/status*`.
 - `GET /api/health` returns `health_status.v1` with `instance_id`, `mode`,
   safe `database_fingerprint`, `started_at`, `readiness` and `schema_version`.
 - `database_fingerprint` is derived from safe storage locator components and
@@ -108,8 +116,8 @@ They must not create later-stage tables such as `jobs`, `root_paths`,
 - SQLite runs through a single open DB connection so connection
   local PRAGMA settings remain effective. Stage 01 sets foreign keys, busy
   timeout and WAL for file-backed SQLite databases.
-- `cmd/thelper-worker` is a buildable scaffold only; job execution starts in
-  Stage 03.
+- `cmd/thelper-worker` executes queued jobs through persistent leases,
+  heartbeats, retry/backoff and `job_locks`.
 - `cmd/thelper-ctl providers` lists the registered Stage 01 storage providers.
 - `cmd/thelper-ctl -reconfigure` imports `config.json` and `.t-helper.ignore`
   into Stage 02-owned tables.

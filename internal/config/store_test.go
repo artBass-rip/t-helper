@@ -83,6 +83,54 @@ func TestStoreImportNilIgnoreRulesPreservesExistingRules(t *testing.T) {
 	}
 }
 
+func TestCurrentWorkerProviderSettingsUsesActiveProfile(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("import config: %v", err)
+	}
+	settings, err := store.CurrentWorkerProviderSettings(ctx)
+	if err != nil {
+		t.Fatalf("worker provider settings: %v", err)
+	}
+	if !settings.Loaded || settings.WorkersConcurrency != 1 || settings.WorkerProcessLimit != 1 {
+		t.Fatalf("unexpected sqlite worker settings: %+v", settings)
+	}
+	if settings.LeaseDuration.String() != "30s" || settings.HeartbeatInterval.String() != "10s" || settings.BusyTimeout.String() != "5s" {
+		t.Fatalf("unexpected worker durations: %+v", settings)
+	}
+	if settings.SQLiteJournalMode != "WAL" || !settings.SQLiteForeignKeys {
+		t.Fatalf("unexpected sqlite settings: %+v", settings)
+	}
+}
+
+func TestRuntimeSettingsIncludeWorkersEnabled(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	cfg := loadExampleConfig(t)
+	cfg.Workers.Enabled = false
+	store := appconfig.NewStore(handle)
+	if _, err := store.Import(ctx, cfg, nil, "test"); err != nil {
+		t.Fatalf("import config: %v", err)
+	}
+	settings, err := store.RuntimeSettings(ctx)
+	if err != nil {
+		t.Fatalf("runtime settings: %v", err)
+	}
+	if !settings.Loaded {
+		t.Fatal("expected runtime settings to be loaded")
+	}
+	if settings.WorkersEnabled {
+		t.Fatalf("workers enabled = true, want false: %+v", settings)
+	}
+}
+
 func TestStoreImportRejectsSensitiveLiteralsWhenExternalDatabaseDisabled(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

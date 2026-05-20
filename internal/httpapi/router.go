@@ -23,6 +23,15 @@ func New(health *HealthHandler, optionalHandlers ...any) *Server {
 			r.Get("/api/modules", h.List)
 			r.Post("/api/modules/reload", h.Reload)
 			r.Post("/api/modules/restart", h.Restart)
+		case *JobsHandler:
+			r.Get("/api/jobs", h.List)
+			r.Get("/api/jobs/{id}", h.Get)
+		case *StatusHandler:
+			r.Get("/api/status", h.Runtime)
+			r.Get("/api/status/workflows", h.Workflows)
+			r.Get("/api/status/workflows/{job_group_id}", h.Workflow)
+			r.Get("/api/status/jobs/{job_id}", h.Job)
+			r.Get("/api/status/workers", h.Workers)
 		}
 	}
 	return &Server{router: r}

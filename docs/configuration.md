@@ -172,6 +172,9 @@ reloadable runtime settings и не должны переключать акти
 - `concurrency` - максимальное число jobs, одновременно выполняемых одним worker process.
 
 `thelper` не должен выполнять long-running jobs inline. Он создаёт jobs и отдаёт их на выполнение отдельным `thelper-worker` процессам.
+Если `workers.enabled = false`, `thelper-worker` exits without claiming queued
+jobs; existing jobs remain persisted for a later enabled worker or explicit
+operator action.
 
 Worker execution defaults are provider-specific. `workers.concurrency` в
 top-level config остаётся compatibility/default value для текущего active provider,
@@ -182,6 +185,11 @@ top-level config остаётся compatibility/default value для текущ�
 
 - `sqlite`: one active worker process, `concurrency = 1`, `journal_mode = WAL`, `foreign_keys = ON`, `busy_timeout = 5s`;
 - `postgresql`: multiple worker processes allowed, concurrency is installation-specific and can be increased after load testing.
+
+`thelper-worker` enforces the SQLite process limit with a local worker lock file
+under `.artifacts/runtime` by default. The lock is keyed by the active database
+fingerprint and is released on normal worker shutdown; stale locks left by dead
+processes are replaced.
 
 Изменение worker settings для одного provider/profile не должно менять settings
 другого provider/profile. Например, настройка PostgreSQL concurrency перед

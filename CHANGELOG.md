@@ -7,6 +7,18 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Stage 03 jobs/workers/status foundation is now implemented: persistent
+  `jobs`, `job_locks`, `job_events`, `workflow_statuses`, atomic claim,
+  leases, heartbeat, retry/backoff, worker execution and `/api/status*`.
+- Stage 03 job idempotency now compares canonical JSON payloads, so equivalent
+  payloads with different object ordering or whitespace replay the same job.
+- Stage 03 retention cleanup now preserves events for active jobs and only
+  deletes old routine events for terminal jobs.
+- Stage 03 worker status now reports each running lease, including concurrent
+  jobs owned by the same worker process.
+- Stage 03 SQLite workers now enforce the configured one-process limit with a
+  database-fingerprint worker lock, and job enqueue rejects secret-like payloads
+  before persistence.
 - Stage 02 storage profile imports now keep active `current` storage stable
   until successful `thelper-ctl -migrate-db`, including initial imports with
   `external_databases.enabled = true`.
@@ -39,8 +51,7 @@ grouped by completed roadmap stages and merge commits.
   formatting.
 - Module lifecycle errors are now joined with failed-state persistence errors
   when persisting `state = failed` also fails.
-- Next planned implementation stage: Stage 03 jobs, workers and status
-  foundation.
+- Next planned implementation stage: Stage 04 scanner and registry MVP.
 
 ## Stage 02 Hardening and Documentation Alignment - 2026-05-06
 

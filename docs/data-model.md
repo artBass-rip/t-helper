@@ -602,6 +602,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 Допустимые базовые `workflow_type`:
 
 - `project_scan`
+- `project_discovery`
 - `global_scan`
 - `repository_operation`
 - `config_operation`

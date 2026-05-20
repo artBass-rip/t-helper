@@ -12,6 +12,7 @@ import (
 	"github.com/artBass-rip/t-helper/internal/app/storageproviders"
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/modules"
+	"github.com/artBass-rip/t-helper/internal/storage"
 )
 
 func TestProvidersListsMVPAdapters(t *testing.T) {
@@ -95,6 +96,19 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	out.Reset()
 	if err := app.Run(ctx, Command{Name: "restart", StorageProvider: "sqlite", StorageDSN: dbPath, ModuleName: "global-scanner"}); err == nil {
 		t.Fatal("expected unavailable module restart to fail")
+	}
+
+	handle, err := storageproviders.MVPRegistry().Open(ctx, storage.Config{Provider: "sqlite", DSN: dbPath})
+	if err != nil {
+		t.Fatalf("open sqlite after cli lifecycle: %v", err)
+	}
+	defer handle.Close()
+	var jobCount int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM jobs").Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs after cli lifecycle: %v", err)
+	}
+	if jobCount != 0 {
+		t.Fatalf("Stage 02 synchronous CLI lifecycle commands created %d jobs, want 0", jobCount)
 	}
 }
 

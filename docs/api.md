@@ -10,7 +10,13 @@
 - Время возвращается в UTC в RFC 3339 format.
 - Write endpoints, которые запускают фоновые операции, возвращают `202 Accepted` и `job_id`.
 - Write endpoints, которые меняют справочники или конфигурацию без фоновой операции, возвращают обновлённую сущность или `204 No Content`.
+- Stage 02 synchronous module lifecycle endpoints are explicit exceptions:
+  `POST /api/modules/reload` and `POST /api/modules/restart` keep returning
+  synchronous result DTOs until an async variant or contract migration is
+  documented.
 - Повторяемые write requests должны поддерживать `Idempotency-Key`, если операция создаёт `job`.
+  For jobs, idempotency is scoped to `(actor, job_type, Idempotency-Key)` rather
+  than global across all job-producing endpoints.
 - Confirmed MVP behavior: bulk `PUT` endpoints are non-destructive idempotent upserts by stable identity or `id`; omitted records are not deleted unless a future endpoint explicitly documents delete/disable semantics.
 - Confirmed MVP behavior: public `DELETE` endpoints are out of scope; delete permissions are seeded for future lifecycle expansion and do not imply an implemented delete route.
 - Confirmed MVP lifecycle behavior: user-facing removal/deactivation is expressed through explicit state fields and non-destructive `PUT` updates, for example `enabled = false`, `active = false`, `status = disabled`, `status = missing` or `status = superseded` depending on entity type. UI/API wording must use disable, deactivate, mark missing or supersede instead of delete unless a future endpoint explicitly defines hard delete semantics.
@@ -62,6 +68,98 @@
   "next_cursor": null
 }
 ```
+
+### `runtime_status`
+
+Stage 03 `runtime_status.v1` is an aggregate read model from
+`status-monitor`. It summarizes `jobs`, derived worker status and
+`module_states`; clients must not reconstruct this aggregate from lower-level
+tables or endpoints.
+
+```json
+{
+  "aggregate_status": "running",
+  "jobs": {
+    "queued": 3,
+    "running": 1,
+    "failed": 0
+  },
+  "workers": {
+    "active": 1,
+    "stale": 0
+  },
+  "modules": {
+    "running": 5,
+    "stopped": 1,
+    "failed": 0,
+    "unavailable": 5
+  },
+  "updated_at": "2026-04-08T00:00:00Z",
+  "schema_version": "runtime_status.v1"
+}
+```
+
+`aggregate_status` accepts `running`, `degraded` or `failed` for Stage 03.
+
+### `job_status`
+
+`job_status.v1` is the operational status view for one job. It complements
+`GET /api/jobs/{id}`, which returns the persisted job record and safe
+payload/result metadata.
+
+```json
+{
+  "job_id": "job_opaque_id",
+  "job_type": "config_reload",
+  "status": "running",
+  "job_group_id": "config_operation:job_opaque_id",
+  "attempt_count": 1,
+  "max_attempts": 3,
+  "leased_by": "host:12345:worker_uuid",
+  "heartbeat_at": "2026-04-08T00:00:00Z",
+  "lease_expires_at": "2026-04-08T00:00:30Z",
+  "latest_event": {
+    "event_type": "heartbeat",
+    "status": "running",
+    "worker_id": "host:12345:worker_uuid",
+    "message": "job heartbeat",
+    "created_at": "2026-04-08T00:00:00Z"
+  },
+  "updated_at": "2026-04-08T00:00:00Z",
+  "schema_version": "job_status.v1"
+}
+```
+
+If a job exists but has no `job_events` yet, `latest_event` is `null`.
+
+### `worker_status`
+
+Stage 03 derives `worker_status.v1` from running jobs and their leases. Idle
+workers are not reported until a later worker heartbeat registry is introduced.
+
+```json
+{
+  "worker_id": "host:12345:worker_uuid",
+  "status": "active",
+  "running_job_id": "job_opaque_id",
+  "running_job_type": "config_reload",
+  "running_job_count": 1,
+  "last_heartbeat_at": "2026-04-08T00:00:00Z",
+  "lease_expires_at": "2026-04-08T00:00:30Z",
+  "schema_version": "worker_status.v1"
+}
+```
+
+`status` is `active` when `lease_expires_at` is in the future and `stale` when
+the lease is expired but recovery has not yet processed the job.
+When one worker process runs multiple jobs concurrently, Stage 03 returns one
+`worker_status.v1` row per `worker_id`; `running_job_id` and
+`running_job_type` identify the most recently updated running lease, and
+`running_job_count` reports the total running leases owned by that worker.
+
+`last_heartbeat_at` is read from `jobs.heartbeat_at`. A matching `heartbeat`
+event may exist for diagnostics, but clients must not require one heartbeat
+event per heartbeat tick.
 
 ### `health_status`
 
@@ -123,11 +221,11 @@ paths, usernames, passwords or userinfo.
 | `POST /api/repos/sync` | `repository_id`, `credential_id?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = repo_sync`; credential usage depends on sync mode. |
 | `GET /api/jobs` | `limit`, `cursor`, `job_type?`, `status?`, `lock_key?`, `job_group_id?`, `parent_job_id?` | `list_response<job>` | Общая видимость jobs. Для UI workflow status предпочтительнее status/project-scan aggregate endpoints. |
 | `GET /api/jobs/{id}` | n/a | `job` | Возвращает payload/result metadata без секретов. |
-| `GET /api/status` | n/a | `runtime_status` | Aggregate runtime status из `status-monitor`. |
+| `GET /api/status` | n/a | `runtime_status.v1` | Aggregate runtime status из `status-monitor`; summarizes jobs, derived worker status and module states. |
 | `GET /api/status/workflows` | `limit`, `cursor`, `workflow_type?`, `aggregate_status?` | `list_response<workflow_status>` | Aggregate workflow statuses. |
 | `GET /api/status/workflows/{job_group_id}` | n/a | `workflow_status` | Единая точка чтения workflow status по `job_group_id`. |
-| `GET /api/status/jobs/{job_id}` | n/a | `job_status` | Aggregate job status, latest event и диагностические metadata. |
-| `GET /api/status/workers` | n/a | `list_response<worker_status>` | Worker health/status из status aggregation layer. |
+| `GET /api/status/jobs/{job_id}` | n/a | `job_status.v1` | Operational job status, latest event and worker lease diagnostics. |
+| `GET /api/status/workers` | n/a | `list_response<worker_status.v1>` | Stage 03 derives worker health/status from running jobs and leases; idle workers are not reported. |
 | `GET /api/config` | n/a | `config` | Возвращает активную runtime-конфигурацию с masked sensitive values; resolved secrets never returned. |
 | `PUT /api/config` | `config` | `config_import.result.v1` | Stage 02 synchronously imports config with strict schema validation, rejects unknown keys, sensitive literals, malformed JSON and trailing payload, and preserves existing imported ignore rules because `.t-helper.ignore` is not part of this HTTP payload. Later job-backed workflows may extend this contract without changing Stage 02 sync import semantics. |
 | `GET /api/ignore-rules` | `limit`, `cursor`, `scope_type?`, `scope_id?` | `list_response<ignore_rule>` | Возвращает правила без потери `!pattern`. |
@@ -142,8 +240,8 @@ paths, usernames, passwords or userinfo.
 | `POST /api/tool-profiles/activate` | `tool`, `profile_id`, `profile_version` | `tool_profile` | Explicitly activates a validated profile for runtime selection. Generated candidate profiles cannot be activated without successful validation results. |
 | `POST /api/tool-profiles/analyze` | `samples_path?`, `sample_payload?`, `baseline_profile_id?` | `tool_profile_candidate` | Optional analyzer endpoint that generates candidate profiles/fixtures; it never activates profiles automatically. |
 | `GET /api/modules` | n/a | `list_response<module_state>` | Состояния runtime modules. |
-| `POST /api/modules/reload` | `keys?`, `module_name?`, `reason?` | `config_reload.result.v1` or `module_reload.result.v1` | Stage 02 synchronous operation. Without `module_name`, accepts reloadable config keys and applies only keys with implemented Stage 02 runtime effects, currently `modules.enabled`; accepted-but-not-applied keys remain visible in `accepted_keys`, and unknown explicit keys are returned in `failed_keys`. With `module_name`, reloads one available module. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict: unknown fields, `null`, malformed JSON and trailing payload are rejected. Stage 03 may add job-backed `config_reload` handlers for long-running workflow integration. |
-| `POST /api/modules/restart` | `module_name`, `reason?` | `module_restart.result.v1` | Stage 02 synchronous restart for one available module. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict and `module_name` is required. Stage 03 may add job-backed `module_restart` handlers for worker/status integration. |
+| `POST /api/modules/reload` | `keys?`, `module_name?`, `reason?` | `config_reload.result.v1` or `module_reload.result.v1` | Stage 02 synchronous operation and explicit Stage 03 jobs exception. Without `module_name`, accepts reloadable config keys and applies only keys with implemented Stage 02 runtime effects, currently `modules.enabled`; accepted-but-not-applied keys remain visible in `accepted_keys`, and unknown explicit keys are returned in `failed_keys`. With `module_name`, reloads one available module. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict: unknown fields, `null`, malformed JSON and trailing payload are rejected. Stage 03 implements job-backed `config_reload` handlers for framework validation/future workflow integration without changing this public sync contract. |
+| `POST /api/modules/restart` | `module_name`, `reason?` | `module_restart.result.v1` | Stage 02 synchronous restart for one available module and explicit Stage 03 jobs exception. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict and `module_name` is required. Stage 03 implements job-backed `module_restart` handlers for framework validation/future workflow integration without changing this public sync contract. |
 | `GET /api/environments` | `limit`, `cursor` | `list_response<environment>` | MVP read endpoint. |
 | `GET /api/environments/{id}` | n/a | `environment` | MVP read endpoint. |
 | `GET /api/workspaces` | `limit`, `cursor`, `project_id?`, `environment_id?` | `list_response<workspace>` | MVP read endpoint. |

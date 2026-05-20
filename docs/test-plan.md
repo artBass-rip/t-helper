@@ -46,6 +46,10 @@
 - Ожидание: возвращается тот же `job_id` или тот же итоговый state.
 - Повторить write request с тем же `Idempotency-Key`, но другим payload.
 - Ожидание: `409 Conflict` или `validation_error` с явным кодом.
+- Для job-producing endpoints проверить, что `Idempotency-Key` scoped by
+  `(actor, job_type, key)`: same actor/job type/key replays, different payload
+  conflicts, but the same key can be used independently by another job type or
+  actor.
 
 ### Configuration contract
 
@@ -240,17 +244,23 @@ Stage 01 implemented coverage:
 
 - Проверить, что API/CLI создают jobs в статусе `queued`, но не выполняют long-running operations inline.
 - Запустить отдельный `thelper-worker` и проверить atomic claim + transition `queued -> running -> succeeded|failed`.
+- Запустить `thelper-worker` с теми же storage provider/DSN settings, что
+  `thelper`, и проверить, что он применяет migrations, resolves active storage
+  profile and consumes jobs from the active database.
 - Проверить, что `leased_by` и worker diagnostics используют формат `<hostname>:<pid>:<worker_uuid>`.
 - Запустить несколько worker-процессов и проверить, что `job_locks` не допускают конфликтующие операции с одинаковым `lock_key`.
 - Запустить несколько worker-процессов на одном queued job и проверить, что lease получает только один worker.
-- Проверить heartbeat update для long-running job.
+- Проверить heartbeat update для long-running job: `jobs.heartbeat_at` and
+  `jobs.lease_expires_at` update on ticks, while `job_events` heartbeat rows are
+  bounded diagnostics and are not required for every tick.
 - Проверить expired lease recovery: job возвращается в `queued` с `run_after` или становится `failed` после исчерпания `max_attempts`.
 - Проверить retry/backoff через `attempt_count`, `max_attempts` и `run_after`.
 - Проверить default retry policy: `max_attempts = 3`, initial backoff `5s`, multiplier `2`, max backoff `5m`, jitter в допустимых пределах.
 - Проверить lock contention: worker не запускает handler, очищает lease, возвращает job в `queued`, выставляет `run_after` и пишет `job_events`.
 - Проверить retention cleanup: old `job_events` и released/expired `job_locks` старше retention удаляются, active jobs/locks и `audit_log` не удаляются.
 - Проверить, что остановка worker-процесса не останавливает `thelper` API runtime.
-- Для SQLite проверить effective `workers.concurrency = 1`, one active worker process, `journal_mode = WAL`, `foreign_keys = ON`, configured `busy_timeout`, and rejection `sqlite_worker_concurrency_unsupported` when applying higher concurrency to active SQLite profile.
+- Для SQLite проверить effective `workers.concurrency = 1`, one active worker process via database-fingerprint worker lock, `journal_mode = WAL`, `foreign_keys = ON`, configured `busy_timeout`, rejection `sqlite_worker_concurrency_unsupported` when applying higher concurrency to active SQLite profile, and stale worker lock replacement after the original process is gone.
+- Проверить, что enqueue rejects `jobs.payload` with secret-like JSON keys, URL userinfo or unresolved `secretref://...` values before persistence.
 - Для PostgreSQL проверить, что provider-specific concurrency может быть выше SQLite without changing SQLite provider settings.
 
 ### Singleton runtime
