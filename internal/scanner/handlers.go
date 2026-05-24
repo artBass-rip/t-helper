@@ -59,18 +59,16 @@ func (h globalScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job 
 		if err != nil {
 			return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 		}
-		rootErrorsBefore := result.ErrorsCount
-		processed, seen := h.scanRoot(ctx, env, job, root, newIgnoreMatcher(rules), now, &result)
+		processed, seen, erroredSubtrees := h.scanRoot(ctx, env, job, root, newIgnoreMatcher(rules), now, &result)
 		if processed {
 			processedRoots++
-			if result.ErrorsCount > rootErrorsBefore {
-				_ = env.EmitProgress(ctx, job, "missing project marking skipped for partial root scan", map[string]any{
-					"root_path_id": root.ID,
-					"error_code":   "partial_root_scan",
+			if len(erroredSubtrees) > 0 {
+				_ = env.EmitProgress(ctx, job, "missing project marking skipped for errored subtrees", map[string]any{
+					"root_path_id":          root.ID,
+					"errored_subtree_count": len(erroredSubtrees),
 				})
-				continue
 			}
-			missing, err := h.store.MarkMissingProjects(ctx, root.ID, seen, now)
+			missing, err := h.store.MarkMissingProjects(ctx, root.ID, seen, erroredSubtrees, now)
 			if err != nil {
 				return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 			}
@@ -90,25 +88,26 @@ func (h globalScanHandler) roots(ctx context.Context, ids []string) ([]RootPath,
 	return h.store.EnabledRootPaths(ctx)
 }
 
-func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, matcher ignoreMatcher, now time.Time, result *GlobalScanResult) (bool, map[string]bool) {
+func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, matcher ignoreMatcher, now time.Time, result *GlobalScanResult) (bool, map[string]bool, map[string]bool) {
 	seen := map[string]bool{}
+	erroredSubtrees := map[string]bool{}
 	info, err := os.Lstat(root.Path)
 	if err != nil {
 		result.ErrorsCount++
 		_ = emitScanError(ctx, env, job, "root_path_unavailable", root.ID, root.Path, ".", err)
-		return false, seen
+		return false, seen, erroredSubtrees
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		result.ErrorsCount++
 		result.DirectoriesSkipped++
 		result.SymlinksSkipped++
 		_ = emitScanError(ctx, env, job, "root_path_symlink_unsupported", root.ID, root.Path, ".", nil)
-		return false, seen
+		return false, seen, erroredSubtrees
 	}
 	if !info.IsDir() {
 		result.ErrorsCount++
 		_ = emitScanError(ctx, env, job, "root_path_unavailable", root.ID, root.Path, ".", nil)
-		return false, seen
+		return false, seen, erroredSubtrees
 	}
 	queue := []string{root.Path}
 	processed := false
@@ -131,7 +130,7 @@ func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, jo
 			active++
 			mu.Unlock()
 
-			children, stop := h.scanDirectory(ctx, env, job, root, dir, matcher, now, result, seen, &processed, &mu)
+			children, stop := h.scanDirectory(ctx, env, job, root, dir, matcher, now, result, seen, erroredSubtrees, &processed, &mu)
 
 			mu.Lock()
 			if !stop {
@@ -151,7 +150,7 @@ func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, jo
 		}()
 	}
 	workers.Wait()
-	return processed, seen
+	return processed, seen, erroredSubtrees
 }
 
 func (h globalScanHandler) traversalWorkerCount() int {
@@ -161,10 +160,11 @@ func (h globalScanHandler) traversalWorkerCount() int {
 	return 4
 }
 
-func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, dir string, matcher ignoreMatcher, now time.Time, result *GlobalScanResult, seen map[string]bool, processed *bool, mu *sync.Mutex) ([]string, bool) {
+func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, dir string, matcher ignoreMatcher, now time.Time, result *GlobalScanResult, seen map[string]bool, erroredSubtrees map[string]bool, processed *bool, mu *sync.Mutex) ([]string, bool) {
 	addError := func(code, pathValue, relativePath string, err error) {
 		mu.Lock()
 		result.ErrorsCount++
+		erroredSubtrees[cleanRelativePath(relativePath)] = true
 		mu.Unlock()
 		_ = emitScanError(ctx, env, job, code, root.ID, pathValue, relativePath, err)
 	}
@@ -181,7 +181,7 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 	mu.Lock()
 	*processed = true
 	mu.Unlock()
-	if containsTerraformFile(entries) {
+	if containsTerraformFile(entries, dirRelativePath, matcher) {
 		project, created, err := h.store.UpsertProject(ctx, root, dirRelativePath, now)
 		if err != nil {
 			addError("project_upsert_failed", dir, dirRelativePath, err)
@@ -403,12 +403,16 @@ func validGitdirFile(path string) (bool, error) {
 	return false, nil
 }
 
-func containsTerraformFile(entries []os.DirEntry) bool {
+func containsTerraformFile(entries []os.DirEntry, dirRelativePath string, matcher ignoreMatcher) bool {
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 			continue
 		}
 		if strings.EqualFold(filepath.Ext(entry.Name()), ".tf") {
+			fileRelativePath := cleanRelativePath(filepath.ToSlash(filepath.Join(dirRelativePath, entry.Name())))
+			if matcher.ignored(fileRelativePath, false) {
+				continue
+			}
 			return true
 		}
 	}

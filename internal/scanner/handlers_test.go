@@ -109,6 +109,59 @@ func TestGlobalScanDetectsTerraformProjectsAndMissingLifecycle(t *testing.T) {
 	}
 }
 
+func TestGlobalScanAppliesIgnoreRulesToTerraformFiles(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    jobStore,
+		Handlers: scanner.JobHandlers(scannerStore),
+		WorkerID: "host:test:file-ignore",
+		Logger:   slog.Default(),
+	})
+
+	rootDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(rootDir, "ignored-file", "main.tf"), "terraform {}\n")
+	mustWriteFile(t, filepath.Join(rootDir, "ignored-glob", "ignored.tf"), "terraform {}\n")
+	mustWriteFile(t, filepath.Join(rootDir, "kept", "main.tf"), "terraform {}\n")
+
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	if _, err := scannerStore.UpsertIgnoreRules(ctx, []scanner.IgnoreRuleInput{
+		{ScopeType: "root_path", ScopeID: roots[0].ID, Pattern: "ignored-file/main.tf", Origin: "ui"},
+		{ScopeType: "root_path", ScopeID: roots[0].ID, Pattern: "ignored-glob/*.tf", Origin: "ui"},
+		{ScopeType: "root_path", ScopeID: roots[0].ID, Pattern: "!ignored-file/main.tf", Origin: "ui"},
+	}); err != nil {
+		t.Fatalf("upsert ignore rules: %v", err)
+	}
+
+	ref := enqueueGlobalScan(t, ctx, jobStore, roots[0].ID)
+	runUntilComplete(t, ctx, runtime, jobStore, ref.JobID)
+	job, err := jobStore.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get scan job: %v", err)
+	}
+	var result scanner.GlobalScanResult
+	if err := json.Unmarshal(job.ResultPayload, &result); err != nil {
+		t.Fatalf("decode scan result: %v", err)
+	}
+	if result.ProjectsCreated != 1 {
+		t.Fatalf("file-level ignore should leave one project, got result %+v", result)
+	}
+	projects, err := scannerStore.ListProjects(ctx, scanner.ProjectListOptions{Status: "all"})
+	if err != nil {
+		t.Fatalf("list projects: %v", err)
+	}
+	if len(projects.Items) != 1 || projects.Items[0].RelativePath != "kept" {
+		t.Fatalf("unexpected projects after file-level ignore: %+v", projects.Items)
+	}
+}
+
 func TestGlobalScanOnlyEnqueuesProjectDiscoveryBeforeRepositoryLinking(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -277,6 +330,76 @@ func TestProjectDiscoveryGenericRepositoryIdentityIncludesRootPath(t *testing.T)
 	}
 	if repoCount != 2 {
 		t.Fatalf("generic repository count = %d, want 2", repoCount)
+	}
+}
+
+func TestStoreRejectsPathsOutsideRoot(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+
+	rootDir := t.TempDir()
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+
+	if _, _, err := scannerStore.UpsertProject(ctx, roots[0], "../outside", time.Now().UTC()); err == nil {
+		t.Fatal("expected project relative path escaping root to be rejected")
+	}
+	if _, _, err := scannerStore.UpsertProject(ctx, roots[0], filepath.Join(rootDir, "absolute"), time.Now().UTC()); err == nil {
+		t.Fatal("expected absolute project relative path to be rejected")
+	}
+	if _, _, _, err := scannerStore.UpsertGenericRepository(ctx, roots[0], filepath.Dir(rootDir)); err == nil {
+		t.Fatal("expected repository path outside root to be rejected")
+	}
+}
+
+func TestMarkMissingProjectsSkipsOnlyErroredSubtrees(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+
+	rootDir := t.TempDir()
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	now := time.Now().UTC()
+	kept, _, err := scannerStore.UpsertProject(ctx, roots[0], "kept", now)
+	if err != nil {
+		t.Fatalf("upsert kept project: %v", err)
+	}
+	gone, _, err := scannerStore.UpsertProject(ctx, roots[0], "gone", now)
+	if err != nil {
+		t.Fatalf("upsert gone project: %v", err)
+	}
+	errored, _, err := scannerStore.UpsertProject(ctx, roots[0], "errored/service", now)
+	if err != nil {
+		t.Fatalf("upsert errored project: %v", err)
+	}
+
+	marked, err := scannerStore.MarkMissingProjects(ctx, roots[0].ID, map[string]bool{kept.RelativePath: true}, map[string]bool{"errored": true}, now)
+	if err != nil {
+		t.Fatalf("mark missing projects: %v", err)
+	}
+	if marked != 1 {
+		t.Fatalf("marked missing = %d, want 1", marked)
+	}
+	gone, err = scannerStore.GetProject(ctx, gone.ID)
+	if err != nil {
+		t.Fatalf("get gone project: %v", err)
+	}
+	errored, err = scannerStore.GetProject(ctx, errored.ID)
+	if err != nil {
+		t.Fatalf("get errored project: %v", err)
+	}
+	if gone.Status != scanner.ProjectStatusMissing || errored.Status != scanner.ProjectStatusActive {
+		t.Fatalf("unexpected statuses: gone=%s errored=%s", gone.Status, errored.Status)
 	}
 }
 

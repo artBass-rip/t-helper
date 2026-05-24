@@ -18,7 +18,9 @@ baseline is:
 - `docker compose --profile offline -f docker-compose.test.yml run --rm test-runner`.
 
 The Docker `offline` test runner starts PostgreSQL and runs the same Go test
-suite with `THELPER_POSTGRES_DSN` set.
+suite with `THELPER_POSTGRES_DSN` set. DSN-backed tests run with `go test -p 1
+./...` so destructive contract tests in different packages do not reset the
+same test database concurrently.
 
 ## PostgreSQL test environment
 

@@ -187,17 +187,23 @@ func requirePostgresTestDatabase(t *testing.T, dsn string) {
 func resetStage03Tables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	for _, stmt := range []string{
-		"DROP TABLE IF EXISTS workflow_statuses",
-		"DROP TABLE IF EXISTS job_events",
-		"DROP TABLE IF EXISTS job_locks",
-		"DROP TABLE IF EXISTS jobs",
-		"DROP TABLE IF EXISTS ignore_rules",
-		"DROP TABLE IF EXISTS module_states",
-		"DROP TABLE IF EXISTS storage_provider_settings",
-		"DROP TABLE IF EXISTS storage_profiles",
-		"DROP TABLE IF EXISTS config_entries",
-		"DROP TABLE IF EXISTS system_metadata",
-		"DROP TABLE IF EXISTS goose_db_version",
+		"DROP TABLE IF EXISTS project_links CASCADE",
+		"DROP TABLE IF EXISTS workspaces CASCADE",
+		"DROP TABLE IF EXISTS projects CASCADE",
+		"DROP TABLE IF EXISTS repositories CASCADE",
+		"DROP TABLE IF EXISTS environments CASCADE",
+		"DROP TABLE IF EXISTS root_paths CASCADE",
+		"DROP TABLE IF EXISTS workflow_statuses CASCADE",
+		"DROP TABLE IF EXISTS job_events CASCADE",
+		"DROP TABLE IF EXISTS job_locks CASCADE",
+		"DROP TABLE IF EXISTS jobs CASCADE",
+		"DROP TABLE IF EXISTS ignore_rules CASCADE",
+		"DROP TABLE IF EXISTS module_states CASCADE",
+		"DROP TABLE IF EXISTS storage_provider_settings CASCADE",
+		"DROP TABLE IF EXISTS storage_profiles CASCADE",
+		"DROP TABLE IF EXISTS config_entries CASCADE",
+		"DROP TABLE IF EXISTS system_metadata CASCADE",
+		"DROP TABLE IF EXISTS goose_db_version CASCADE",
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("reset table with %q: %v", stmt, err)

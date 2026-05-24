@@ -30,6 +30,8 @@ services:
     command:
       - go
       - test
+      - -p
+      - "1"
       - ./...
     environment:
       THELPER_POSTGRES_DSN: postgres://${THELPER_POSTGRES_USER:-t_helper}:${THELPER_POSTGRES_PASSWORD:-local_password}@postgres:5432/${THELPER_POSTGRES_DB:-t_helper_test}?sslmode=disable

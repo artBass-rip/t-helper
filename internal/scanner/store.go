@@ -224,7 +224,10 @@ func (s *Store) RootPathsByIDs(ctx context.Context, ids []string) ([]RootPath, e
 }
 
 func (s *Store) UpsertProject(ctx context.Context, root RootPath, relativePath string, now time.Time) (Project, bool, error) {
-	relativePath = cleanRelativePath(relativePath)
+	relativePath, err := safeRelativePath(relativePath)
+	if err != nil {
+		return Project{}, false, err
+	}
 	projectPath := root.Path
 	if relativePath != "." {
 		projectPath = filepath.Join(root.Path, filepath.FromSlash(relativePath))
@@ -331,7 +334,7 @@ func (s *Store) ListProjects(ctx context.Context, opts ProjectListOptions) (Page
 	return listPage(ctx, s, query, args, "created_at", opts.ListOptions, scanProject)
 }
 
-func (s *Store) MarkMissingProjects(ctx context.Context, rootPathID string, seen map[string]bool, now time.Time) (int, error) {
+func (s *Store) MarkMissingProjects(ctx context.Context, rootPathID string, seen map[string]bool, erroredSubtrees map[string]bool, now time.Time) (int, error) {
 	query := "SELECT id, relative_path FROM projects WHERE root_path_id = ? AND status = ?"
 	args := []any{rootPathID, ProjectStatusActive}
 	if s.handle.Provider == "postgres" {
@@ -348,7 +351,7 @@ func (s *Store) MarkMissingProjects(ctx context.Context, rootPathID string, seen
 			rows.Close()
 			return 0, err
 		}
-		if !seen[relativePath] {
+		if !seen[relativePath] && !underErroredSubtree(relativePath, erroredSubtrees) {
 			missing = append(missing, id)
 		}
 	}
@@ -401,11 +404,18 @@ func (s *Store) ProjectsByRepository(ctx context.Context, repositoryID string) (
 }
 
 func (s *Store) UpsertGenericRepository(ctx context.Context, root RootPath, repositoryPath string) (Repository, bool, bool, error) {
-	repositoryPath, err := normalizeAbsPath(repositoryPath)
+	rootPath, err := normalizeAbsPath(root.Path)
 	if err != nil {
 		return Repository{}, false, false, err
 	}
-	fullPath, err := filepath.Rel(root.Path, repositoryPath)
+	repositoryPath, err = normalizeAbsPath(repositoryPath)
+	if err != nil {
+		return Repository{}, false, false, err
+	}
+	if !withinRoot(rootPath, repositoryPath) {
+		return Repository{}, false, false, validationErrorf("repository path must stay within root_path")
+	}
+	fullPath, err := filepath.Rel(rootPath, repositoryPath)
 	if err != nil {
 		return Repository{}, false, false, err
 	}
@@ -1061,6 +1071,43 @@ func cleanRelativePath(value string) string {
 		return "."
 	}
 	return value
+}
+
+func safeRelativePath(value string) (string, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return ".", nil
+	}
+	slashPath := strings.ReplaceAll(filepath.ToSlash(raw), "\\", "/")
+	if filepath.IsAbs(raw) || strings.HasPrefix(slashPath, "/") || looksLikeWindowsAbsPath(slashPath) {
+		return "", validationErrorf("relative_path must be relative")
+	}
+	cleaned := cleanRelativePath(slashPath)
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", validationErrorf("relative_path must stay within root_path")
+	}
+	return cleaned, nil
+}
+
+func looksLikeWindowsAbsPath(value string) bool {
+	if len(value) < 3 || value[1] != ':' || value[2] != '/' {
+		return false
+	}
+	return (value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')
+}
+
+func underErroredSubtree(relativePath string, erroredSubtrees map[string]bool) bool {
+	if len(erroredSubtrees) == 0 {
+		return false
+	}
+	relativePath = cleanRelativePath(relativePath)
+	for subtree := range erroredSubtrees {
+		subtree = cleanRelativePath(subtree)
+		if subtree == "." || relativePath == subtree || strings.HasPrefix(relativePath, subtree+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func validateFrequency(value string) error {

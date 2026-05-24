@@ -989,7 +989,10 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `project_links.repository_id` indexed;
 - `project_scan_settings.project_id` unique;
 - `project_security_scan_settings.project_id` unique;
-- `repositories.provider + repositories.provider_host + repositories.full_path` unique;
+- provider-aware repositories use unique
+  `repositories.provider + repositories.provider_host + repositories.full_path`;
+- Stage 04 generic local repositories use unique
+  `repositories.provider + repositories.provider_host + repositories.root_path_id + repositories.full_path`;
 - `repositories.provider_host + repositories.full_path` indexed;
 - `repositories.provider_instance_id + repositories.full_path` indexed;
 - `repositories.local_path` indexed;
