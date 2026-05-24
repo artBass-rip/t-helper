@@ -141,6 +141,32 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 		}
 	}
 
+	otherProject, _, err := scannerStore.UpsertProject(ctx, roots.Items[0], "other-service", now)
+	if err != nil {
+		t.Fatalf("upsert linked project fixture: %v", err)
+	}
+	repo, _, _, err := scannerStore.UpsertGenericRepository(ctx, roots.Items[0], rootPath)
+	if err != nil {
+		t.Fatalf("upsert repository fixture: %v", err)
+	}
+	if _, err := scannerStore.UpsertProjectLink(ctx, project.ID, otherProject.ID, repo.ID, ""); err != nil {
+		t.Fatalf("upsert project link fixture: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects/"+project.ID+"/links", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/projects/{id}/links status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var links struct {
+		Items []scanner.ProjectLink `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&links); err != nil {
+		t.Fatalf("decode project links: %v", err)
+	}
+	if len(links.Items) != 1 || links.Items[0].LinkType != scanner.LinkTypeSameRepository || links.Items[0].RepositoryID != repo.ID {
+		t.Fatalf("unexpected project links response: %+v", links.Items)
+	}
+
 	missing, _, err := scannerStore.UpsertProject(ctx, roots.Items[0], "missing-service", now)
 	if err != nil {
 		t.Fatalf("upsert missing project fixture: %v", err)

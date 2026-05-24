@@ -158,6 +158,25 @@ func (h *ScannerHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *ScannerHandler) ListProjectLinks(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "id")
+	if _, err := h.store.GetProject(r.Context(), projectID); err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	page, err := h.store.ListProjectLinks(r.Context(), scanner.ProjectLinkListOptions{
+		ListOptions: scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		ProjectID:   projectID,
+		LinkType:    r.URL.Query().Get("link_type"),
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
 func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ProjectID string `json:"project_id"`

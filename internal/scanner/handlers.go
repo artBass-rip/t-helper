@@ -59,9 +59,17 @@ func (h globalScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job 
 		if err != nil {
 			return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 		}
+		rootErrorsBefore := result.ErrorsCount
 		processed, seen := h.scanRoot(ctx, env, job, root, newIgnoreMatcher(rules), now, &result)
 		if processed {
 			processedRoots++
+			if result.ErrorsCount > rootErrorsBefore {
+				_ = env.EmitProgress(ctx, job, "missing project marking skipped for partial root scan", map[string]any{
+					"root_path_id": root.ID,
+					"error_code":   "partial_root_scan",
+				})
+				continue
+			}
 			missing, err := h.store.MarkMissingProjects(ctx, root.ID, seen, now)
 			if err != nil {
 				return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
@@ -271,6 +279,12 @@ func (h projectDiscoveryHandler) Handle(ctx context.Context, env jobs.HandlerEnv
 	project, err := h.store.GetProject(ctx, payload.ProjectID)
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
+	}
+	if payload.RootPathID != "" && payload.RootPathID != project.RootPathID {
+		return nil, jobs.HandlerError{Code: "validation_error", Message: "project discovery root_path_id does not match project", Retryable: false}
+	}
+	if payload.RelativePath != "" && cleanRelativePath(payload.RelativePath) != project.RelativePath {
+		return nil, jobs.HandlerError{Code: "validation_error", Message: "project discovery relative_path does not match project", Retryable: false}
 	}
 	root, err := h.store.GetRootPath(ctx, project.RootPathID)
 	if err != nil {

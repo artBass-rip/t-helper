@@ -39,6 +39,7 @@ func New(health *HealthHandler, optionalHandlers ...any) *Server {
 			r.Get("/api/scans/{job_id}", h.GetScan)
 			r.Get("/api/projects", h.ListProjects)
 			r.Get("/api/projects/{id}", h.GetProject)
+			r.Get("/api/projects/{id}/links", h.ListProjectLinks)
 			r.Post("/api/project-scans", h.CreateProjectScan)
 			r.Get("/api/repos", h.ListRepositories)
 			r.Get("/api/repos/{id}", h.GetRepository)

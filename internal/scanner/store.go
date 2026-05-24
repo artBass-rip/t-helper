@@ -575,6 +575,33 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 	return true, nil
 }
 
+func (s *Store) ListProjectLinks(ctx context.Context, opts ProjectLinkListOptions) (Page[ProjectLink], error) {
+	var where []string
+	var args []any
+	add := func(clause string, value any) {
+		args = append(args, value)
+		where = append(where, fmt.Sprintf(clause, s.placeholder(len(args))))
+	}
+	if opts.ProjectID != "" {
+		args = append(args, opts.ProjectID, opts.ProjectID)
+		where = append(where, fmt.Sprintf("(source_project_id = %s OR target_project_id = %s)", s.placeholder(len(args)-1), s.placeholder(len(args))))
+	}
+	if opts.RepositoryID != "" {
+		add("repository_id = %s", opts.RepositoryID)
+	}
+	if opts.LinkType != "" {
+		if opts.LinkType != LinkTypeSameRepository {
+			return Page[ProjectLink]{}, validationErrorf("unsupported project link_type %q", opts.LinkType)
+		}
+		add("link_type = %s", opts.LinkType)
+	}
+	query := "SELECT " + s.projectLinkColumns() + " FROM project_links"
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	return listPage(ctx, s, query, args, "created_at", opts.ListOptions, scanProjectLink)
+}
+
 func (s *Store) IgnoreRulesForRoot(ctx context.Context, rootPathID string) ([]IgnoreRule, error) {
 	query := "SELECT " + s.ignoreRuleColumns() + " FROM ignore_rules WHERE scope_type = ? OR (scope_type = ? AND scope_id = ?) ORDER BY sort_order ASC, created_at ASC, id ASC"
 	args := []any{"system", "root_path", rootPathID}
@@ -825,6 +852,8 @@ func valueID(value any) string {
 		return v.ID
 	case Project:
 		return v.ID
+	case ProjectLink:
+		return v.ID
 	case Repository:
 		return v.ID
 	case IgnoreRule:
@@ -843,6 +872,8 @@ func valueCreatedAt(value any) time.Time {
 	case RootPath:
 		return v.CreatedAt
 	case Project:
+		return v.CreatedAt
+	case ProjectLink:
 		return v.CreatedAt
 	case Repository:
 		return v.CreatedAt
@@ -865,6 +896,11 @@ func (s *Store) rootPathColumns() string {
 func (s *Store) projectColumns() string {
 	return fmt.Sprintf(`id, name, path, relative_path, root_path_id, terraform_marker, status, COALESCE(repository_id, ''), COALESCE(environment_id, ''), COALESCE(default_workspace_id, ''), %s, %s, %s, %s`,
 		s.timeExpr("detected_at"), s.timeExpr("last_seen_at"), s.timeExpr("created_at"), s.timeExpr("updated_at"))
+}
+
+func (s *Store) projectLinkColumns() string {
+	return fmt.Sprintf(`id, source_project_id, target_project_id, link_type, COALESCE(repository_id, ''), COALESCE(detected_by_job_id, ''), %s, %s`,
+		s.timeExpr("created_at"), s.timeExpr("updated_at"))
 }
 
 func (s *Store) repositoryColumns() string {
@@ -908,6 +944,17 @@ func scanProject(row interface{ Scan(dest ...any) error }) (Project, error) {
 	}
 	item.DetectedAt, _ = parseTime(detected)
 	item.LastSeenAt, _ = parseTime(lastSeen)
+	item.CreatedAt, _ = parseTime(created)
+	item.UpdatedAt, _ = parseTime(updated)
+	return item, nil
+}
+
+func scanProjectLink(row interface{ Scan(dest ...any) error }) (ProjectLink, error) {
+	var item ProjectLink
+	var created, updated string
+	if err := row.Scan(&item.ID, &item.SourceProjectID, &item.TargetProjectID, &item.LinkType, &item.RepositoryID, &item.DetectedByJobID, &created, &updated); err != nil {
+		return ProjectLink{}, err
+	}
 	item.CreatedAt, _ = parseTime(created)
 	item.UpdatedAt, _ = parseTime(updated)
 	return item, nil

@@ -421,6 +421,52 @@ func TestProjectDiscoveryGitMarkerAllowlist(t *testing.T) {
 	}
 }
 
+func TestProjectDiscoveryRejectsStaleProjectIdentityPayload(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    jobStore,
+		Handlers: scanner.JobHandlers(scannerStore),
+		WorkerID: "host:test:stale-discovery",
+		Logger:   slog.Default(),
+	})
+
+	rootDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(rootDir, "repo", ".git", "HEAD"), "ref: refs/heads/main\n")
+	mustWriteFile(t, filepath.Join(rootDir, "repo", "app", "main.tf"), "terraform {}\n")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, roots[0], "repo/app", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	payload, err := json.Marshal(scanner.ProjectDiscoveryPayload{
+		SchemaVersion: scanner.ProjectDiscoveryPayloadSchema,
+		ProjectID:     project.ID,
+		RootPathID:    project.RootPathID,
+		RelativePath:  "repo/other",
+		Reason:        "test",
+	})
+	if err != nil {
+		t.Fatalf("marshal discovery payload: %v", err)
+	}
+	ref, err := jobStore.Enqueue(ctx, jobs.EnqueueRequest{JobType: "project_discovery", Payload: payload})
+	if err != nil {
+		t.Fatalf("enqueue stale discovery job: %v", err)
+	}
+	job := runUntilTerminal(t, ctx, runtime, jobStore, ref.JobID)
+	code := failureErrorCode(t, job)
+	if job.Status != jobs.StatusFailed || code != "validation_error" {
+		t.Fatalf("stale discovery job = %s/%s, want failed/validation_error", job.Status, code)
+	}
+}
+
 func TestGlobalScanFailureAndSymlinkPolicy(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -528,6 +574,10 @@ func TestGlobalScanPartialDirectoryErrorsStillSucceed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert root path: %v", err)
 	}
+	preexisting, _, err := scannerStore.UpsertProject(ctx, roots[0], "unreadable/service", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert preexisting unreadable project: %v", err)
+	}
 	ref := enqueueGlobalScan(t, ctx, jobStore, roots[0].ID)
 	runUntilComplete(t, ctx, runtime, jobStore, ref.JobID)
 	job, err := jobStore.Get(ctx, ref.JobID)
@@ -543,6 +593,13 @@ func TestGlobalScanPartialDirectoryErrorsStillSucceed(t *testing.T) {
 	}
 	if job.Status != jobs.StatusSucceeded || result.ProjectsCreated != 1 {
 		t.Fatalf("partial scan result = status %s result %+v, want succeeded with project and errors", job.Status, result)
+	}
+	preexisting, err = scannerStore.GetProject(ctx, preexisting.ID)
+	if err != nil {
+		t.Fatalf("get preexisting unreadable project: %v", err)
+	}
+	if preexisting.Status != scanner.ProjectStatusActive {
+		t.Fatalf("partial scan must not mark projects missing under errored root: %+v", preexisting)
 	}
 }
 

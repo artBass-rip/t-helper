@@ -61,31 +61,42 @@ type Project struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
+type ProjectLink struct {
+	ID              string    `json:"id"`
+	SourceProjectID string    `json:"source_project_id"`
+	TargetProjectID string    `json:"target_project_id"`
+	LinkType        string    `json:"link_type"`
+	RepositoryID    string    `json:"repository_id,omitempty"`
+	DetectedByJobID string    `json:"detected_by_job_id,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
 type Repository struct {
-	ID                         string     `json:"id"`
-	Name                       string     `json:"name"`
-	ProviderInstanceID         string     `json:"provider_instance_id,omitempty"`
-	Provider                   string     `json:"provider"`
-	ProviderHost               string     `json:"provider_host"`
-	FullPath                   string     `json:"full_path"`
-	CloneURL                   string     `json:"clone_url,omitempty"`
-	DefaultBranch              string     `json:"default_branch,omitempty"`
-	RootPathID                 string     `json:"root_path_id,omitempty"`
-	TargetDirectory            string     `json:"target_directory,omitempty"`
-	LocalPath                  string     `json:"local_path,omitempty"`
-	AuthType                   string     `json:"auth_type,omitempty"`
-	DefaultCredentialID         string     `json:"default_credential_id,omitempty"`
-	Status                     string     `json:"status"`
-	DiscoverySource            string     `json:"discovery_source"`
-	SupersededByRepositoryID   string     `json:"superseded_by_repository_id,omitempty"`
-	IdentityConfirmedAt        *time.Time `json:"identity_confirmed_at,omitempty"`
-	AutoSyncEnabled            bool       `json:"auto_sync_enabled"`
-	WebhookEnabled             bool       `json:"webhook_enabled"`
-	PollInterval               string     `json:"poll_interval,omitempty"`
-	LastPullAt                 *time.Time `json:"last_pull_at,omitempty"`
-	LastError                  string     `json:"last_error,omitempty"`
-	CreatedAt                  time.Time  `json:"created_at"`
-	UpdatedAt                  time.Time  `json:"updated_at"`
+	ID                       string     `json:"id"`
+	Name                     string     `json:"name"`
+	ProviderInstanceID       string     `json:"provider_instance_id,omitempty"`
+	Provider                 string     `json:"provider"`
+	ProviderHost             string     `json:"provider_host"`
+	FullPath                 string     `json:"full_path"`
+	CloneURL                 string     `json:"clone_url,omitempty"`
+	DefaultBranch            string     `json:"default_branch,omitempty"`
+	RootPathID               string     `json:"root_path_id,omitempty"`
+	TargetDirectory          string     `json:"target_directory,omitempty"`
+	LocalPath                string     `json:"local_path,omitempty"`
+	AuthType                 string     `json:"auth_type,omitempty"`
+	DefaultCredentialID      string     `json:"default_credential_id,omitempty"`
+	Status                   string     `json:"status"`
+	DiscoverySource          string     `json:"discovery_source"`
+	SupersededByRepositoryID string     `json:"superseded_by_repository_id,omitempty"`
+	IdentityConfirmedAt      *time.Time `json:"identity_confirmed_at,omitempty"`
+	AutoSyncEnabled          bool       `json:"auto_sync_enabled"`
+	WebhookEnabled           bool       `json:"webhook_enabled"`
+	PollInterval             string     `json:"poll_interval,omitempty"`
+	LastPullAt               *time.Time `json:"last_pull_at,omitempty"`
+	LastError                string     `json:"last_error,omitempty"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
 }
 
 type IgnoreRule struct {
@@ -137,6 +148,13 @@ type ProjectListOptions struct {
 	RootPathID   string
 	RepositoryID string
 	Status       string
+}
+
+type ProjectLinkListOptions struct {
+	ListOptions
+	ProjectID    string
+	RepositoryID string
+	LinkType     string
 }
 
 type IgnoreRuleListOptions struct {
