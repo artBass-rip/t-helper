@@ -199,8 +199,8 @@ paths, usernames, passwords or userinfo.
 | Endpoint | Request | Success response | Notes |
 | --- | --- | --- | --- |
 | `GET /api/health` | n/a | `health_status` | Safe unauthenticated health/readiness endpoint for singleton runtime discovery; detailed status remains under authenticated `/api/status`. |
-| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Возвращает активные и отключённые root paths. |
-| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Идемпотентно upsert'ит root paths by `id` or normalized `path`; omitted records are not deleted in MVP. |
+| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Возвращает активные и отключённые root paths. Before read, backend materializes `scanning.global_scan` from config into `root_paths`. |
+| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Operational API: идемпотентно upsert'ит root paths by `id` or normalized `path`; omitted records are not deleted in MVP and this endpoint does not rewrite `scanning.global_scan` config. |
 | `POST /api/scans` | `root_path_ids?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = global_scan`; global scan creates/updates project records and enqueues background `project_discovery` jobs without waiting for them; `job_ref.job_id` используется для чтения статуса через `GET /api/scans/{job_id}` или `GET /api/jobs/{job_id}`. |
 | `GET /api/scans/{job_id}` | n/a | `job` | Temporary compatibility endpoint для global scan jobs; canonical job status endpoint - `GET /api/jobs/{id}`. Frontend MUST use `GET /api/jobs/{id}` or status endpoints for new code. Compatibility endpoint remains during MVP and may be removed only after one documented deprecation cycle. |
 | `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model для registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |

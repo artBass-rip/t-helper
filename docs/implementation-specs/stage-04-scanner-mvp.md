@@ -21,7 +21,9 @@
 - `project_links` для связи отдельных локальных project records, относящихся к одному Git repository;
 - `environments` и `workspaces` backend read models/API для Frontend MVP;
 - conservative MVP lifecycle для `project` / `environment` / `workspace`: scanner создаёт и обновляет `projects`, а связи с `environment` и `workspace` сохраняются только если они уже известны или заданы явно;
-- worker pool обхода;
+- bounded worker pool обхода; SQLite runtime uses an effective traversal
+  concurrency of 1 to avoid local database writer contention, while other
+  storage providers use bounded parallel traversal;
 - exclude-only matcher с сохранением `!pattern`;
 - обнаружение Terraform-проектов по `*.tf`;
 - enqueue фонового `project_discovery` job для каждого созданного или обновлённого проекта;
@@ -63,6 +65,13 @@
 - Stage 06 project/security scans write scan data to scan/finding tables, not summary fields on `projects`.
 - Manual/admin input may set `projects.environment_id`, `projects.default_workspace_id` and future explicit metadata fields.
 - `repositories` provider-aware upsert key remains `provider + provider_host + full_path`.
+- Stage 04 generic local fallback identity is scoped by root path:
+  `provider + provider_host + root_path_id + full_path`. This prevents two
+  different scan roots with the same relative repository path from being merged.
+- Generic local repository upsert must be idempotent under concurrent
+  `project_discovery` jobs for projects in the same Git repository. A unique
+  identity conflict is handled by re-reading/updating the existing repository
+  card rather than failing the job.
 - Stage 04 global scan does not create repository cards directly. It enqueues `jobs.job_type = project_discovery` for each created/updated project and continues traversal without waiting for that job.
 - `project_discovery` performs local Git marker discovery for one project. If the project belongs to a Git working tree but provider identity is not known, project discovery creates or updates a conservative generic repository card:
   - `provider = generic`;
@@ -86,6 +95,9 @@
 
 - Default Stage 04 behavior is `follow_symlinks = false`.
 - Symlinked directories are skipped by default and counted as skipped directories.
+- A root path that is itself a symlink is rejected for Stage 04 traversal when
+  `follow_symlinks = false`; the job fails if no requested root path can be
+  processed.
 - `follow_symlinks = true` is not supported in MVP and is deferred to Stage 09. A future implementation must include opt-in configuration, cycle detection, root containment checks, traversal counters and max-depth/max-visited guards.
 
 ### Ignore-rule behavior
@@ -102,7 +114,7 @@
 - `projects_updated` counts existing project rows whose discovery metadata or `last_seen_at` is updated.
 - `project_discovery_jobs_enqueued` counts background project discovery jobs created by global scan.
 - Repository counters are not part of `jobs.global_scan.result.v1`; repository cards are created/updated by `project_discovery` jobs.
-- `directories_skipped` counts ignored directories, skipped symlink directories and directories skipped because traversal stops below a detected Terraform working directory.
+- `directories_skipped` counts ignored directories, skipped symlink directories and immediate child directories skipped because traversal stops below a detected Terraform working directory.
 - Per-directory errors are recorded in `job_events` and increment `errors_count`.
 - If at least one requested root path is processed successfully, the job may finish with `jobs.status = succeeded` even when `errors_count > 0`.
 - If all requested root paths fail before useful traversal, the job must finish with `jobs.status = failed`.
@@ -138,6 +150,9 @@
 - symlinked directories skipped by default when `follow_symlinks = false`;
 - nested Terraform directories под найденным project не регистрируются отдельно;
 - повторный scan не создаёт дубли;
+- concurrent `project_discovery` jobs for one Git repository do not create
+  duplicate generic repository cards and do not fail on repository identity
+  conflicts;
 - ранее найденные, но отсутствующие в новом scan projects не удаляются и получают `status = missing`;
 - `!pattern` сохраняется без применения в exclude-only matcher;
 - scanner не создаёт implicit `environment` или `workspace` без явного входного правила/данных;

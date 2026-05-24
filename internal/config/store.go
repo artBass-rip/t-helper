@@ -453,7 +453,7 @@ func (s *Store) MigrateDB(ctx context.Context, registry *storage.Registry) (Migr
 		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, fmt.Errorf("migration target fingerprint mismatch")
 	}
-	if err := s.copyStage02Data(ctx, target, current, migration); err != nil {
+	if err := s.copyMigratedData(ctx, target, current, migration); err != nil {
 		_ = s.markMigrationFailed(ctx, migration.ID)
 		return MigrationResult{}, err
 	}
@@ -469,7 +469,7 @@ func (s *Store) MigrateDB(ctx context.Context, registry *storage.Registry) (Migr
 	}, nil
 }
 
-func (s *Store) copyStage02Data(ctx context.Context, target *storage.Handle, current, migration StorageProfileRecord) error {
+func (s *Store) copyMigratedData(ctx context.Context, target *storage.Handle, current, migration StorageProfileRecord) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	tx, err := target.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -479,6 +479,9 @@ func (s *Store) copyStage02Data(ctx context.Context, target *storage.Handle, cur
 	if err := clearStage02Tables(ctx, tx); err != nil {
 		return err
 	}
+	if err := clearStage04Tables(ctx, tx); err != nil {
+		return err
+	}
 	if err := s.copyConfigEntries(ctx, tx, target.Provider, migration, now); err != nil {
 		return err
 	}
@@ -486,6 +489,9 @@ func (s *Store) copyStage02Data(ctx context.Context, target *storage.Handle, cur
 		return err
 	}
 	if err := s.copyModuleStates(ctx, tx, target.Provider); err != nil {
+		return err
+	}
+	if err := s.copyStage04ScannerData(ctx, tx, target.Provider); err != nil {
 		return err
 	}
 	if err := insertHistoricalProfile(ctx, tx, target.Provider, current, now); err != nil {
@@ -507,6 +513,23 @@ func clearStage02Tables(ctx context.Context, tx *sql.Tx) error {
 		"DELETE FROM storage_provider_settings",
 		"DELETE FROM storage_profiles",
 		"DELETE FROM config_entries",
+	} {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func clearStage04Tables(ctx context.Context, tx *sql.Tx) error {
+	for _, stmt := range []string{
+		"DELETE FROM project_links",
+		"UPDATE projects SET default_workspace_id = NULL",
+		"DELETE FROM workspaces",
+		"DELETE FROM projects",
+		"DELETE FROM repositories",
+		"DELETE FROM environments",
+		"DELETE FROM root_paths",
 	} {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return err
@@ -563,23 +586,24 @@ func insertConfigEntry(ctx context.Context, tx *sql.Tx, provider string, entry E
 }
 
 func (s *Store) copyIgnoreRules(ctx context.Context, tx *sql.Tx, targetProvider string) error {
-	rows, err := s.handle.DB.QueryContext(ctx, "SELECT id, scope_type, COALESCE(scope_id, ''), pattern, origin, created_at, updated_at FROM ignore_rules ORDER BY id")
+	rows, err := s.handle.DB.QueryContext(ctx, "SELECT id, scope_type, COALESCE(scope_id, ''), pattern, origin, sort_order, created_at, updated_at FROM ignore_rules ORDER BY sort_order, id")
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id, scopeType, scopeID, pattern, origin, createdAt, updatedAt string
-		if err := rows.Scan(&id, &scopeType, &scopeID, &pattern, &origin, &createdAt, &updatedAt); err != nil {
+		var sortOrder int
+		if err := rows.Scan(&id, &scopeType, &scopeID, &pattern, &origin, &sortOrder, &createdAt, &updatedAt); err != nil {
 			return err
 		}
 		if targetProvider == "postgres" {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, id, scopeType, scopeID, pattern, origin, createdAt, updatedAt); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, id, scopeType, scopeID, pattern, origin, sortOrder, createdAt, updatedAt); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`, id, scopeType, scopeID, pattern, origin, createdAt, updatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`, id, scopeType, scopeID, pattern, origin, sortOrder, createdAt, updatedAt); err != nil {
 			return err
 		}
 	}
@@ -610,6 +634,220 @@ func (s *Store) copyModuleStates(ctx context.Context, tx *sql.Tx, targetProvider
 		}
 	}
 	return rows.Err()
+}
+
+func (s *Store) copyStage04ScannerData(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	if err := s.copyRootPaths(ctx, tx, targetProvider); err != nil {
+		return err
+	}
+	if err := s.copyEnvironments(ctx, tx, targetProvider); err != nil {
+		return err
+	}
+	if err := s.copyRepositories(ctx, tx, targetProvider); err != nil {
+		return err
+	}
+	projectDefaultWorkspaces, err := s.copyProjects(ctx, tx, targetProvider)
+	if err != nil {
+		return err
+	}
+	if err := s.copyWorkspaces(ctx, tx, targetProvider); err != nil {
+		return err
+	}
+	if err := updateProjectDefaultWorkspaces(ctx, tx, targetProvider, projectDefaultWorkspaces); err != nil {
+		return err
+	}
+	return s.copyProjectLinks(ctx, tx, targetProvider)
+}
+
+func (s *Store) copyRootPaths(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, path, CASE WHEN enabled THEN 1 ELSE 0 END, CASE WHEN schedule_enabled THEN 1 ELSE 0 END, COALESCE(schedule_frequency, ''), %s, %s FROM root_paths ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name, pathValue, frequency, createdAt, updatedAt string
+		var enabled, scheduleEnabled int
+		if err := rows.Scan(&id, &name, &pathValue, &enabled, &scheduleEnabled, &frequency, &createdAt, &updatedAt); err != nil {
+			return err
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+				id, name, pathValue, enabled != 0, scheduleEnabled != 0, nullEmpty(frequency), createdAt, updatedAt); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,
+			id, name, pathValue, enabled, scheduleEnabled, nullEmpty(frequency), createdAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func (s *Store) copyEnvironments(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, code, COALESCE(description, ''), %s, %s FROM environments ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name, code, description, createdAt, updatedAt string
+		if err := rows.Scan(&id, &name, &code, &description, &createdAt, &updatedAt); err != nil {
+			return err
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO environments (id, name, code, description, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+				id, name, code, nullEmpty(description), createdAt, updatedAt); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO environments (id, name, code, description, created_at, updated_at) VALUES (?,?,?,?,?,?)`,
+			id, name, code, nullEmpty(description), createdAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func (s *Store) copyRepositories(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, COALESCE(provider_instance_id, ''), provider, provider_host, full_path, COALESCE(clone_url, ''), COALESCE(default_branch, ''), COALESCE(root_path_id, ''), COALESCE(target_directory, ''), COALESCE(local_path, ''), COALESCE(auth_type, ''), COALESCE(default_credential_id, ''), status, discovery_source, COALESCE(superseded_by_repository_id, ''), COALESCE(%s, ''), CASE WHEN auto_sync_enabled THEN 1 ELSE 0 END, CASE WHEN webhook_enabled THEN 1 ELSE 0 END, COALESCE(poll_interval, ''), COALESCE(%s, ''), COALESCE(last_error, ''), %s, %s FROM repositories ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "identity_confirmed_at"), copyTimeExpr(s.handle.Provider, "last_pull_at"), copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name, providerInstanceID, provider, providerHost, fullPath, cloneURL, defaultBranch, rootPathID, targetDirectory, localPath, authType, defaultCredentialID, status, discoverySource, supersededByRepositoryID, identityConfirmedAt, pollInterval, lastPullAt, lastError, createdAt, updatedAt string
+		var autoSyncEnabled, webhookEnabled int
+		if err := rows.Scan(&id, &name, &providerInstanceID, &provider, &providerHost, &fullPath, &cloneURL, &defaultBranch, &rootPathID, &targetDirectory, &localPath, &authType, &defaultCredentialID, &status, &discoverySource, &supersededByRepositoryID, &identityConfirmedAt, &autoSyncEnabled, &webhookEnabled, &pollInterval, &lastPullAt, &lastError, &createdAt, &updatedAt); err != nil {
+			return err
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO repositories (id, name, provider_instance_id, provider, provider_host, full_path, clone_url, default_branch, root_path_id, target_directory, local_path, auth_type, default_credential_id, status, discovery_source, superseded_by_repository_id, identity_confirmed_at, auto_sync_enabled, webhook_enabled, poll_interval, last_pull_at, last_error, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+				id, name, nullEmpty(providerInstanceID), provider, providerHost, fullPath, nullEmpty(cloneURL), nullEmpty(defaultBranch), nullEmpty(rootPathID), nullEmpty(targetDirectory), nullEmpty(localPath), nullEmpty(authType), nullEmpty(defaultCredentialID), status, discoverySource, nullEmpty(supersededByRepositoryID), nullEmpty(identityConfirmedAt), autoSyncEnabled != 0, webhookEnabled != 0, nullEmpty(pollInterval), nullEmpty(lastPullAt), nullEmpty(lastError), createdAt, updatedAt); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO repositories (id, name, provider_instance_id, provider, provider_host, full_path, clone_url, default_branch, root_path_id, target_directory, local_path, auth_type, default_credential_id, status, discovery_source, superseded_by_repository_id, identity_confirmed_at, auto_sync_enabled, webhook_enabled, poll_interval, last_pull_at, last_error, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			id, name, nullEmpty(providerInstanceID), provider, providerHost, fullPath, nullEmpty(cloneURL), nullEmpty(defaultBranch), nullEmpty(rootPathID), nullEmpty(targetDirectory), nullEmpty(localPath), nullEmpty(authType), nullEmpty(defaultCredentialID), status, discoverySource, nullEmpty(supersededByRepositoryID), nullEmpty(identityConfirmedAt), autoSyncEnabled, webhookEnabled, nullEmpty(pollInterval), nullEmpty(lastPullAt), nullEmpty(lastError), createdAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func (s *Store) copyProjects(ctx context.Context, tx *sql.Tx, targetProvider string) (map[string]string, error) {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, path, relative_path, root_path_id, terraform_marker, status, COALESCE(repository_id, ''), COALESCE(environment_id, ''), COALESCE(default_workspace_id, ''), %s, %s, %s, %s FROM projects ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "detected_at"), copyTimeExpr(s.handle.Provider, "last_seen_at"), copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	defaultWorkspaces := map[string]string{}
+	for rows.Next() {
+		var id, name, pathValue, relativePath, rootPathID, terraformMarker, status, repositoryID, environmentID, defaultWorkspaceID, detectedAt, lastSeenAt, createdAt, updatedAt string
+		if err := rows.Scan(&id, &name, &pathValue, &relativePath, &rootPathID, &terraformMarker, &status, &repositoryID, &environmentID, &defaultWorkspaceID, &detectedAt, &lastSeenAt, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(defaultWorkspaceID) != "" {
+			defaultWorkspaces[id] = defaultWorkspaceID
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO projects (id, name, path, relative_path, root_path_id, terraform_marker, status, repository_id, environment_id, default_workspace_id, detected_at, last_seen_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,$10,$11,$12,$13)`,
+				id, name, pathValue, relativePath, rootPathID, terraformMarker, status, nullEmpty(repositoryID), nullEmpty(environmentID), detectedAt, lastSeenAt, createdAt, updatedAt); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO projects (id, name, path, relative_path, root_path_id, terraform_marker, status, repository_id, environment_id, default_workspace_id, detected_at, last_seen_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)`,
+			id, name, pathValue, relativePath, rootPathID, terraformMarker, status, nullEmpty(repositoryID), nullEmpty(environmentID), detectedAt, lastSeenAt, createdAt, updatedAt); err != nil {
+			return nil, err
+		}
+	}
+	return defaultWorkspaces, rows.Err()
+}
+
+func (s *Store) copyWorkspaces(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, project_id, environment_id, name, CASE WHEN is_default THEN 1 ELSE 0 END, %s, %s FROM workspaces ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, projectID, environmentID, name, createdAt, updatedAt string
+		var isDefault int
+		if err := rows.Scan(&id, &projectID, &environmentID, &name, &isDefault, &createdAt, &updatedAt); err != nil {
+			return err
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO workspaces (id, project_id, environment_id, name, is_default, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+				id, projectID, environmentID, name, isDefault != 0, createdAt, updatedAt); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO workspaces (id, project_id, environment_id, name, is_default, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+			id, projectID, environmentID, name, isDefault, createdAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func updateProjectDefaultWorkspaces(ctx context.Context, tx *sql.Tx, targetProvider string, defaultWorkspaces map[string]string) error {
+	for projectID, workspaceID := range defaultWorkspaces {
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `UPDATE projects SET default_workspace_id = $1 WHERE id = $2`, workspaceID, projectID); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE projects SET default_workspace_id = ? WHERE id = ?`, workspaceID, projectID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) copyProjectLinks(ctx context.Context, tx *sql.Tx, targetProvider string) error {
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, source_project_id, target_project_id, link_type, COALESCE(repository_id, ''), %s, %s FROM project_links ORDER BY id`,
+		copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, sourceProjectID, targetProjectID, linkType, repositoryID, createdAt, updatedAt string
+		if err := rows.Scan(&id, &sourceProjectID, &targetProjectID, &linkType, &repositoryID, &createdAt, &updatedAt); err != nil {
+			return err
+		}
+		if targetProvider == "postgres" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO project_links (id, source_project_id, target_project_id, link_type, repository_id, detected_by_job_id, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,NULL,$6,$7)`,
+				id, sourceProjectID, targetProjectID, linkType, nullEmpty(repositoryID), createdAt, updatedAt); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO project_links (id, source_project_id, target_project_id, link_type, repository_id, detected_by_job_id, created_at, updated_at) VALUES (?,?,?,?,?,NULL,?,?)`,
+			id, sourceProjectID, targetProjectID, linkType, nullEmpty(repositoryID), createdAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func copyTimeExpr(provider, column string) string {
+	if provider == "postgres" {
+		return column + "::text"
+	}
+	return column
 }
 
 func insertHistoricalProfile(ctx context.Context, tx *sql.Tx, targetProvider string, current StorageProfileRecord, now string) error {
@@ -791,15 +1029,15 @@ func (s *Store) replaceIgnoreRules(ctx context.Context, tx *sql.Tx, patterns []s
 	if _, err := tx.ExecContext(ctx, "DELETE FROM ignore_rules WHERE scope_type = 'system' AND origin = 'config_import'"); err != nil {
 		return err
 	}
-	for _, pattern := range patterns {
+	for idx, pattern := range patterns {
 		id := stableID("ignore", "system", pattern)
 		if s.handle.Provider == "postgres" {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES ($1, 'system', '', $2, 'config_import', $3, $3)`, id, pattern, now); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES ($1, 'system', '', $2, 'config_import', $3, $4, $4)`, id, pattern, idx, now); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES (?, 'system', '', ?, 'config_import', ?, ?)`, id, pattern, now, now); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES (?, 'system', '', ?, 'config_import', ?, ?, ?)`, id, pattern, idx, now, now); err != nil {
 			return err
 		}
 	}

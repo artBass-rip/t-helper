@@ -62,17 +62,30 @@ type Project struct {
 }
 
 type Repository struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Provider        string    `json:"provider"`
-	ProviderHost    string    `json:"provider_host"`
-	FullPath        string    `json:"full_path"`
-	RootPathID      string    `json:"root_path_id,omitempty"`
-	LocalPath       string    `json:"local_path,omitempty"`
-	Status          string    `json:"status"`
-	DiscoverySource string    `json:"discovery_source"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                         string     `json:"id"`
+	Name                       string     `json:"name"`
+	ProviderInstanceID         string     `json:"provider_instance_id,omitempty"`
+	Provider                   string     `json:"provider"`
+	ProviderHost               string     `json:"provider_host"`
+	FullPath                   string     `json:"full_path"`
+	CloneURL                   string     `json:"clone_url,omitempty"`
+	DefaultBranch              string     `json:"default_branch,omitempty"`
+	RootPathID                 string     `json:"root_path_id,omitempty"`
+	TargetDirectory            string     `json:"target_directory,omitempty"`
+	LocalPath                  string     `json:"local_path,omitempty"`
+	AuthType                   string     `json:"auth_type,omitempty"`
+	DefaultCredentialID         string     `json:"default_credential_id,omitempty"`
+	Status                     string     `json:"status"`
+	DiscoverySource            string     `json:"discovery_source"`
+	SupersededByRepositoryID   string     `json:"superseded_by_repository_id,omitempty"`
+	IdentityConfirmedAt        *time.Time `json:"identity_confirmed_at,omitempty"`
+	AutoSyncEnabled            bool       `json:"auto_sync_enabled"`
+	WebhookEnabled             bool       `json:"webhook_enabled"`
+	PollInterval               string     `json:"poll_interval,omitempty"`
+	LastPullAt                 *time.Time `json:"last_pull_at,omitempty"`
+	LastError                  string     `json:"last_error,omitempty"`
+	CreatedAt                  time.Time  `json:"created_at"`
+	UpdatedAt                  time.Time  `json:"updated_at"`
 }
 
 type IgnoreRule struct {
@@ -81,6 +94,7 @@ type IgnoreRule struct {
 	ScopeID   string    `json:"scope_id,omitempty"`
 	Pattern   string    `json:"pattern"`
 	Origin    string    `json:"origin"`
+	SortOrder int       `json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -91,6 +105,7 @@ type IgnoreRuleInput struct {
 	ScopeID   string `json:"scope_id,omitempty"`
 	Pattern   string `json:"pattern"`
 	Origin    string `json:"origin,omitempty"`
+	SortOrder *int   `json:"sort_order,omitempty"`
 }
 
 type Environment struct {
@@ -128,6 +143,16 @@ type IgnoreRuleListOptions struct {
 	ListOptions
 	ScopeType string
 	ScopeID   string
+}
+
+type RepositoryListOptions struct {
+	ListOptions
+	Provider        string
+	ProviderHost    string
+	FullPath        string
+	Status          string
+	DiscoverySource string
+	AutoSyncEnabled *bool
 }
 
 type WorkspaceListOptions struct {

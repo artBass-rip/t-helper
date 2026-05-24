@@ -169,6 +169,10 @@ plan.
 - `provider_instance_id` ссылается на configured provider host/profile, если repository был создан через managed provider integration;
 - `provider_host` хранит нормализованный host provider instance, например `gitlab.foodtech.team` или `github.com`;
 - identity репозитория задаётся tuple `provider + provider_host + full_path`;
+- for Stage 04 filesystem-only generic local cards
+  (`provider = generic`, `provider_host = local`), identity is scoped by
+  `root_path_id + full_path` so different scan roots with the same relative
+  repository path do not collapse into one repository card;
 - `full_path` уникален только в пределах `provider + provider_host`;
 - `full_path` хранит namespace/project path внутри provider instance без protocol, host, leading slash и trailing `.git`;
 - `root_path_id` обязателен для клонированных репозиториев;
@@ -178,7 +182,7 @@ plan.
 - `clone_url` не используется для lookup/upsert/deduplication и не должен содержать credentials, tokens, passwords или userinfo;
 - разные `clone_url`, нормализуемые в один `provider + provider_host + full_path`, должны ссылаться на одну repository card;
 - Stage 04 global filesystem scan does not create repository cards directly;
-- Stage 04 `project_discovery` job may create/update conservative repository card with `provider = generic`, `provider_host = local`, `full_path = <root_path-relative normalized repository path>`, `clone_url = null`, `status = active`, `discovery_source = filesystem` and `identity_confirmed_at = null`;
+- Stage 04 `project_discovery` job may create/update conservative repository card with `provider = generic`, `provider_host = local`, `root_path_id = <containing root path>`, `full_path = <root_path-relative normalized repository path>`, `clone_url = null`, `status = active`, `discovery_source = filesystem` and `identity_confirmed_at = null`;
 - Stage 05 repository manager may enrich generic local cards after provider-aware identity resolution, but separate project records must not be merged;
 - if provider-aware identity is resolved and no managed repository card exists, the generic repository card is enriched in place and keeps the same `repositories.id`;
 - if provider-aware identity is resolved and a managed repository card already exists, project relations are moved to the managed card and the generic card becomes `status = superseded`;
@@ -252,6 +256,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `scope_id`
 - `pattern`
 - `origin`
+- `sort_order`
 - `created_at`
 - `updated_at`
 
@@ -268,6 +273,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `project`
 
 Для MVP matcher может поддерживать только exclude-only правила. Отрицательные правила `!pattern` должны храниться без потери данных и применяться после добавления full `.gitignore` semantics.
+`sort_order` сохраняет порядок импорта/API upsert для будущей полной `.gitignore` семантики.
 
 ### `environments`
 

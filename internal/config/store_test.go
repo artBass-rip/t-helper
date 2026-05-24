@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artBass-rip/t-helper/internal/app/storageproviders"
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
+	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
 	"github.com/artBass-rip/t-helper/internal/storage/sqlite"
 )
@@ -166,6 +168,44 @@ func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t
 	if _, err := store.Import(ctx, cfg, []string{".terraform/"}, "test"); err != nil {
 		t.Fatalf("initial import: %v", err)
 	}
+	sourceScanner := scanner.NewStore(handle)
+	enabled := true
+	roots, err := sourceScanner.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "scan", Path: filepath.Join(dir, "scan-root"), Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert scanner root: %v", err)
+	}
+	now := time.Now().UTC()
+	projectOne, _, err := sourceScanner.UpsertProject(ctx, roots[0], "service-one", now)
+	if err != nil {
+		t.Fatalf("upsert scanner project one: %v", err)
+	}
+	projectTwo, _, err := sourceScanner.UpsertProject(ctx, roots[0], "service-two", now)
+	if err != nil {
+		t.Fatalf("upsert scanner project two: %v", err)
+	}
+	repo, _, _, err := sourceScanner.UpsertGenericRepository(ctx, roots[0], roots[0].Path)
+	if err != nil {
+		t.Fatalf("upsert scanner repository: %v", err)
+	}
+	if err := sourceScanner.SetProjectRepository(ctx, projectOne.ID, repo.ID); err != nil {
+		t.Fatalf("set project one repository: %v", err)
+	}
+	if err := sourceScanner.SetProjectRepository(ctx, projectTwo.ID, repo.ID); err != nil {
+		t.Fatalf("set project two repository: %v", err)
+	}
+	if _, err := sourceScanner.UpsertProjectLink(ctx, projectOne.ID, projectTwo.ID, repo.ID, ""); err != nil {
+		t.Fatalf("upsert project link: %v", err)
+	}
+	timeText := now.Format(time.RFC3339Nano)
+	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO environments (id, name, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, "env_migrate_stage04", "Production", "prod", timeText, timeText); err != nil {
+		t.Fatalf("insert scanner environment: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO workspaces (id, project_id, environment_id, name, is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "workspace_migrate_stage04", projectOne.ID, "env_migrate_stage04", "prod", 1, timeText, timeText); err != nil {
+		t.Fatalf("insert scanner workspace: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE projects SET environment_id = ?, default_workspace_id = ? WHERE id = ?`, "env_migrate_stage04", "workspace_migrate_stage04", projectOne.ID); err != nil {
+		t.Fatalf("link scanner environment/workspace: %v", err)
+	}
 
 	next := cfg
 	next.Database.DatabasePath = targetPath
@@ -223,6 +263,34 @@ func TestStoreImportStorageChangeCreatesMigrationProfileAndMigrateDBPromotesIt(t
 	}
 	if ignoreRules != 2 {
 		t.Fatalf("target ignore rules = %d, want 2", ignoreRules)
+	}
+	targetScanner := scanner.NewStore(target)
+	targetProjects, err := targetScanner.ListProjects(ctx, scanner.ProjectListOptions{Status: "all"})
+	if err != nil {
+		t.Fatalf("target projects: %v", err)
+	}
+	if len(targetProjects.Items) != 2 {
+		t.Fatalf("target projects = %d, want 2: %+v", len(targetProjects.Items), targetProjects.Items)
+	}
+	targetProject, err := targetScanner.GetProject(ctx, projectOne.ID)
+	if err != nil {
+		t.Fatalf("target project one: %v", err)
+	}
+	if targetProject.RepositoryID != repo.ID || targetProject.EnvironmentID != "env_migrate_stage04" || targetProject.DefaultWorkspaceID != "workspace_migrate_stage04" {
+		t.Fatalf("target project links not preserved: %+v", targetProject)
+	}
+	if _, err := targetScanner.GetRepository(ctx, repo.ID); err != nil {
+		t.Fatalf("target repository: %v", err)
+	}
+	if _, err := targetScanner.GetWorkspace(ctx, "workspace_migrate_stage04"); err != nil {
+		t.Fatalf("target workspace: %v", err)
+	}
+	var projectLinks int
+	if err := target.DB.QueryRowContext(ctx, "SELECT count(*) FROM project_links WHERE repository_id = ?", repo.ID).Scan(&projectLinks); err != nil {
+		t.Fatalf("target project links: %v", err)
+	}
+	if projectLinks != 1 {
+		t.Fatalf("target project links = %d, want 1", projectLinks)
 	}
 }
 

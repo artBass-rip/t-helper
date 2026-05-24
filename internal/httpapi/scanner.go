@@ -158,6 +158,73 @@ func (h *ScannerHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProjectID string `json:"project_id"`
+		ScanType  string `json:"scan_type"`
+		RuleSetID string `json:"rule_set_id"`
+		Reason    string `json:"reason"`
+	}
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if req.ProjectID == "" {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "project_id is required")
+		return
+	}
+	project, err := h.store.GetProject(r.Context(), req.ProjectID)
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	if project.Status == scanner.ProjectStatusMissing {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "missing projects cannot be scanned until rediscovered")
+		return
+	}
+	if project.Status == scanner.ProjectStatusDisabled {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "disabled projects cannot be scanned")
+		return
+	}
+	writeError(w, r, http.StatusNotImplemented, "project_scan_unavailable", "project scans are implemented in Stage 06")
+}
+
+func (h *ScannerHandler) ListRepositories(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	var autoSync *bool
+	if raw := r.URL.Query().Get("auto_sync_enabled"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "auto_sync_enabled must be boolean")
+			return
+		}
+		autoSync = &parsed
+	}
+	page, err := h.store.ListRepositories(r.Context(), scanner.RepositoryListOptions{
+		ListOptions:     scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		Provider:        r.URL.Query().Get("provider"),
+		ProviderHost:    r.URL.Query().Get("provider_host"),
+		FullPath:        r.URL.Query().Get("full_path"),
+		Status:          r.URL.Query().Get("status"),
+		DiscoverySource: r.URL.Query().Get("discovery_source"),
+		AutoSyncEnabled: autoSync,
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) GetRepository(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetRepository(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *ScannerHandler) ListIgnoreRules(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	page, err := h.store.ListIgnoreRules(r.Context(), scanner.IgnoreRuleListOptions{
@@ -236,6 +303,8 @@ func writeScannerReadError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, r, http.StatusNotFound, "not_found", "record not found")
 	case errors.Is(err, scanner.ErrInvalidCursor):
 		writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
+	case errors.Is(err, scanner.ErrValidation):
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
 	default:
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 	}

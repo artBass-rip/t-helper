@@ -1,4 +1,9 @@
 -- +goose Up
+ALTER TABLE ignore_rules ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS ignore_rules_scope_order_idx
+  ON ignore_rules (scope_type, scope_id, sort_order, id);
+
 CREATE TABLE IF NOT EXISTS root_paths (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -47,11 +52,16 @@ CREATE TABLE IF NOT EXISTS repositories (
   last_error TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  UNIQUE (provider, provider_host, full_path),
   FOREIGN KEY (root_path_id) REFERENCES root_paths(id) ON DELETE RESTRICT,
   FOREIGN KEY (superseded_by_repository_id) REFERENCES repositories(id) ON DELETE SET NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS repositories_provider_identity_uidx
+  ON repositories (provider, provider_host, full_path)
+  WHERE NOT (provider = 'generic' AND provider_host = 'local');
+CREATE UNIQUE INDEX IF NOT EXISTS repositories_generic_local_identity_uidx
+  ON repositories (provider, provider_host, root_path_id, full_path)
+  WHERE provider = 'generic' AND provider_host = 'local';
 CREATE INDEX IF NOT EXISTS repositories_provider_host_full_path_idx
   ON repositories (provider_host, full_path);
 CREATE INDEX IF NOT EXISTS repositories_provider_instance_full_path_idx
@@ -157,10 +167,14 @@ DROP INDEX IF EXISTS repositories_status_idx;
 DROP INDEX IF EXISTS repositories_local_path_idx;
 DROP INDEX IF EXISTS repositories_provider_instance_full_path_idx;
 DROP INDEX IF EXISTS repositories_provider_host_full_path_idx;
+DROP INDEX IF EXISTS repositories_generic_local_identity_uidx;
+DROP INDEX IF EXISTS repositories_provider_identity_uidx;
 DROP TABLE IF EXISTS repositories;
 DROP TABLE IF EXISTS environments;
 DROP INDEX IF EXISTS root_paths_enabled_path_idx;
 DROP TABLE IF EXISTS root_paths;
+DROP INDEX IF EXISTS ignore_rules_scope_order_idx;
+ALTER TABLE ignore_rules DROP COLUMN sort_order;
 
 UPDATE system_metadata SET value = 'stage-03', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   WHERE key = 'schema_version';

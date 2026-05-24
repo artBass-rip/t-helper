@@ -82,6 +82,9 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 		"job_locks": {
 			"job_locks_cleanup_idx",
 		},
+		"ignore_rules": {
+			"ignore_rules_scope_order_idx",
+		},
 		"root_paths": {
 			"root_paths_enabled_path_idx",
 		},

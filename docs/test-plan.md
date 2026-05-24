@@ -309,7 +309,7 @@ Stage 01 implemented coverage:
 - Проверить, что `.git` regular file читается только `project_discovery` job до implementation limit и валидируется по первой непустой строке `gitdir:`.
 - Проверить, что global scanner не читает `.git`, `.git/config` и не вызывает `git` CLI.
 - Проверить `follow_symlinks = false`: symlinked directories skipped, `directories_skipped` and `symlinks_skipped` updated.
-- Проверить filesystem-only Git repository fallback identity from project discovery: `provider = generic`, `provider_host = local`, `full_path = <root_path-relative path>`, `clone_url = null`.
+- Проверить filesystem-only Git repository fallback identity from project discovery: `provider = generic`, `provider_host = local`, `root_path_id = <containing root path>`, `full_path = <root_path-relative path>`, `clone_url = null`; одинаковые `full_path` в разных root paths не должны merge в одну repository card.
 - Проверить same-repository relationship: multiple local Terraform projects in one Git repository remain separate `projects` rows, share `repository_id` when known, and get `project_links.link_type = same_repository`.
 - Проверить idempotent upsert keys: repeated scan updates `projects.last_seen_at` by `root_path_id + relative_path` and does not create duplicate `repositories` for the same generic local path.
 - Проверить missing behavior: previously discovered project absent from completed scan gets `projects.status = missing` and is not deleted.

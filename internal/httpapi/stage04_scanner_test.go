@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/httpapi"
@@ -83,6 +84,27 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 		t.Fatalf("GET /api/root-paths status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
+	now := time.Now().UTC()
+	project, _, err := scannerStore.UpsertProject(ctx, roots.Items[0], "service", now)
+	if err != nil {
+		t.Fatalf("upsert project fixture: %v", err)
+	}
+	timeText := now.Format(time.RFC3339Nano)
+	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO environments (id, name, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, "env_http_stage04", "Production", "prod", timeText, timeText); err != nil {
+		t.Fatalf("insert environment fixture: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO workspaces (id, project_id, environment_id, name, is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "workspace_http_stage04", project.ID, "env_http_stage04", "prod", 1, timeText, timeText); err != nil {
+		t.Fatalf("insert workspace fixture: %v", err)
+	}
+
+	for _, path := range []string{"/api/environments/env_http_stage04", "/api/workspaces/workspace_http_stage04"} {
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d body = %s", path, rec.Code, rec.Body.String())
+		}
+	}
+
 	rec = httptest.NewRecorder()
 	scanReq := httptest.NewRequest(http.MethodPost, "/api/scans", bytes.NewReader([]byte(`{"root_path_ids":["`+roots.Items[0].ID+`"],"reason":"manual"}`)))
 	scanReq.Header.Set("Idempotency-Key", "stage04-scan")
@@ -117,6 +139,19 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET %s status = %d body = %s", path, rec.Code, rec.Body.String())
 		}
+	}
+
+	missing, _, err := scannerStore.UpsertProject(ctx, roots.Items[0], "missing-service", now)
+	if err != nil {
+		t.Fatalf("upsert missing project fixture: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE projects SET status = ? WHERE id = ?`, scanner.ProjectStatusMissing, missing.ID); err != nil {
+		t.Fatalf("mark project missing: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+missing.ID+`"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing project scan guard status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

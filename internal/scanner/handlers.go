@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/artBass-rip/t-helper/internal/jobs"
@@ -83,80 +84,153 @@ func (h globalScanHandler) roots(ctx context.Context, ids []string) ([]RootPath,
 
 func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, matcher ignoreMatcher, now time.Time, result *GlobalScanResult) (bool, map[string]bool) {
 	seen := map[string]bool{}
-	info, err := os.Stat(root.Path)
-	if err != nil || !info.IsDir() {
+	info, err := os.Lstat(root.Path)
+	if err != nil {
 		result.ErrorsCount++
 		_ = emitScanError(ctx, env, job, "root_path_unavailable", root.ID, root.Path, ".", err)
 		return false, seen
 	}
-	stack := []string{root.Path}
+	if info.Mode()&os.ModeSymlink != 0 {
+		result.ErrorsCount++
+		result.DirectoriesSkipped++
+		result.SymlinksSkipped++
+		_ = emitScanError(ctx, env, job, "root_path_symlink_unsupported", root.ID, root.Path, ".", nil)
+		return false, seen
+	}
+	if !info.IsDir() {
+		result.ErrorsCount++
+		_ = emitScanError(ctx, env, job, "root_path_unavailable", root.ID, root.Path, ".", nil)
+		return false, seen
+	}
+	queue := []string{root.Path}
 	processed := false
-	for len(stack) > 0 {
-		if ctx.Err() != nil {
-			result.ErrorsCount++
-			_ = emitScanError(ctx, env, job, "scan_cancelled", root.ID, root.Path, ".", ctx.Err())
-			return processed, seen
-		}
-		dir := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		dirRelativePath := relativePath(root.Path, dir)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			result.ErrorsCount++
-			_ = emitScanError(ctx, env, job, "read_directory_failed", root.ID, dir, dirRelativePath, err)
-			continue
-		}
-		processed = true
-		if containsTerraformFile(entries) {
-			project, created, err := h.store.UpsertProject(ctx, root, dirRelativePath, now)
-			if err != nil {
-				result.ErrorsCount++
-				_ = emitScanError(ctx, env, job, "project_upsert_failed", root.ID, dir, dirRelativePath, err)
-				continue
+	workerCount := h.traversalWorkerCount()
+	var mu sync.Mutex
+	cond := sync.NewCond(&mu)
+	active := 0
+	worker := func() {
+		for {
+			mu.Lock()
+			for len(queue) == 0 && active > 0 {
+				cond.Wait()
 			}
-			seen[project.RelativePath] = true
-			if created {
-				result.ProjectsCreated++
-			} else {
-				result.ProjectsUpdated++
+			if len(queue) == 0 && active == 0 {
+				mu.Unlock()
+				return
 			}
-			result.DirectoriesSkipped += countChildDirectories(entries, dir)
-			if err := h.enqueueProjectDiscovery(ctx, env, job, project); err != nil {
-				result.ErrorsCount++
-				_ = emitScanError(ctx, env, job, "project_discovery_enqueue_failed", root.ID, dir, dirRelativePath, err)
-				continue
+			dir := queue[len(queue)-1]
+			queue = queue[:len(queue)-1]
+			active++
+			mu.Unlock()
+
+			children, stop := h.scanDirectory(ctx, env, job, root, dir, matcher, now, result, seen, &processed, &mu)
+
+			mu.Lock()
+			if !stop {
+				queue = append(queue, children...)
 			}
-			result.ProjectDiscoveryJobsEnqueued++
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 {
-				continue
-			}
-			childPath := filepath.Join(dir, entry.Name())
-			childRelativePath := relativePath(root.Path, childPath)
-			if entry.Name() == ".git" {
-				result.DirectoriesSkipped++
-				if entry.Type()&os.ModeSymlink != 0 {
-					result.SymlinksSkipped++
-				}
-				continue
-			}
-			if entry.Type()&os.ModeSymlink != 0 {
-				if isDirectorySymlink(childPath) {
-					result.DirectoriesSkipped++
-					result.SymlinksSkipped++
-				}
-				continue
-			}
-			if matcher.ignored(childRelativePath, true) {
-				result.DirectoriesSkipped++
-				continue
-			}
-			stack = append(stack, childPath)
+			active--
+			cond.Broadcast()
+			mu.Unlock()
 		}
 	}
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer workers.Done()
+			worker()
+		}()
+	}
+	workers.Wait()
 	return processed, seen
+}
+
+func (h globalScanHandler) traversalWorkerCount() int {
+	if h.store != nil && h.store.handle != nil && h.store.handle.Provider == "sqlite" {
+		return 1
+	}
+	return 4
+}
+
+func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, dir string, matcher ignoreMatcher, now time.Time, result *GlobalScanResult, seen map[string]bool, processed *bool, mu *sync.Mutex) ([]string, bool) {
+	addError := func(code, pathValue, relativePath string, err error) {
+		mu.Lock()
+		result.ErrorsCount++
+		mu.Unlock()
+		_ = emitScanError(ctx, env, job, code, root.ID, pathValue, relativePath, err)
+	}
+	if ctx.Err() != nil {
+		addError("scan_cancelled", root.Path, ".", ctx.Err())
+		return nil, true
+	}
+	dirRelativePath := relativePath(root.Path, dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		addError("read_directory_failed", dir, dirRelativePath, err)
+		return nil, false
+	}
+	mu.Lock()
+	*processed = true
+	mu.Unlock()
+	if containsTerraformFile(entries) {
+		project, created, err := h.store.UpsertProject(ctx, root, dirRelativePath, now)
+		if err != nil {
+			addError("project_upsert_failed", dir, dirRelativePath, err)
+			return nil, false
+		}
+		mu.Lock()
+		seen[project.RelativePath] = true
+		if created {
+			result.ProjectsCreated++
+		} else {
+			result.ProjectsUpdated++
+		}
+		result.DirectoriesSkipped += countChildDirectories(entries, dir)
+		mu.Unlock()
+		if err := h.enqueueProjectDiscovery(ctx, env, job, project); err != nil {
+			addError("project_discovery_enqueue_failed", dir, dirRelativePath, err)
+			return nil, false
+		}
+		mu.Lock()
+		result.ProjectDiscoveryJobsEnqueued++
+		mu.Unlock()
+		return nil, false
+	}
+	children := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 {
+			continue
+		}
+		childPath := filepath.Join(dir, entry.Name())
+		childRelativePath := relativePath(root.Path, childPath)
+		if entry.Name() == ".git" {
+			mu.Lock()
+			result.DirectoriesSkipped++
+			if entry.Type()&os.ModeSymlink != 0 {
+				result.SymlinksSkipped++
+			}
+			mu.Unlock()
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			if isDirectorySymlink(childPath) {
+				mu.Lock()
+				result.DirectoriesSkipped++
+				result.SymlinksSkipped++
+				mu.Unlock()
+			}
+			continue
+		}
+		if matcher.ignored(childRelativePath, true) {
+			mu.Lock()
+			result.DirectoriesSkipped++
+			mu.Unlock()
+			continue
+		}
+		children = append(children, childPath)
+	}
+	return children, false
 }
 
 func (h globalScanHandler) enqueueProjectDiscovery(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, project Project) error {

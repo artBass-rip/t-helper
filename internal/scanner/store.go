@@ -18,6 +18,7 @@ import (
 var (
 	ErrNotFound      = errors.New("scanner registry record not found")
 	ErrInvalidCursor = errors.New("invalid cursor")
+	ErrValidation    = errors.New("scanner validation error")
 )
 
 type Store struct {
@@ -319,7 +320,7 @@ func (s *Store) ListProjects(ctx context.Context, opts ProjectListOptions) (Page
 	}
 	if status != "all" {
 		if !validProjectStatus(status) {
-			return Page[Project]{}, fmt.Errorf("unsupported project status %q", status)
+			return Page[Project]{}, validationErrorf("unsupported project status %q", status)
 		}
 		add("status = %s", status)
 	}
@@ -417,7 +418,7 @@ func (s *Store) UpsertGenericRepository(ctx context.Context, root RootPath, repo
 		name = filepath.Base(root.Path)
 	}
 	now := time.Now().UTC()
-	existing, err := s.findRepository(ctx, RepositoryProviderGeneric, RepositoryHostLocal, fullPath)
+	existing, err := s.findGenericRepository(ctx, root.ID, fullPath)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return Repository{}, false, false, err
 	}
@@ -442,6 +443,22 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`
 	}
 	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		if isUniqueConstraintError(err) {
+			existing, findErr := s.findGenericRepository(ctx, root.ID, fullPath)
+			if findErr != nil {
+				return Repository{}, false, false, err
+			}
+			query := `UPDATE repositories SET name = ?, root_path_id = ?, local_path = ?, status = ?, discovery_source = ?, updated_at = ? WHERE id = ?`
+			args := []any{name, root.ID, repositoryPath, RepositoryStatusActive, DiscoverySourceFilesystem, formatTime(now), existing.ID}
+			if s.handle.Provider == "postgres" {
+				query = `UPDATE repositories SET name = $1, root_path_id = $2, local_path = $3, status = $4, discovery_source = $5, updated_at = $6 WHERE id = $7`
+			}
+			if _, updateErr := s.handle.DB.ExecContext(ctx, query, args...); updateErr != nil {
+				return Repository{}, false, false, updateErr
+			}
+			repo, getErr := s.GetRepository(ctx, existing.ID)
+			return repo, false, true, getErr
+		}
 		return Repository{}, false, false, err
 	}
 	repo, err := s.GetRepository(ctx, id)
@@ -461,6 +478,19 @@ func (s *Store) findRepository(ctx context.Context, provider, providerHost, full
 	return repo, err
 }
 
+func (s *Store) findGenericRepository(ctx context.Context, rootPathID, fullPath string) (Repository, error) {
+	query := "SELECT " + s.repositoryColumns() + " FROM repositories WHERE provider = ? AND provider_host = ? AND root_path_id = ? AND full_path = ?"
+	args := []any{RepositoryProviderGeneric, RepositoryHostLocal, rootPathID, fullPath}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.repositoryColumns() + " FROM repositories WHERE provider = $1 AND provider_host = $2 AND root_path_id = $3 AND full_path = $4"
+	}
+	repo, err := scanRepository(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Repository{}, ErrNotFound
+	}
+	return repo, err
+}
+
 func (s *Store) GetRepository(ctx context.Context, id string) (Repository, error) {
 	query := "SELECT " + s.repositoryColumns() + " FROM repositories WHERE id = ?"
 	args := []any{id}
@@ -472,6 +502,48 @@ func (s *Store) GetRepository(ctx context.Context, id string) (Repository, error
 		return Repository{}, ErrNotFound
 	}
 	return repo, err
+}
+
+func (s *Store) ListRepositories(ctx context.Context, opts RepositoryListOptions) (Page[Repository], error) {
+	var where []string
+	var args []any
+	add := func(clause string, value any) {
+		args = append(args, value)
+		where = append(where, fmt.Sprintf(clause, s.placeholder(len(args))))
+	}
+	if opts.Provider != "" {
+		add("provider = %s", opts.Provider)
+	}
+	if opts.ProviderHost != "" {
+		add("provider_host = %s", opts.ProviderHost)
+	}
+	if opts.FullPath != "" {
+		add("full_path = %s", opts.FullPath)
+	}
+	status := strings.TrimSpace(opts.Status)
+	if status == "" {
+		status = RepositoryStatusActive
+	}
+	if status != "all" {
+		if !validRepositoryStatus(status) {
+			return Page[Repository]{}, validationErrorf("unsupported repository status %q", status)
+		}
+		add("status = %s", status)
+	}
+	if opts.DiscoverySource != "" {
+		if !validDiscoverySource(opts.DiscoverySource) {
+			return Page[Repository]{}, validationErrorf("unsupported discovery_source %q", opts.DiscoverySource)
+		}
+		add("discovery_source = %s", opts.DiscoverySource)
+	}
+	if opts.AutoSyncEnabled != nil {
+		add("auto_sync_enabled = %s", s.boolArg(*opts.AutoSyncEnabled))
+	}
+	query := "SELECT " + s.repositoryColumns() + " FROM repositories"
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	return listPage(ctx, s, query, args, "created_at", opts.ListOptions, scanRepository)
 }
 
 func (s *Store) UpsertProjectLink(ctx context.Context, leftID, rightID, repositoryID, jobID string) (bool, error) {
@@ -504,10 +576,10 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 }
 
 func (s *Store) IgnoreRulesForRoot(ctx context.Context, rootPathID string) ([]IgnoreRule, error) {
-	query := "SELECT " + s.ignoreRuleColumns() + " FROM ignore_rules WHERE scope_type = ? OR (scope_type = ? AND scope_id = ?) ORDER BY created_at ASC, id ASC"
+	query := "SELECT " + s.ignoreRuleColumns() + " FROM ignore_rules WHERE scope_type = ? OR (scope_type = ? AND scope_id = ?) ORDER BY sort_order ASC, created_at ASC, id ASC"
 	args := []any{"system", "root_path", rootPathID}
 	if s.handle.Provider == "postgres" {
-		query = "SELECT " + s.ignoreRuleColumns() + " FROM ignore_rules WHERE scope_type = $1 OR (scope_type = $2 AND scope_id = $3) ORDER BY created_at ASC, id ASC"
+		query = "SELECT " + s.ignoreRuleColumns() + " FROM ignore_rules WHERE scope_type = $1 OR (scope_type = $2 AND scope_id = $3) ORDER BY sort_order ASC, created_at ASC, id ASC"
 	}
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -547,8 +619,8 @@ func (s *Store) ListIgnoreRules(ctx context.Context, opts IgnoreRuleListOptions)
 
 func (s *Store) UpsertIgnoreRules(ctx context.Context, inputs []IgnoreRuleInput) ([]IgnoreRule, error) {
 	out := make([]IgnoreRule, 0, len(inputs))
-	for _, input := range inputs {
-		item, err := s.upsertIgnoreRule(ctx, input)
+	for idx, input := range inputs {
+		item, err := s.upsertIgnoreRule(ctx, input, idx)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +629,7 @@ func (s *Store) UpsertIgnoreRules(ctx context.Context, inputs []IgnoreRuleInput)
 	return out, nil
 }
 
-func (s *Store) upsertIgnoreRule(ctx context.Context, input IgnoreRuleInput) (IgnoreRule, error) {
+func (s *Store) upsertIgnoreRule(ctx context.Context, input IgnoreRuleInput, defaultSortOrder int) (IgnoreRule, error) {
 	scopeType := strings.TrimSpace(input.ScopeType)
 	if !validIgnoreScope(scopeType) {
 		return IgnoreRule{}, fmt.Errorf("unsupported ignore rule scope_type %q", scopeType)
@@ -577,16 +649,20 @@ func (s *Store) upsertIgnoreRule(ctx context.Context, input IgnoreRuleInput) (Ig
 	if !validIgnoreOrigin(origin) {
 		return IgnoreRule{}, fmt.Errorf("unsupported ignore rule origin %q", origin)
 	}
+	sortOrder := defaultSortOrder
+	if input.SortOrder != nil {
+		sortOrder = *input.SortOrder
+	}
 	existing, err := s.findIgnoreRule(ctx, input.ID, scopeType, scopeID, pattern)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return IgnoreRule{}, err
 	}
 	now := time.Now().UTC()
 	if err == nil {
-		query := "UPDATE ignore_rules SET origin = ?, updated_at = ? WHERE id = ?"
-		args := []any{origin, formatTime(now), existing.ID}
+		query := "UPDATE ignore_rules SET origin = ?, sort_order = ?, updated_at = ? WHERE id = ?"
+		args := []any{origin, sortOrder, formatTime(now), existing.ID}
 		if s.handle.Provider == "postgres" {
-			query = "UPDATE ignore_rules SET origin = $1, updated_at = $2 WHERE id = $3"
+			query = "UPDATE ignore_rules SET origin = $1, sort_order = $2, updated_at = $3 WHERE id = $4"
 		}
 		if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
 			return IgnoreRule{}, err
@@ -597,10 +673,10 @@ func (s *Store) upsertIgnoreRule(ctx context.Context, input IgnoreRuleInput) (Ig
 	if id == "" {
 		id = newID("ignore")
 	}
-	query := `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	args := []any{id, scopeType, scopeID, pattern, origin, formatTime(now), formatTime(now)}
+	query := `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{id, scopeType, scopeID, pattern, origin, sortOrder, formatTime(now), formatTime(now)}
 	if s.handle.Provider == "postgres" {
-		query = `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`
+		query = `INSERT INTO ignore_rules (id, scope_type, scope_id, pattern, origin, sort_order, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 	}
 	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
 		if isUniqueConstraintError(err) {
@@ -749,6 +825,8 @@ func valueID(value any) string {
 		return v.ID
 	case Project:
 		return v.ID
+	case Repository:
+		return v.ID
 	case IgnoreRule:
 		return v.ID
 	case Environment:
@@ -765,6 +843,8 @@ func valueCreatedAt(value any) time.Time {
 	case RootPath:
 		return v.CreatedAt
 	case Project:
+		return v.CreatedAt
+	case Repository:
 		return v.CreatedAt
 	case IgnoreRule:
 		return v.CreatedAt
@@ -788,12 +868,12 @@ func (s *Store) projectColumns() string {
 }
 
 func (s *Store) repositoryColumns() string {
-	return fmt.Sprintf(`id, name, provider, provider_host, full_path, COALESCE(root_path_id, ''), COALESCE(local_path, ''), status, discovery_source, %s, %s`,
-		s.timeExpr("created_at"), s.timeExpr("updated_at"))
+	return fmt.Sprintf(`id, name, COALESCE(provider_instance_id, ''), provider, provider_host, full_path, COALESCE(clone_url, ''), COALESCE(default_branch, ''), COALESCE(root_path_id, ''), COALESCE(target_directory, ''), COALESCE(local_path, ''), COALESCE(auth_type, ''), COALESCE(default_credential_id, ''), status, discovery_source, COALESCE(superseded_by_repository_id, ''), COALESCE(%s, ''), %s, %s, COALESCE(poll_interval, ''), COALESCE(%s, ''), COALESCE(last_error, ''), %s, %s`,
+		s.timeExpr("identity_confirmed_at"), s.boolSelect("auto_sync_enabled"), s.boolSelect("webhook_enabled"), s.timeExpr("last_pull_at"), s.timeExpr("created_at"), s.timeExpr("updated_at"))
 }
 
 func (s *Store) ignoreRuleColumns() string {
-	return fmt.Sprintf(`id, scope_type, COALESCE(scope_id, ''), pattern, origin, %s, %s`,
+	return fmt.Sprintf(`id, scope_type, COALESCE(scope_id, ''), pattern, origin, sort_order, %s, %s`,
 		s.timeExpr("created_at"), s.timeExpr("updated_at"))
 }
 
@@ -835,10 +915,15 @@ func scanProject(row interface{ Scan(dest ...any) error }) (Project, error) {
 
 func scanRepository(row interface{ Scan(dest ...any) error }) (Repository, error) {
 	var item Repository
-	var created, updated string
-	if err := row.Scan(&item.ID, &item.Name, &item.Provider, &item.ProviderHost, &item.FullPath, &item.RootPathID, &item.LocalPath, &item.Status, &item.DiscoverySource, &created, &updated); err != nil {
+	var identityConfirmed, lastPull, created, updated string
+	var autoSync, webhook int
+	if err := row.Scan(&item.ID, &item.Name, &item.ProviderInstanceID, &item.Provider, &item.ProviderHost, &item.FullPath, &item.CloneURL, &item.DefaultBranch, &item.RootPathID, &item.TargetDirectory, &item.LocalPath, &item.AuthType, &item.DefaultCredentialID, &item.Status, &item.DiscoverySource, &item.SupersededByRepositoryID, &identityConfirmed, &autoSync, &webhook, &item.PollInterval, &lastPull, &item.LastError, &created, &updated); err != nil {
 		return Repository{}, err
 	}
+	item.IdentityConfirmedAt = parseTimePtr(identityConfirmed)
+	item.AutoSyncEnabled = autoSync != 0
+	item.WebhookEnabled = webhook != 0
+	item.LastPullAt = parseTimePtr(lastPull)
 	item.CreatedAt, _ = parseTime(created)
 	item.UpdatedAt, _ = parseTime(updated)
 	return item, nil
@@ -847,7 +932,7 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (Repository, error
 func scanIgnoreRule(row interface{ Scan(dest ...any) error }) (IgnoreRule, error) {
 	var item IgnoreRule
 	var created, updated string
-	if err := row.Scan(&item.ID, &item.ScopeType, &item.ScopeID, &item.Pattern, &item.Origin, &created, &updated); err != nil {
+	if err := row.Scan(&item.ID, &item.ScopeType, &item.ScopeID, &item.Pattern, &item.Origin, &item.SortOrder, &created, &updated); err != nil {
 		return IgnoreRule{}, err
 	}
 	item.CreatedAt, _ = parseTime(created)
@@ -949,6 +1034,24 @@ func validProjectStatus(value string) bool {
 	}
 }
 
+func validRepositoryStatus(value string) bool {
+	switch value {
+	case RepositoryStatusActive, "missing", "superseded", "disabled":
+		return true
+	default:
+		return false
+	}
+}
+
+func validDiscoverySource(value string) bool {
+	switch value {
+	case DiscoverySourceFilesystem, "provider", "clone", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
 func validIgnoreScope(value string) bool {
 	switch value {
 	case "system", "root_path", "project":
@@ -1002,6 +1105,14 @@ func parseTime(value string) (time.Time, error) {
 	return time.Parse(time.RFC3339, value)
 }
 
+func parseTimePtr(value string) *time.Time {
+	t, err := parseTime(value)
+	if err != nil || t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 type listCursor struct {
 	Time time.Time `json:"time"`
 	ID   string    `json:"id"`
@@ -1044,4 +1155,8 @@ func isUniqueConstraintError(err error) bool {
 		strings.Contains(message, "duplicate key value") ||
 		strings.Contains(message, "constraint failed: unique") ||
 		strings.Contains(message, "sqlite_constraint_unique")
+}
+
+func validationErrorf(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrValidation, fmt.Sprintf(format, args...))
 }
