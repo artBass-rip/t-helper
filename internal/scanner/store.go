@@ -282,7 +282,13 @@ func (s *Store) EnabledRootPaths(ctx context.Context) ([]RootPath, error) {
 
 func (s *Store) RootPathsByIDs(ctx context.Context, ids []string) ([]RootPath, error) {
 	out := make([]RootPath, 0, len(ids))
+	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
 		root, err := s.GetRootPath(ctx, id)
 		if err != nil {
 			return nil, err

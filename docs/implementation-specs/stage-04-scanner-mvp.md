@@ -53,6 +53,26 @@
 
 ## Implementation contract
 
+### Discovery algorithm notes
+
+- `POST /api/scans` and `jobs.global_scan.payload.v1` resolve requested
+  `root_path_ids` through the registry and deduplicate repeated IDs while
+  preserving request order.
+- `global-scanner` materializes `scanning.global_scan`, loads ignore rules per
+  root, then traverses each root with a bounded in-process worker pool. SQLite
+  runs traversal with effective concurrency `1`; other providers use
+  `workers.concurrency` capped at `64`, with default `4`.
+- Traversal uses directory entries and `lstat` metadata only. Terraform project
+  detection checks entry names for `*.tf`; it does not open Terraform source
+  files and stops traversal below a detected Terraform working directory.
+- `.git` directories are skipped by global traversal. Repository detection is
+  deferred to `project_discovery`, which walks upward from the project path to
+  the root path and checks only the allowlisted `.git` marker.
+- Stage 04 filesystem boundary tests use an injected filesystem adapter to
+  assert that global scan does not open Terraform source, `.git` marker files or
+  `.git/config`, and that project discovery reads at most `4 KiB` from `.git`
+  marker files.
+
 ### Upsert and identity rules
 
 - `root_paths` upsert key: normalized absolute `path`.

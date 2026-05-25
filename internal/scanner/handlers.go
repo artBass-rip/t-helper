@@ -16,16 +16,39 @@ import (
 
 type globalScanHandler struct {
 	store *Store
+	fs    scanFilesystem
 }
 
 type projectDiscoveryHandler struct {
 	store *Store
+	fs    scanFilesystem
+}
+
+type scanFilesystem interface {
+	Lstat(name string) (os.FileInfo, error)
+	ReadDir(name string) ([]os.DirEntry, error)
+	Open(name string) (io.ReadCloser, error)
+}
+
+type osScanFilesystem struct{}
+
+func (osScanFilesystem) Lstat(name string) (os.FileInfo, error) {
+	return os.Lstat(name)
+}
+
+func (osScanFilesystem) ReadDir(name string) ([]os.DirEntry, error) {
+	return os.ReadDir(name)
+}
+
+func (osScanFilesystem) Open(name string) (io.ReadCloser, error) {
+	return os.Open(name)
 }
 
 func JobHandlers(store *Store) map[string]jobs.Handler {
+	fs := osScanFilesystem{}
 	return map[string]jobs.Handler{
-		"global_scan":       globalScanHandler{store: store},
-		"project_discovery": projectDiscoveryHandler{store: store},
+		"global_scan":       globalScanHandler{store: store, fs: fs},
+		"project_discovery": projectDiscoveryHandler{store: store, fs: fs},
 	}
 }
 
@@ -91,6 +114,20 @@ func (h globalScanHandler) roots(ctx context.Context, ids []string) ([]RootPath,
 	return h.store.EnabledRootPaths(ctx)
 }
 
+func (h globalScanHandler) filesystem() scanFilesystem {
+	if h.fs != nil {
+		return h.fs
+	}
+	return osScanFilesystem{}
+}
+
+func (h projectDiscoveryHandler) filesystem() scanFilesystem {
+	if h.fs != nil {
+		return h.fs
+	}
+	return osScanFilesystem{}
+}
+
 func rootScanMetrics(rootPathID string, duration time.Duration, workers int, before, after GlobalScanResult) map[string]any {
 	return map[string]any{
 		"root_path_id":                    rootPathID,
@@ -108,7 +145,7 @@ func rootScanMetrics(rootPathID string, duration time.Duration, workers int, bef
 func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, matcher ignoreMatcher, now time.Time, result *GlobalScanResult) (bool, map[string]bool, map[string]bool) {
 	seen := map[string]bool{}
 	erroredSubtrees := map[string]bool{}
-	info, err := os.Lstat(root.Path)
+	info, err := h.filesystem().Lstat(root.Path)
 	if err != nil {
 		result.ErrorsCount++
 		_ = emitScanError(ctx, env, job, "root_path_unavailable", root.ID, root.Path, ".", err)
@@ -198,7 +235,7 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 		return nil, true
 	}
 	dirRelativePath := relativePath(root.Path, dir)
-	entries, err := os.ReadDir(dir)
+	entries, err := h.filesystem().ReadDir(dir)
 	if err != nil {
 		addError("read_directory_failed", dir, dirRelativePath, err)
 		return nil, false
@@ -336,7 +373,7 @@ func (h projectDiscoveryHandler) Handle(ctx context.Context, env jobs.HandlerEnv
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
 	}
-	repositoryPath, markerType, detected, err := findGitRepository(project.Path, root.Path)
+	repositoryPath, markerType, detected, err := findGitRepository(h.filesystem(), project.Path, root.Path)
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "handler_failed", Message: err.Error(), Retryable: true}
 	}
@@ -380,7 +417,7 @@ func (h projectDiscoveryHandler) Handle(ctx context.Context, env jobs.HandlerEnv
 	return marshalJSON(result)
 }
 
-func findGitRepository(projectPath, rootPath string) (string, string, bool, error) {
+func findGitRepository(fs scanFilesystem, projectPath, rootPath string) (string, string, bool, error) {
 	projectPath, err := normalizeAbsPath(projectPath)
 	if err != nil {
 		return "", "", false, err
@@ -395,13 +432,13 @@ func findGitRepository(projectPath, rootPath string) (string, string, bool, erro
 			return "", "", false, nil
 		}
 		markerPath := filepath.Join(current, ".git")
-		info, err := os.Lstat(markerPath)
+		info, err := fs.Lstat(markerPath)
 		if err == nil {
 			if info.IsDir() {
 				return current, ".git_directory", true, nil
 			}
 			if info.Mode().IsRegular() {
-				valid, err := validGitdirFile(markerPath)
+				valid, err := validGitdirFile(fs, markerPath)
 				if err != nil {
 					return "", "", false, err
 				}
@@ -424,8 +461,8 @@ func findGitRepository(projectPath, rootPath string) (string, string, bool, erro
 	return "", "", false, nil
 }
 
-func validGitdirFile(path string) (bool, error) {
-	file, err := os.Open(path)
+func validGitdirFile(fs scanFilesystem, path string) (bool, error) {
+	file, err := fs.Open(path)
 	if err != nil {
 		return false, err
 	}
