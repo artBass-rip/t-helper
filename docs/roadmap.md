@@ -52,13 +52,15 @@ Status: completed.
 
 ### Stage 04. Scanner and registry MVP
 
-- реализовать `root_paths`, `ignore_rules`, `projects`, `environments`, `workspaces` и минимальный `repositories` registry;
-- реализовать exclude-only ignore matcher с сохранением `!pattern`;
-- реализовать discovery Terraform-проектов по `*.tf` без чтения исходников;
-- реализовать enqueue фоновых `project_discovery` jobs для определения Git-связей проекта без блокировки глобального scan;
-- реализовать обнаружение Git markers внутри `project_discovery` и прекращение обхода ниже найденного Terraform-проекта в global scan;
-- реализовать `project_links` для связи отдельных project records, относящихся к одному Git repository, без merge project rows;
-- закрыть API для scan roots, ignore rules, scans, projects, environments и workspaces.
+Status: completed.
+
+- реализованы `root_paths`, `ignore_rules`, `projects`, `environments`, `workspaces` и минимальный `repositories` registry;
+- реализован exclude-only ignore matcher с сохранением `!pattern`;
+- реализован discovery Terraform-проектов по `*.tf` без чтения исходников;
+- реализованы coalesced фоновые `project_discovery` jobs для определения Git-связей проекта без блокировки глобального scan;
+- реализовано обнаружение Git markers внутри `project_discovery` и прекращение обхода ниже найденного Terraform-проекта в global scan;
+- реализованы `project_links` для связи отдельных project records, относящихся к одному Git repository, без merge project rows;
+- закрыт API для scan roots, ignore rules, scans, projects, environments и workspaces.
 
 ### Stage 05. Repository manager MVP
 

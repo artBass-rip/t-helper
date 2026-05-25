@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -109,6 +110,59 @@ func TestGlobalScanDetectsTerraformProjectsAndMissingLifecycle(t *testing.T) {
 	}
 }
 
+func TestSyncRootPathsFromConfigDeactivatesOnlyRemovedConfigRoots(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+
+	configRootA := filepath.Join(t.TempDir(), "config-a")
+	configRootB := filepath.Join(t.TempDir(), "config-b")
+	apiRoot := filepath.Join(t.TempDir(), "api-root")
+	if err := os.MkdirAll(configRootA, 0o755); err != nil {
+		t.Fatalf("mkdir config root a: %v", err)
+	}
+	if err := os.MkdirAll(configRootB, 0o755); err != nil {
+		t.Fatalf("mkdir config root b: %v", err)
+	}
+	if err := os.MkdirAll(apiRoot, 0o755); err != nil {
+		t.Fatalf("mkdir api root: %v", err)
+	}
+
+	enabled := true
+	apiRoots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "api", Path: apiRoot, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert api root: %v", err)
+	}
+	upsertGlobalScanConfig(t, ctx, handle, configRootA, configRootB)
+	if err := scannerStore.SyncRootPathsFromConfig(ctx); err != nil {
+		t.Fatalf("initial config sync: %v", err)
+	}
+
+	upsertGlobalScanConfig(t, ctx, handle, configRootA)
+	if err := scannerStore.SyncRootPathsFromConfig(ctx); err != nil {
+		t.Fatalf("second config sync: %v", err)
+	}
+
+	roots, err := scannerStore.ListRootPaths(ctx, scanner.ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list root paths: %v", err)
+	}
+	byPath := map[string]scanner.RootPath{}
+	for _, root := range roots.Items {
+		byPath[root.Path] = root
+	}
+	if !byPath[configRootA].Enabled || byPath[configRootA].Source != scanner.RootPathSourceConfig {
+		t.Fatalf("config root a should stay enabled and config-owned: %+v", byPath[configRootA])
+	}
+	if byPath[configRootB].Enabled || byPath[configRootB].Source != scanner.RootPathSourceConfig {
+		t.Fatalf("removed config root b should be disabled and config-owned: %+v", byPath[configRootB])
+	}
+	if !byPath[apiRoot].Enabled || byPath[apiRoot].Source != scanner.RootPathSourceAPI || byPath[apiRoot].ID != apiRoots[0].ID {
+		t.Fatalf("api root should be preserved: %+v", byPath[apiRoot])
+	}
+}
+
 func TestGlobalScanAppliesIgnoreRulesToTerraformFiles(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -202,6 +256,59 @@ func TestGlobalScanOnlyEnqueuesProjectDiscoveryBeforeRepositoryLinking(t *testin
 	}
 	if discoveryJobs != 2 {
 		t.Fatalf("project discovery jobs = %d, want 2", discoveryJobs)
+	}
+}
+
+func TestGlobalScanCoalescesActiveProjectDiscoveryJobs(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    jobStore,
+		Handlers: scanner.JobHandlers(scannerStore),
+		WorkerID: "host:test:discovery-coalescing",
+		Logger:   slog.Default(),
+	})
+
+	rootDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(rootDir, "service", "main.tf"), "terraform {}\n")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+
+	first := enqueueGlobalScan(t, ctx, jobStore, roots[0].ID)
+	runUntilComplete(t, ctx, runtime, jobStore, first.JobID)
+	claimed, ok, err := jobStore.ClaimNext(ctx, jobs.ClaimOptions{WorkerID: "host:test:claimed-discovery", LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatalf("claim discovery job: %v", err)
+	}
+	if !ok || claimed.JobType != "project_discovery" {
+		t.Fatalf("expected active discovery job, got ok=%v job=%+v", ok, claimed)
+	}
+
+	second := enqueueGlobalScan(t, ctx, jobStore, roots[0].ID)
+	runUntilComplete(t, ctx, runtime, jobStore, second.JobID)
+	secondJob, err := jobStore.Get(ctx, second.JobID)
+	if err != nil {
+		t.Fatalf("get second scan: %v", err)
+	}
+	var result scanner.GlobalScanResult
+	if err := json.Unmarshal(secondJob.ResultPayload, &result); err != nil {
+		t.Fatalf("decode second scan result: %v", err)
+	}
+	if result.ProjectDiscoveryJobsEnqueued != 0 {
+		t.Fatalf("expected active discovery coalescing, got result %+v", result)
+	}
+	var discoveryJobs int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE job_type = 'project_discovery'").Scan(&discoveryJobs); err != nil {
+		t.Fatalf("count project discovery jobs: %v", err)
+	}
+	if discoveryJobs != 1 {
+		t.Fatalf("project discovery jobs = %d, want 1", discoveryJobs)
 	}
 }
 
@@ -400,6 +507,50 @@ func TestMarkMissingProjectsSkipsOnlyErroredSubtrees(t *testing.T) {
 	}
 	if gone.Status != scanner.ProjectStatusMissing || errored.Status != scanner.ProjectStatusActive {
 		t.Fatalf("unexpected statuses: gone=%s errored=%s", gone.Status, errored.Status)
+	}
+}
+
+func TestMarkMissingProjectsBatchesLargeRoot(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+
+	rootDir := t.TempDir()
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	now := time.Now().UTC()
+	seen := map[string]bool{}
+	for i := 0; i < 1200; i++ {
+		relative := "services/service-" + strconv.Itoa(i)
+		project, _, err := scannerStore.UpsertProject(ctx, roots[0], relative, now)
+		if err != nil {
+			t.Fatalf("upsert project %d: %v", i, err)
+		}
+		if i%10 == 0 {
+			seen[project.RelativePath] = true
+		}
+	}
+
+	marked, err := scannerStore.MarkMissingProjects(ctx, roots[0].ID, seen, nil, now)
+	if err != nil {
+		t.Fatalf("mark missing projects: %v", err)
+	}
+	if marked != 1080 {
+		t.Fatalf("marked missing = %d, want 1080", marked)
+	}
+	var active, missing int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM projects WHERE status = ?", scanner.ProjectStatusActive).Scan(&active); err != nil {
+		t.Fatalf("count active: %v", err)
+	}
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM projects WHERE status = ?", scanner.ProjectStatusMissing).Scan(&missing); err != nil {
+		t.Fatalf("count missing: %v", err)
+	}
+	if active != 120 || missing != 1080 {
+		t.Fatalf("unexpected status counts: active=%d missing=%d", active, missing)
 	}
 }
 
@@ -872,6 +1023,30 @@ func mustWriteFile(t *testing.T, path string, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func upsertGlobalScanConfig(t *testing.T, ctx context.Context, handle *storage.Handle, rootPaths ...string) {
+	t.Helper()
+	type globalScanRoot struct {
+		Name     string `json:"name"`
+		RootPath string `json:"root_path"`
+	}
+	roots := make([]globalScanRoot, 0, len(rootPaths))
+	for i, rootPath := range rootPaths {
+		roots = append(roots, globalScanRoot{Name: "root-" + strconv.Itoa(i), RootPath: rootPath})
+	}
+	raw, err := json.Marshal(roots)
+	if err != nil {
+		t.Fatalf("marshal global_scan config: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = handle.DB.ExecContext(ctx, `INSERT INTO config_entries (id, key, value, value_type, scope, version, updated_at, updated_by)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(key, scope) DO UPDATE SET value = excluded.value, version = config_entries.version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+		"cfg_scanning_global_scan", "scanning.global_scan", string(raw), "json", "system", 1, now, "test")
+	if err != nil {
+		t.Fatalf("upsert global_scan config: %v", err)
 	}
 }
 

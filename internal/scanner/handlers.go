@@ -59,7 +59,10 @@ func (h globalScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job 
 		if err != nil {
 			return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 		}
+		before := result
+		startedAt := time.Now()
 		processed, seen, erroredSubtrees := h.scanRoot(ctx, env, job, root, newIgnoreMatcher(rules), now, &result)
+		_ = env.EmitProgress(ctx, job, "root scan completed", rootScanMetrics(root.ID, time.Since(startedAt), h.traversalWorkerCount(ctx), before, result))
 		if processed {
 			processedRoots++
 			if len(erroredSubtrees) > 0 {
@@ -88,6 +91,20 @@ func (h globalScanHandler) roots(ctx context.Context, ids []string) ([]RootPath,
 	return h.store.EnabledRootPaths(ctx)
 }
 
+func rootScanMetrics(rootPathID string, duration time.Duration, workers int, before, after GlobalScanResult) map[string]any {
+	return map[string]any{
+		"root_path_id":                    rootPathID,
+		"duration_ms":                     duration.Milliseconds(),
+		"traversal_workers":               workers,
+		"projects_created":                after.ProjectsCreated - before.ProjectsCreated,
+		"projects_updated":                after.ProjectsUpdated - before.ProjectsUpdated,
+		"project_discovery_jobs_enqueued": after.ProjectDiscoveryJobsEnqueued - before.ProjectDiscoveryJobsEnqueued,
+		"directories_skipped":             after.DirectoriesSkipped - before.DirectoriesSkipped,
+		"symlinks_skipped":                after.SymlinksSkipped - before.SymlinksSkipped,
+		"errors_count":                    after.ErrorsCount - before.ErrorsCount,
+	}
+}
+
 func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, root RootPath, matcher ignoreMatcher, now time.Time, result *GlobalScanResult) (bool, map[string]bool, map[string]bool) {
 	seen := map[string]bool{}
 	erroredSubtrees := map[string]bool{}
@@ -111,7 +128,7 @@ func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, jo
 	}
 	queue := []string{root.Path}
 	processed := false
-	workerCount := h.traversalWorkerCount()
+	workerCount := h.traversalWorkerCount(ctx)
 	var mu sync.Mutex
 	cond := sync.NewCond(&mu)
 	active := 0
@@ -153,9 +170,17 @@ func (h globalScanHandler) scanRoot(ctx context.Context, env jobs.HandlerEnv, jo
 	return processed, seen, erroredSubtrees
 }
 
-func (h globalScanHandler) traversalWorkerCount() int {
+func (h globalScanHandler) traversalWorkerCount(ctx context.Context) int {
 	if h.store != nil && h.store.handle != nil && h.store.handle.Provider == "sqlite" {
 		return 1
+	}
+	if h.store != nil {
+		if configured, err := h.store.ConfigInt(ctx, "workers.concurrency"); err == nil && configured > 0 {
+			if configured > 64 {
+				return 64
+			}
+			return configured
+		}
 	}
 	return 4
 }
@@ -196,13 +221,16 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 		}
 		result.DirectoriesSkipped += countChildDirectories(entries, dir)
 		mu.Unlock()
-		if err := h.enqueueProjectDiscovery(ctx, env, job, project); err != nil {
+		enqueued, err := h.enqueueProjectDiscovery(ctx, env, job, project)
+		if err != nil {
 			addError("project_discovery_enqueue_failed", dir, dirRelativePath, err)
 			return nil, false
 		}
-		mu.Lock()
-		result.ProjectDiscoveryJobsEnqueued++
-		mu.Unlock()
+		if enqueued {
+			mu.Lock()
+			result.ProjectDiscoveryJobsEnqueued++
+			mu.Unlock()
+		}
 		return nil, false
 	}
 	children := make([]string, 0, len(entries))
@@ -241,7 +269,7 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 	return children, false
 }
 
-func (h globalScanHandler) enqueueProjectDiscovery(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, project Project) error {
+func (h globalScanHandler) enqueueProjectDiscovery(ctx context.Context, env jobs.HandlerEnv, job jobs.Job, project Project) (bool, error) {
 	payload, err := marshalJSON(ProjectDiscoveryPayload{
 		SchemaVersion: ProjectDiscoveryPayloadSchema,
 		ProjectID:     project.ID,
@@ -250,21 +278,27 @@ func (h globalScanHandler) enqueueProjectDiscovery(ctx context.Context, env jobs
 		Reason:        "global_scan",
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
-	ref, err := env.Store.Enqueue(ctx, jobs.EnqueueRequest{
+	lockKey := "project_discovery:" + project.ID
+	ref, enqueued, err := env.Store.EnqueueIfNoActive(ctx, jobs.EnqueueRequest{
 		JobType:     "project_discovery",
 		Actor:       nonEmpty(job.Actor, "global-scanner"),
 		ParentJobID: job.ID,
-		LockKey:     "project_discovery:" + project.ID,
+		LockKey:     lockKey,
 		Payload:     payload,
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
-	return env.EmitChildCreated(ctx, job, "project discovery job enqueued", map[string]any{
+	message := "project discovery job enqueued"
+	if !enqueued {
+		message = "project discovery job already active"
+	}
+	return enqueued, env.EmitChildCreated(ctx, job, message, map[string]any{
 		"project_id": project.ID,
 		"job_id":     ref.JobID,
+		"coalesced":  !enqueued,
 	})
 }
 

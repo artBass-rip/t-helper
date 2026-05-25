@@ -22,12 +22,16 @@ const (
 
 	LinkTypeSameRepository = "same_repository"
 	TerraformMarkerGlob    = "*.tf"
+
+	RootPathSourceAPI    = "api"
+	RootPathSourceConfig = "config"
 )
 
 type RootPath struct {
 	ID                string    `json:"id"`
 	Name              string    `json:"name"`
 	Path              string    `json:"path"`
+	Source            string    `json:"source"`
 	Enabled           bool      `json:"enabled"`
 	ScheduleEnabled   bool      `json:"schedule_enabled"`
 	ScheduleFrequency string    `json:"schedule_frequency,omitempty"`
@@ -42,6 +46,7 @@ type RootPathInput struct {
 	Enabled           *bool  `json:"enabled,omitempty"`
 	ScheduleEnabled   *bool  `json:"schedule_enabled,omitempty"`
 	ScheduleFrequency string `json:"schedule_frequency,omitempty"`
+	Source            string `json:"source,omitempty"`
 }
 
 type Project struct {

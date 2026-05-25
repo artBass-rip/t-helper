@@ -45,11 +45,16 @@ plan.
 - `id`
 - `name`
 - `path`
+- `source`
 - `enabled`
 - `schedule_enabled`
 - `schedule_frequency`
 - `created_at`
 - `updated_at`
+
+`source` принимает `config` или `api`. `scanning.global_scan` sync owns only
+`source = config` rows: removed config roots are disabled, while API-created
+roots are preserved.
 
 ### `projects`
 

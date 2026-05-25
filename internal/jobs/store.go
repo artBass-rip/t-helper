@@ -110,6 +110,25 @@ VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14
 	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
 }
 
+func (s *Store) EnqueueIfNoActive(ctx context.Context, req EnqueueRequest) (JobRef, bool, error) {
+	if strings.TrimSpace(req.LockKey) == "" {
+		ref, err := s.Enqueue(ctx, req)
+		return ref, true, err
+	}
+	existing, err := s.findActiveByLock(ctx, req.JobType, req.LockKey)
+	if err == nil {
+		return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, false, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return JobRef{}, false, err
+	}
+	ref, err := s.Enqueue(ctx, req)
+	if err != nil {
+		return JobRef{}, false, err
+	}
+	return ref, true, nil
+}
+
 func (s *Store) idempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey)
 	if err != nil {
@@ -594,6 +613,19 @@ func (s *Store) findByIdempotency(ctx context.Context, actor, jobType, key strin
 	args := []any{actor, jobType, key}
 	if s.handle.Provider == "postgres" {
 		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE actor = $1 AND job_type = $2 AND idempotency_key = $3"
+	}
+	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) findActiveByLock(ctx context.Context, jobType, lockKey string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type = ? AND lock_key = ? AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
+	args := []any{jobType, lockKey}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type = $1 AND lock_key = $2 AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
 	}
 	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {

@@ -2,12 +2,12 @@
 
 `t-helper` - on-premise платформа для обнаружения Terraform-проектов, учёта репозиториев, локального security-анализа и централизованного управления конфигурацией, доступом и модулями.
 
-Репозиторий находится на Stage 03 executable baseline: backend entrypoints,
+Репозиторий находится на Stage 04 scanner/registry baseline: backend entrypoints,
 storage foundation, migrations, health endpoint, persisted runtime
 configuration, module lifecycle, singleton runtime lock, jobs/workers
-execution, status read models, tests and CI are implemented. Scanner,
-repository manager, auth and frontend remain stage-owned by later roadmap
-stages.
+execution, status read models, global scanner, Terraform project discovery,
+root paths, project registry and tests/CI are implemented. Repository manager,
+auth and frontend remain stage-owned by later roadmap stages.
 
 ## License
 
@@ -28,10 +28,10 @@ Use, copying, modification, distribution, and access outside the authorized orga
 - `thelper-worker` - отдельный worker process для выполнения background jobs
 - `thelper-ctl` - административный CLI
 
-Stage 03 реализует executable backend baseline. `thelper` starts the HTTP
-runtime, applies Stage 01-03 migrations and exposes `GET /api/health`,
-Stage 02 config/modules API, `GET /api/jobs`, `GET /api/jobs/{id}` and
-`GET /api/status*`.
+Stage 04 реализует executable backend baseline plus scanner/registry MVP.
+`thelper` starts the HTTP runtime, applies Stage 01-04 migrations and exposes
+`GET /api/health`, Stage 02 config/modules API, Stage 03 jobs/status API and
+Stage 04 scanner registry API.
 `thelper-worker` executes queued background jobs through persistent leases,
 heartbeats, retry/backoff and `job_locks`.
 `thelper-ctl` includes provider diagnostics, config import, synchronous reload,

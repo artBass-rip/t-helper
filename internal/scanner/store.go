@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,19 +53,28 @@ func (s *Store) SyncRootPathsFromConfig(ctx context.Context) error {
 		return fmt.Errorf("decode scanning.global_scan: %w", err)
 	}
 	inputs := make([]RootPathInput, 0, len(roots))
+	currentPaths := make(map[string]bool, len(roots))
 	for _, root := range roots {
 		enabled := true
 		schedule := root.Schedule
+		normalized, err := normalizeAbsPath(root.RootPath)
+		if err != nil {
+			return err
+		}
+		currentPaths[normalized] = true
 		inputs = append(inputs, RootPathInput{
 			Name:              root.Name,
-			Path:              root.RootPath,
+			Path:              normalized,
 			Enabled:           &enabled,
 			ScheduleEnabled:   &schedule,
 			ScheduleFrequency: root.Frequency,
+			Source:            RootPathSourceConfig,
 		})
 	}
-	_, err := s.UpsertRootPaths(ctx, inputs)
-	return err
+	if _, err := s.UpsertRootPaths(ctx, inputs); err != nil {
+		return err
+	}
+	return s.deactivateRemovedConfigRootPaths(ctx, currentPaths)
 }
 
 func (s *Store) UpsertRootPaths(ctx context.Context, inputs []RootPathInput) ([]RootPath, error) {
@@ -92,12 +102,22 @@ func (s *Store) upsertRootPath(ctx context.Context, input RootPathInput) (RootPa
 	if name == "" {
 		name = filepath.Base(normalized)
 	}
+	source := strings.TrimSpace(input.Source)
+	sourceExplicit := source != ""
+	if source != RootPathSourceAPI && source != RootPathSourceConfig {
+		if sourceExplicit {
+			return RootPath{}, validationErrorf("unsupported root_path source %q", source)
+		}
+	}
 	now := time.Now().UTC()
 	existing, err := s.findRootPath(ctx, input.ID, normalized)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return RootPath{}, err
 	}
 	if err == nil {
+		if !sourceExplicit {
+			source = existing.Source
+		}
 		enabled := existing.Enabled
 		if input.Enabled != nil {
 			enabled = *input.Enabled
@@ -106,10 +126,10 @@ func (s *Store) upsertRootPath(ctx context.Context, input RootPathInput) (RootPa
 		if input.ScheduleEnabled != nil {
 			schedule = *input.ScheduleEnabled
 		}
-		query := `UPDATE root_paths SET name = ?, path = ?, enabled = ?, schedule_enabled = ?, schedule_frequency = ?, updated_at = ? WHERE id = ?`
-		args := []any{name, normalized, s.boolArg(enabled), s.boolArg(schedule), nullEmpty(frequency), formatTime(now), existing.ID}
+		query := `UPDATE root_paths SET name = ?, path = ?, source = ?, enabled = ?, schedule_enabled = ?, schedule_frequency = ?, updated_at = ? WHERE id = ?`
+		args := []any{name, normalized, source, s.boolArg(enabled), s.boolArg(schedule), nullEmpty(frequency), formatTime(now), existing.ID}
 		if s.handle.Provider == "postgres" {
-			query = `UPDATE root_paths SET name = $1, path = $2, enabled = $3, schedule_enabled = $4, schedule_frequency = $5, updated_at = $6 WHERE id = $7`
+			query = `UPDATE root_paths SET name = $1, path = $2, source = $3, enabled = $4, schedule_enabled = $5, schedule_frequency = $6, updated_at = $7 WHERE id = $8`
 		}
 		if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
 			return RootPath{}, err
@@ -117,6 +137,9 @@ func (s *Store) upsertRootPath(ctx context.Context, input RootPathInput) (RootPa
 		return s.GetRootPath(ctx, existing.ID)
 	}
 	enabled := true
+	if !sourceExplicit {
+		source = RootPathSourceAPI
+	}
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
@@ -128,12 +151,12 @@ func (s *Store) upsertRootPath(ctx context.Context, input RootPathInput) (RootPa
 	if id == "" {
 		id = newID("root")
 	}
-	query := `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	args := []any{id, name, normalized, s.boolArg(enabled), s.boolArg(schedule), nullEmpty(frequency), formatTime(now), formatTime(now)}
+	query := `INSERT INTO root_paths (id, name, path, source, enabled, schedule_enabled, schedule_frequency, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{id, name, normalized, source, s.boolArg(enabled), s.boolArg(schedule), nullEmpty(frequency), formatTime(now), formatTime(now)}
 	if s.handle.Provider == "postgres" {
-		query = `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
+		query = `INSERT INTO root_paths (id, name, path, source, enabled, schedule_enabled, schedule_frequency, created_at, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
 	}
 	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
 		if isUniqueConstraintError(err) {
@@ -147,6 +170,55 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 		return RootPath{}, err
 	}
 	return s.GetRootPath(ctx, id)
+}
+
+func (s *Store) deactivateRemovedConfigRootPaths(ctx context.Context, currentPaths map[string]bool) error {
+	now := time.Now().UTC()
+	query := "SELECT id, path FROM root_paths WHERE source = ? AND enabled = ?"
+	args := []any{RootPathSourceConfig, s.boolArg(true)}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT id, path FROM root_paths WHERE source = $1 AND enabled = $2"
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	var removed []string
+	for rows.Next() {
+		var id, pathValue string
+		if err := rows.Scan(&id, &pathValue); err != nil {
+			rows.Close()
+			return err
+		}
+		if !currentPaths[pathValue] {
+			removed = append(removed, id)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, batch := range batches(removed, 500) {
+		if err := s.updateRootPathsEnabled(ctx, batch, false, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) updateRootPathsEnabled(ctx context.Context, ids []string, enabled bool, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args := []any{s.boolArg(enabled), formatTime(now)}
+	placeholders := make([]string, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+		placeholders = append(placeholders, s.placeholder(len(args)))
+	}
+	query := fmt.Sprintf("UPDATE root_paths SET enabled = %s, updated_at = %s WHERE id IN (%s)",
+		s.placeholder(1), s.placeholder(2), strings.Join(placeholders, ", "))
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (s *Store) findRootPath(ctx context.Context, id, path string) (RootPath, error) {
@@ -221,6 +293,26 @@ func (s *Store) RootPathsByIDs(ctx context.Context, ids []string) ([]RootPath, e
 		out = append(out, root)
 	}
 	return out, nil
+}
+
+func (s *Store) ConfigInt(ctx context.Context, key string) (int, error) {
+	query := "SELECT value FROM config_entries WHERE scope = ? AND key = ?"
+	args := []any{"system", key}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT value FROM config_entries WHERE scope = $1 AND key = $2"
+	}
+	var raw string
+	if err := s.handle.DB.QueryRowContext(ctx, query, args...).Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, validationErrorf("config %s must be an integer", key)
+	}
+	return value, nil
 }
 
 func (s *Store) UpsertProject(ctx context.Context, root RootPath, relativePath string, now time.Time) (Project, bool, error) {
@@ -358,17 +450,36 @@ func (s *Store) MarkMissingProjects(ctx context.Context, rootPathID string, seen
 	if err := rows.Close(); err != nil {
 		return 0, err
 	}
-	for _, id := range missing {
-		update := "UPDATE projects SET status = ?, updated_at = ? WHERE id = ?"
-		updateArgs := []any{ProjectStatusMissing, formatTime(now), id}
-		if s.handle.Provider == "postgres" {
-			update = "UPDATE projects SET status = $1, updated_at = $2 WHERE id = $3"
-		}
-		if _, err := s.handle.DB.ExecContext(ctx, update, updateArgs...); err != nil {
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	for _, batch := range batches(missing, 500) {
+		if err := s.markProjectIDsMissing(ctx, tx, batch, now); err != nil {
 			return 0, err
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
 	return len(missing), nil
+}
+
+func (s *Store) markProjectIDsMissing(ctx context.Context, tx *sql.Tx, ids []string, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args := []any{ProjectStatusMissing, formatTime(now)}
+	placeholders := make([]string, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+		placeholders = append(placeholders, s.placeholder(len(args)))
+	}
+	query := fmt.Sprintf("UPDATE projects SET status = %s, updated_at = %s WHERE id IN (%s)",
+		s.placeholder(1), s.placeholder(2), strings.Join(placeholders, ", "))
+	_, err := tx.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (s *Store) SetProjectRepository(ctx context.Context, projectID, repositoryID string) error {
@@ -899,7 +1010,7 @@ func valueCreatedAt(value any) time.Time {
 }
 
 func (s *Store) rootPathColumns() string {
-	return fmt.Sprintf(`id, name, path, %s, %s, COALESCE(schedule_frequency, ''), %s, %s`,
+	return fmt.Sprintf(`id, name, path, source, %s, %s, COALESCE(schedule_frequency, ''), %s, %s`,
 		s.boolSelect("enabled"), s.boolSelect("schedule_enabled"), s.timeExpr("created_at"), s.timeExpr("updated_at"))
 }
 
@@ -936,7 +1047,7 @@ func scanRootPath(row interface{ Scan(dest ...any) error }) (RootPath, error) {
 	var item RootPath
 	var enabled, schedule int
 	var created, updated string
-	if err := row.Scan(&item.ID, &item.Name, &item.Path, &enabled, &schedule, &item.ScheduleFrequency, &created, &updated); err != nil {
+	if err := row.Scan(&item.ID, &item.Name, &item.Path, &item.Source, &enabled, &schedule, &item.ScheduleFrequency, &created, &updated); err != nil {
 		return RootPath{}, err
 	}
 	item.Enabled = enabled != 0
@@ -1108,6 +1219,24 @@ func underErroredSubtree(relativePath string, erroredSubtrees map[string]bool) b
 		}
 	}
 	return false
+}
+
+func batches(values []string, size int) [][]string {
+	if len(values) == 0 {
+		return nil
+	}
+	if size <= 0 {
+		size = len(values)
+	}
+	out := make([][]string, 0, (len(values)+size-1)/size)
+	for start := 0; start < len(values); start += size {
+		end := start + size
+		if end > len(values) {
+			end = len(values)
+		}
+		out = append(out, values[start:end])
+	}
+	return out
 }
 
 func validateFrequency(value string) error {

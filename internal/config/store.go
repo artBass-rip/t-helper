@@ -660,27 +660,27 @@ func (s *Store) copyStage04ScannerData(ctx context.Context, tx *sql.Tx, targetPr
 }
 
 func (s *Store) copyRootPaths(ctx context.Context, tx *sql.Tx, targetProvider string) error {
-	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, path, CASE WHEN enabled THEN 1 ELSE 0 END, CASE WHEN schedule_enabled THEN 1 ELSE 0 END, COALESCE(schedule_frequency, ''), %s, %s FROM root_paths ORDER BY id`,
+	rows, err := s.handle.DB.QueryContext(ctx, fmt.Sprintf(`SELECT id, name, path, COALESCE(source, 'api'), CASE WHEN enabled THEN 1 ELSE 0 END, CASE WHEN schedule_enabled THEN 1 ELSE 0 END, COALESCE(schedule_frequency, ''), %s, %s FROM root_paths ORDER BY id`,
 		copyTimeExpr(s.handle.Provider, "created_at"), copyTimeExpr(s.handle.Provider, "updated_at")))
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, name, pathValue, frequency, createdAt, updatedAt string
+		var id, name, pathValue, source, frequency, createdAt, updatedAt string
 		var enabled, scheduleEnabled int
-		if err := rows.Scan(&id, &name, &pathValue, &enabled, &scheduleEnabled, &frequency, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &name, &pathValue, &source, &enabled, &scheduleEnabled, &frequency, &createdAt, &updatedAt); err != nil {
 			return err
 		}
 		if targetProvider == "postgres" {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-				id, name, pathValue, enabled != 0, scheduleEnabled != 0, nullEmpty(frequency), createdAt, updatedAt); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, source, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+				id, name, pathValue, source, enabled != 0, scheduleEnabled != 0, nullEmpty(frequency), createdAt, updatedAt); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,
-			id, name, pathValue, enabled, scheduleEnabled, nullEmpty(frequency), createdAt, updatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO root_paths (id, name, path, source, enabled, schedule_enabled, schedule_frequency, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+			id, name, pathValue, source, enabled, scheduleEnabled, nullEmpty(frequency), createdAt, updatedAt); err != nil {
 			return err
 		}
 	}
