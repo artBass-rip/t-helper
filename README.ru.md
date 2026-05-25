@@ -16,6 +16,18 @@ HTTP APIs.
 Repository operations, project/security scans, authentication/RBAC и frontend
 намеренно отнесены к следующим roadmap stages.
 
+## Страница проекта
+
+GitHub Pages поставляются как статическая двуязычная landing page проекта:
+
+- русская страница: [docs/index.html](docs/index.html);
+- английская страница: [docs/en.html](docs/en.html);
+- deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml).
+
+В начале страницы явно указано, что проект реализуется исключительно ИИ.
+Публикация идет из директории `docs` через GitHub Actions, если в настройках
+репозитория для Pages выбран source `GitHub Actions`.
+
 ## Лицензия
 
 Internal proprietary project. All rights reserved.
@@ -167,6 +179,8 @@ SQLite tests запускаются по умолчанию.
   `.t-helper.ignore`, reloadability и validation.
 - [docs/development.md](docs/development.md) - local development и test
   contract.
+- [docs/github-pages.md](docs/github-pages.md) - структура двуязычных GitHub
+  Pages и deployment workflow.
 - [docs/local-dev-environment.md](docs/local-dev-environment.md) -
   Docker-based local environment.
 - [docs/data-model.md](docs/data-model.md) - entities, relationships и storage
