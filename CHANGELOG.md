@@ -11,6 +11,8 @@ grouped by completed roadmap stages and merge commits.
   including a visible AI-only implementation notice at the top of both pages.
 - Added GitHub Pages deployment through `.github/workflows/pages.yml` from the
   `docs` directory.
+- Configured the Pages workflow to request automatic Pages enablement before
+  uploading the deployment artifact.
 - Added GitHub Pages documentation and linked it from both README variants.
 - Updated development, local environment and test-plan documentation to
   describe the current Stage 04 baseline.
