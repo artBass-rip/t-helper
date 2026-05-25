@@ -8,6 +8,8 @@ grouped by completed roadmap stages and merge commits.
 ## Unreleased
 
 - Next planned implementation stage: Stage 05 repository manager MVP.
+- Stage 09 implementation spec and roadmap now capture the prioritized
+  runtime/scanner optimization backlog from the code review.
 - Russian changelog added as [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
 - English README promoted to the primary [`README.md`](README.md).
 - Russian README added as [`README.ru.md`](README.ru.md).

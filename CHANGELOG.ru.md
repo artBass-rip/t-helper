@@ -8,6 +8,8 @@
 ## Не выпущено
 
 - Следующий плановый этап реализации: Stage 05 repository manager MVP.
+- Stage 09 implementation spec и roadmap теперь фиксируют приоритизированный
+  runtime/scanner optimization backlog из code review.
 - Добавлен русский журнал изменений: [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
 - Английский README сделан основным файлом [`README.md`](README.md).
 - Добавлен русский README: [`README.ru.md`](README.ru.md).
