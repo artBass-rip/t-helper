@@ -851,6 +851,58 @@ func TestGlobalScanFailureAndSymlinkPolicy(t *testing.T) {
 	}
 }
 
+func TestGlobalScanSucceedsWhenAtLeastOneRequestedRootIsProcessed(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    jobStore,
+		Handlers: scanner.JobHandlers(scannerStore),
+		WorkerID: "host:test:mixed-root-policy",
+		Logger:   slog.Default(),
+	})
+
+	goodRoot := t.TempDir()
+	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	mustWriteFile(t, filepath.Join(goodRoot, "service", "main.tf"), "terraform {}\n")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{
+		{Name: "good", Path: goodRoot, Enabled: &enabled},
+		{Name: "missing", Path: missingRoot, Enabled: &enabled},
+	})
+	if err != nil {
+		t.Fatalf("upsert root paths: %v", err)
+	}
+	payload, err := json.Marshal(scanner.GlobalScanPayload{
+		SchemaVersion:  scanner.GlobalScanPayloadSchema,
+		RootPathIDs:    []string{roots[0].ID, roots[1].ID},
+		Reason:         "test",
+		FollowSymlinks: false,
+	})
+	if err != nil {
+		t.Fatalf("marshal scan payload: %v", err)
+	}
+	ref, err := jobStore.Enqueue(ctx, jobs.EnqueueRequest{JobType: "global_scan", Payload: payload})
+	if err != nil {
+		t.Fatalf("enqueue mixed-root scan: %v", err)
+	}
+
+	runUntilComplete(t, ctx, runtime, jobStore, ref.JobID)
+	job, err := jobStore.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get mixed-root scan job: %v", err)
+	}
+	var result scanner.GlobalScanResult
+	if err := json.Unmarshal(job.ResultPayload, &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.ProjectsCreated != 1 || result.ErrorsCount == 0 {
+		t.Fatalf("mixed-root scan result = %+v, want one project and recorded root error", result)
+	}
+}
+
 func TestGlobalScanRejectsFollowSymlinksTrue(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -972,6 +1024,13 @@ func TestGlobalScanPreservesKnownEnvironmentAndWorkspaceLinks(t *testing.T) {
 	if len(projects.Items) != 1 {
 		t.Fatalf("projects = %+v, want one", projects.Items)
 	}
+	repo, _, _, err := scannerStore.UpsertGenericRepository(ctx, roots[0], rootDir)
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	if err := scannerStore.SetProjectRepository(ctx, projects.Items[0].ID, repo.ID); err != nil {
+		t.Fatalf("link repository: %v", err)
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO environments (id, name, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, "env_stage04", "Production", "prod", now, now); err != nil {
@@ -992,6 +1051,9 @@ func TestGlobalScanPreservesKnownEnvironmentAndWorkspaceLinks(t *testing.T) {
 	}
 	if project.EnvironmentID != "env_stage04" || project.DefaultWorkspaceID != "workspace_stage04" {
 		t.Fatalf("known links were not preserved after scan: %+v", project)
+	}
+	if project.RepositoryID != repo.ID {
+		t.Fatalf("known repository link was not preserved after scan: %+v", project)
 	}
 }
 
