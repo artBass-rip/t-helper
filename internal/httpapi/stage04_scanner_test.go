@@ -62,6 +62,15 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if len(roots.Items) != 1 || roots.Items[0].Path != rootPath {
 		t.Fatalf("unexpected root paths response: %+v", roots)
 	}
+	if roots.Items[0].Source != scanner.RootPathSourceAPI {
+		t.Fatalf("API-created root path source = %q, want api", roots.Items[0].Source)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/root-paths", bytes.NewReader([]byte(`{"root_paths":[{"name":"bad","path":"`+filepath.Join(t.TempDir(), "bad-root")+`","source":"config"}]}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PUT /api/root-paths with source status = %d body = %s", rec.Code, rec.Body.String())
+	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/ignore-rules", bytes.NewReader([]byte(`{"ignore_rules":[{"scope_type":"root_path","scope_id":"`+roots.Items[0].ID+`","pattern":"ignored/","origin":"ui"},{"scope_type":"root_path","scope_id":"`+roots.Items[0].ID+`","pattern":"!ignored/keep","origin":"ui"}]}`))))

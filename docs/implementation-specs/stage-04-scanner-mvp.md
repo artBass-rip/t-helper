@@ -56,6 +56,9 @@
 ### Upsert and identity rules
 
 - `root_paths` upsert key: normalized absolute `path`.
+- Public `PUT /api/root-paths` treats `root_paths.source` as read-only.
+  API-created or API-updated rows are owned as `source = api`; `source =
+  config` is reserved for materialized `scanning.global_scan` entries.
 - `projects` upsert key: `root_path_id + relative_path`.
 - Global filesystem scan never merges local project records. Every discovered Terraform working directory gets its own `projects` row keyed by `root_path_id + relative_path`.
 - Project records are created with the full project schema from the beginning; fields whose information is not known yet remain nullable/default and are filled later by project discovery, repository manager, project scans or explicit user/admin input.
@@ -123,6 +126,9 @@
 - Missing status does not replace or merge project records. If the project is later discovered again, the same row returns to `active`.
 - `GET /api/projects` returns `active` projects by default. Missing/disabled projects are returned only when `status?` explicitly requests them or when `status=all`.
 - Missing projects are read-only for project scan operations until rediscovered; `POST /api/project-scans` must reject `projects.status = missing` with a controlled validation error.
+- Stale `project_discovery` jobs for `projects.status = missing` or
+  `disabled` are no-op and must not create repository cards, links or
+  `projects.repository_id`.
 - If a later global scan finds the same `root_path_id + relative_path`, the project is automatically reactivated by setting `status = active` and updating `last_seen_at`.
 
 ### Required fixtures
@@ -158,6 +164,10 @@
 - scanner не создаёт implicit `environment` или `workspace` без явного входного правила/данных;
 - если связь проекта с `environment` или `workspace` уже известна, повторный scan сохраняет её;
 - environments/workspaces read endpoints работают и имеют FK/read tests;
+- `root_paths.source` ownership is enforced: API cannot claim config-owned
+  source values through request payloads;
+- stale project discovery for missing/disabled projects does not mutate
+  repository registry state;
 - results пишутся в `jobs.global_scan.result.v1`.
 
 ## Remaining MVP blockers

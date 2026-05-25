@@ -44,6 +44,13 @@ func (h *ScannerHandler) PutRootPaths(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
 		return
 	}
+	for idx := range req.RootPaths {
+		if req.RootPaths[idx].Source != "" {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "root_paths.source is read-only")
+			return
+		}
+		req.RootPaths[idx].Source = scanner.RootPathSourceAPI
+	}
 	items, err := h.store.UpsertRootPaths(r.Context(), req.RootPaths)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())

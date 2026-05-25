@@ -314,6 +314,18 @@ func (h projectDiscoveryHandler) Handle(ctx context.Context, env jobs.HandlerEnv
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
 	}
+	result := ProjectDiscoveryResult{
+		SchemaVersion:    ProjectDiscoveryResultSchema,
+		ProjectID:        project.ID,
+		LinkedProjectIDs: []string{},
+	}
+	if project.Status == ProjectStatusMissing || project.Status == ProjectStatusDisabled {
+		_ = env.EmitProgress(ctx, job, "project discovery skipped for inactive project", map[string]any{
+			"project_id": project.ID,
+			"status":     project.Status,
+		})
+		return marshalJSON(result)
+	}
 	if payload.RootPathID != "" && payload.RootPathID != project.RootPathID {
 		return nil, jobs.HandlerError{Code: "validation_error", Message: "project discovery root_path_id does not match project", Retryable: false}
 	}
@@ -327,11 +339,6 @@ func (h projectDiscoveryHandler) Handle(ctx context.Context, env jobs.HandlerEnv
 	repositoryPath, markerType, detected, err := findGitRepository(project.Path, root.Path)
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "handler_failed", Message: err.Error(), Retryable: true}
-	}
-	result := ProjectDiscoveryResult{
-		SchemaVersion:    ProjectDiscoveryResultSchema,
-		ProjectID:        project.ID,
-		LinkedProjectIDs: []string{},
 	}
 	if !detected {
 		return marshalJSON(result)

@@ -807,6 +807,62 @@ func TestProjectDiscoveryRejectsStaleProjectIdentityPayload(t *testing.T) {
 	}
 }
 
+func TestProjectDiscoverySkipsInactiveProjects(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:    jobStore,
+		Handlers: scanner.JobHandlers(scannerStore),
+		WorkerID: "host:test:inactive-discovery",
+		Logger:   slog.Default(),
+	})
+
+	rootDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(rootDir, "repo", ".git", "HEAD"), "ref: refs/heads/main\n")
+	mustWriteFile(t, filepath.Join(rootDir, "repo", "app", "main.tf"), "terraform {}\n")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+
+	for _, status := range []string{scanner.ProjectStatusMissing, scanner.ProjectStatusDisabled} {
+		project, _, err := scannerStore.UpsertProject(ctx, roots[0], "repo/app-"+status, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("upsert %s project: %v", status, err)
+		}
+		if _, err := handle.DB.ExecContext(ctx, `UPDATE projects SET status = ? WHERE id = ?`, status, project.ID); err != nil {
+			t.Fatalf("mark project %s: %v", status, err)
+		}
+		project, err = scannerStore.GetProject(ctx, project.ID)
+		if err != nil {
+			t.Fatalf("reload %s project: %v", status, err)
+		}
+		result := runProjectDiscoveryResult(t, ctx, runtime, jobStore, project)
+		if result.GitRepositoryDetected || result.RepositoryID != "" {
+			t.Fatalf("inactive %s project discovery should be no-op: %+v", status, result)
+		}
+		reloaded, err := scannerStore.GetProject(ctx, project.ID)
+		if err != nil {
+			t.Fatalf("get %s project after discovery: %v", status, err)
+		}
+		if reloaded.RepositoryID != "" {
+			t.Fatalf("inactive %s project got repository_id %q", status, reloaded.RepositoryID)
+		}
+	}
+
+	var repoCount int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM repositories").Scan(&repoCount); err != nil {
+		t.Fatalf("count repositories: %v", err)
+	}
+	if repoCount != 0 {
+		t.Fatalf("inactive project discovery created %d repositories, want 0", repoCount)
+	}
+}
+
 func TestGlobalScanFailureAndSymlinkPolicy(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
