@@ -13,6 +13,7 @@ import (
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/modules"
+	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
 )
 
@@ -77,7 +78,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	jobStore := jobs.NewStore(handle)
-	runtimeOptions, err := a.runtimeOptions(ctx, handle.Provider, configStore, jobStore, moduleStore)
+	runtimeOptions, err := a.runtimeOptions(ctx, handle, configStore, jobStore, moduleStore)
 	if err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func (a *App) Run(ctx context.Context) error {
 	return runtime.Run(ctx)
 }
 
-func (a *App) runtimeOptions(ctx context.Context, provider string, configStore *appconfig.Store, jobStore *jobs.Store, moduleStore *modules.Store) (jobs.RuntimeOptions, error) {
+func (a *App) runtimeOptions(ctx context.Context, handle *storage.Handle, configStore *appconfig.Store, jobStore *jobs.Store, moduleStore *modules.Store) (jobs.RuntimeOptions, error) {
 	cfg := a.cfg
 	defaults := DefaultConfig()
 	providerSettings, err := configStore.CurrentWorkerProviderSettings(ctx)
@@ -113,13 +114,17 @@ func (a *App) runtimeOptions(ctx context.Context, provider string, configStore *
 	if concurrency <= 0 {
 		concurrency = 1
 	}
-	if provider == "sqlite" && concurrency != 1 {
+	if handle.Provider == "sqlite" && concurrency != 1 {
 		return jobs.RuntimeOptions{}, fmt.Errorf("sqlite_worker_concurrency_unsupported")
 	}
 	workerID := jobs.NewWorkerID()
+	handlers := jobs.ModuleHandlers(configStore, moduleStore)
+	for jobType, handler := range scanner.JobHandlers(scanner.NewStore(handle)) {
+		handlers[jobType] = handler
+	}
 	return jobs.RuntimeOptions{
 		Store:             jobStore,
-		Handlers:          jobs.ModuleHandlers(configStore, moduleStore),
+		Handlers:          handlers,
 		WorkerID:          workerID,
 		Logger:            a.logger,
 		PollInterval:      cfg.PollInterval,

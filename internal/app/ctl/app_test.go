@@ -94,7 +94,7 @@ func TestStage02CLIReconfigureReloadAndRestartFlow(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := app.Run(ctx, Command{Name: "restart", StorageProvider: "sqlite", StorageDSN: dbPath, ModuleName: "global-scanner"}); err == nil {
+	if err := app.Run(ctx, Command{Name: "restart", StorageProvider: "sqlite", StorageDSN: dbPath, ModuleName: "project-scanner"}); err == nil {
 		t.Fatal("expected unavailable module restart to fail")
 	}
 

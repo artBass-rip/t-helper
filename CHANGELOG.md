@@ -7,51 +7,83 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
-- Stage 03 jobs/workers/status foundation is now implemented: persistent
-  `jobs`, `job_locks`, `job_events`, `workflow_statuses`, atomic claim,
-  leases, heartbeat, retry/backoff, worker execution and `/api/status*`.
-- Stage 03 job idempotency now compares canonical JSON payloads, so equivalent
-  payloads with different object ordering or whitespace replay the same job.
-- Stage 03 retention cleanup now preserves events for active jobs and only
-  deletes old routine events for terminal jobs.
-- Stage 03 worker status now reports each running lease, including concurrent
-  jobs owned by the same worker process.
-- Stage 03 SQLite workers now enforce the configured one-process limit with a
-  database-fingerprint worker lock, and job enqueue rejects secret-like payloads
-  before persistence.
-- Stage 02 storage profile imports now keep active `current` storage stable
-  until successful `thelper-ctl -migrate-db`, including initial imports with
-  `external_databases.enabled = true`.
-- Stage 02 storage migration targets now use fingerprint-specific migration
-  profile IDs and retire previous migration targets before staging a new one,
-  allowing repeated storage migrations after a successful promotion.
-- Re-importing config into an already promoted storage target now preserves the
-  active profile identity instead of attempting to create a second `current`
-  profile.
-- `repositories.poll_interval_default` validation now rejects zero and
-  negative durations.
-- Stage 02 configuration docs now clarify that `external_databases` is a
-  migration target in Stage 02 and does not switch runtime storage without
-  `thelper-ctl -migrate-db`.
-- Stage 02 reload results now distinguish `accepted_keys` from actually
-  `applied_keys`; accepted-but-not-applied reloadable keys are no longer
-  reported as applied.
-- Stage 02 module lifecycle failures now persist `state = failed` with
-  `last_error` in `module_states.details`.
-- Runtime startup now fails closed on unexpected `current` storage profile read
-  errors instead of silently falling back to bootstrap storage.
-- PostgreSQL storage profile DSNs are now built with URL-escaped credentials.
-- Module reload/restart JSON payloads now reject unknown fields and trailing
-  payloads.
-- `PUT /api/config` now rejects trailing JSON payload after the config object.
-- Explicit unknown reload keys are now reported in `failed_keys`.
-- Module reload/restart JSON payloads now reject `null` instead of treating it
-  as an empty request.
-- PostgreSQL storage profile DSNs now use `net.JoinHostPort` for IPv6-safe host
-  formatting.
-- Module lifecycle errors are now joined with failed-state persistence errors
-  when persisting `state = failed` also fails.
-- Next planned implementation stage: Stage 04 scanner and registry MVP.
+- Next planned implementation stage: Stage 05 repository manager MVP.
+- Russian changelog added as [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
+- English README promoted to the primary [`README.md`](README.md).
+- Russian README added as [`README.ru.md`](README.ru.md).
+- README content expanded with Stage 04 status, executable commands, HTTP API
+  surface, configuration model, storage/migration scope, scanner behavior,
+  documentation map, roadmap status and security/privacy assumptions.
+
+## Stage 04: Scanner and Registry MVP - 2026-05-26
+
+Commits: `490da8e` through `274dcee`.
+
+### Added
+
+- Added Stage 04 SQLite/PostgreSQL migrations for `root_paths`, `projects`,
+  `project_links`, minimal generic `repositories`, `environments` and
+  `workspaces`.
+- Added scanner/registry API endpoints for root paths, scans, projects,
+  project links, repositories, ignore rules, environments and workspaces.
+- Added `global_scan` job handling that discovers Terraform working
+  directories by `*.tf` filenames only.
+- Added coalesced background `project_discovery` jobs for Git repository
+  discovery after global scan registration.
+- Added Git marker handling for `.git/` directories and `.git` files with
+  `gitdir:` pointers.
+- Added generic local repository cards and `same_repository` project links for
+  separate projects discovered under the same repository.
+- Added filesystem boundary tests and scanner filesystem abstraction.
+
+### Changed
+
+- Global scanner now skips symlinked directories and `.git/` directories,
+  stops traversal below a discovered Terraform project and records skipped
+  symlink/error counters.
+- Root paths now track their source and inactive discovery paths are skipped.
+- Ignore matching is exclude-only for Stage 04 and preserves `!pattern` rules
+  without applying negation until full `.gitignore` semantics are implemented.
+- Project listing defaults to active projects, with explicit filters for
+  missing, disabled or all records.
+- API documentation was aligned with mixed root scans, project links and Stage
+  04 scanner behavior.
+
+### Known Limits
+
+- `POST /api/project-scans` exposes only the Stage 06 lifecycle guard and
+  returns `project_scan_unavailable` for otherwise valid active projects.
+- Repository clone, pull and sync workflows are reserved for Stage 05.
+- Full `.gitignore` negation semantics are reserved for a later hardening
+  stage.
+
+## Stage 03: Jobs, Workers and Status Foundation - 2026-05-21
+
+Merge commit: `7732215` (`stage-03-jobs-workers-status`).
+
+### Added
+
+- Added Stage 03 SQLite/PostgreSQL migrations for `jobs`, `job_locks`,
+  `job_events` and `workflow_statuses`.
+- Added persistent job enqueue, atomic claim, leases, heartbeat, retry/backoff
+  and expired lease recovery.
+- Added `thelper-worker` execution of queued background jobs.
+- Added worker handlers for `config_reload` and `module_restart`.
+- Added job idempotency scoped by actor, job type and `Idempotency-Key`.
+- Added `/api/jobs`, `/api/jobs/{id}` and `/api/status*` read APIs.
+- Added runtime, workflow, job and worker status read models.
+
+### Changed
+
+- Job idempotency compares canonical JSON payloads, so equivalent payloads with
+  different object ordering or whitespace replay the same job.
+- Worker status reports every running lease, including concurrent jobs owned by
+  the same worker process.
+- SQLite workers enforce the configured one-process limit with a
+  database-fingerprint worker lock.
+- Retention cleanup preserves events for active jobs and only deletes old
+  routine events for terminal jobs.
+- Job enqueue rejects secret-like payloads before persistence.
 
 ## Stage 02 Hardening and Documentation Alignment - 2026-05-06
 
@@ -77,11 +109,9 @@ Commit: `0b5996e` (`Stage02: preserve ignore_rules and sync reload`).
 - Added HTTP tests for malformed module reload JSON and missing restart
   `module_name`.
 - Added Stage 02 synchronous result schemas to payload documentation:
-  - `config_import.result.v1`
-  - `config_reload.result.v1`
-  - `module_reload.result.v1`
-  - `module_restart.result.v1`
-  - `storage_migration.result.v1`
+  `config_import.result.v1`, `config_reload.result.v1`,
+  `module_reload.result.v1`, `module_restart.result.v1` and
+  `storage_migration.result.v1`.
 
 ### Changed
 
@@ -107,29 +137,10 @@ Merge commit: `39446dd` (`stage-02-config-modules-runtime`).
 - Added persisted module observability through `module_states`.
 - Added `ignore_rules` import support as part of reconfiguration.
 - Added strict configuration import and validation pipeline.
-- Added `thelper-ctl` commands:
-  - `reconfigure`
-  - `reload`
-  - `restart`
-  - `migrate-db`
-- Added HTTP endpoints:
-  - `GET /api/config`
-  - `PUT /api/config`
-  - `GET /api/modules`
-  - `POST /api/modules/reload`
-  - `POST /api/modules/restart`
-- Added initial module registry seed:
-  - `core`
-  - `worker-runtime`
-  - `config-manager`
-  - `module-runtime`
-  - `status-monitor`
-  - `global-scanner`
-  - `repository-manager`
-  - `project-scanner`
-  - `security-validator`
-  - `auth`
-  - `web`
+- Added `thelper-ctl` commands: `reconfigure`, `reload`, `restart` and
+  `migrate-db`.
+- Added HTTP endpoints for config and module lifecycle operations.
+- Added initial module registry seed for core MVP modules.
 - Added singleton runtime lock and health metadata handling.
 - Added Stage 02 end-to-end tests for config import, reload, module lifecycle,
   runtime startup, storage profile migration and singleton runtime behavior.
@@ -142,12 +153,31 @@ Merge commit: `39446dd` (`stage-02-config-modules-runtime`).
 - Deprecated configuration aliases are rejected instead of being accepted as
   alternate spellings.
 - Global scan roots are accepted only through `scanning.global_scan`.
-- `GET /api/config` masks sensitive values and does not expose resolved secrets.
+- `GET /api/config` masks sensitive values and does not expose resolved
+  secrets.
 - Storage target changes update the `migration` profile first; the active
   `current` profile changes only after successful `thelper-ctl migrate-db`.
 - Module reload/restart operations now update persisted module state.
 - `GET /api/health` keeps the Stage 01 `health_status.v1` response shape while
   adding singleton runtime lock/probe semantics.
+
+### Fixed
+
+- Storage profile imports keep active `current` storage stable until a
+  successful `thelper-ctl -migrate-db`.
+- Repeated storage migrations use fingerprint-specific migration profile IDs
+  and retire previous migration targets before staging a new one.
+- Re-importing config into an already promoted storage target preserves the
+  active profile identity.
+- `repositories.poll_interval_default` rejects zero and negative durations.
+- Reload results distinguish accepted keys from actually applied keys.
+- Module lifecycle failures persist `state = failed` with `last_error`.
+- Runtime startup fails closed on unexpected `current` storage profile read
+  errors instead of silently falling back to bootstrap storage.
+- PostgreSQL storage profile DSNs URL-escape credentials and use
+  `net.JoinHostPort` for IPv6-safe host formatting.
+- Module reload/restart and `PUT /api/config` reject unknown fields, trailing
+  payloads and invalid `null` requests where applicable.
 
 ### Security
 
@@ -163,8 +193,9 @@ Merge commit: `39446dd` (`stage-02-config-modules-runtime`).
   jobs.
 - Scanner, repository manager, security validator, auth and frontend behavior
   remain future-stage deliverables.
-- MySQL and MSSQL are accepted in forward-compatible configuration spelling, but
-  runtime migration is currently implemented for SQLite and PostgreSQL only.
+- MySQL and MSSQL are accepted in forward-compatible configuration spelling,
+  but runtime migration is currently implemented for SQLite and PostgreSQL
+  only.
 
 ## Stage 01: Backend Storage Foundation - 2026-05-05
 
@@ -173,10 +204,8 @@ Merge commit: `eec0256` (`stage-01-backend-storage-foundation`).
 ### Added
 
 - Added Go module `github.com/artBass-rip/t-helper`.
-- Added executable entrypoints:
-  - `cmd/thelper`
-  - `cmd/thelper-worker`
-  - `cmd/thelper-ctl`
+- Added executable entrypoints: `cmd/thelper`, `cmd/thelper-worker` and
+  `cmd/thelper-ctl`.
 - Added backend HTTP runtime scaffold using `net/http` and `chi`.
 - Added unauthenticated safe `GET /api/health` endpoint returning
   `health_status.v1`.
@@ -251,8 +280,9 @@ Merge commit: `cf9474d` (`stage-00-delivery-contract`).
 
 ### Repository State
 
-- Current implemented backend scope is Stage 02.
+- Current implemented backend scope is Stage 04.
 - Current supported storage adapters are SQLite and PostgreSQL.
-- Current public runtime API surface is health, config and module lifecycle.
+- Current public runtime API surface is health, config, module lifecycle,
+  jobs/status and scanner/registry.
 - Frontend directory exists as a placeholder; React/Tauri implementation starts
   in Stage 08.

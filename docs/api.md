@@ -199,17 +199,18 @@ paths, usernames, passwords or userinfo.
 | Endpoint | Request | Success response | Notes |
 | --- | --- | --- | --- |
 | `GET /api/health` | n/a | `health_status` | Safe unauthenticated health/readiness endpoint for singleton runtime discovery; detailed status remains under authenticated `/api/status`. |
-| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Возвращает активные и отключённые root paths. |
-| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Идемпотентно upsert'ит root paths by `id` or normalized `path`; omitted records are not deleted in MVP. |
+| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Возвращает активные и отключённые root paths. Before read, backend materializes `scanning.global_scan` from config into `root_paths`. |
+| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Operational API: идемпотентно upsert'ит root paths by `id` or normalized `path`; omitted records are not deleted in MVP and this endpoint does not rewrite `scanning.global_scan` config. |
 | `POST /api/scans` | `root_path_ids?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = global_scan`; global scan creates/updates project records and enqueues background `project_discovery` jobs without waiting for them; `job_ref.job_id` используется для чтения статуса через `GET /api/scans/{job_id}` или `GET /api/jobs/{job_id}`. |
 | `GET /api/scans/{job_id}` | n/a | `job` | Temporary compatibility endpoint для global scan jobs; canonical job status endpoint - `GET /api/jobs/{id}`. Frontend MUST use `GET /api/jobs/{id}` or status endpoints for new code. Compatibility endpoint remains during MVP and may be removed only after one documented deprecation cycle. |
 | `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model для registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |
 | `GET /api/projects/{id}` | n/a | `project` | Возвращает проект с базовыми связями. |
-| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Возвращает project-level и security/validation scan settings для проекта. |
-| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Идемпотентно обновляет scan settings проекта; `security.enabled_modules` должны входить в `scanning.security_scan.modules`. |
-| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Создаёт `project_scans`, parent `jobs.job_type = project_scan` и `job_group_id = project_scan:<project_scan_id>`; parent job создаёт child `security_validation_scan` jobs, если security modules включены. |
-| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Возвращает aggregate status/read model из `status-monitor`; `project_scan.job_id` указывает на parent job, `job_group_id` связывает parent/child jobs. |
-| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Scoped findings для одного project scan. |
+| `GET /api/projects/{id}/links` | `limit`, `cursor`, `link_type?` | `list_response<project_link>` | Возвращает связи отдельного project record, например `same_repository`, без merge project rows. |
+| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
+| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. When implemented, `security.enabled_modules` must come from `scanning.security_scan.modules`. |
+| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Stage 06 contract. Stage 04 exposes only the lifecycle guard: missing/disabled projects return controlled validation errors; otherwise the endpoint returns `501 project_scan_unavailable`. |
+| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
+| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
 | `GET /api/repos` | `limit`, `cursor`, `provider?`, `provider_host?`, `full_path?`, `status?`, `discovery_source?`, `auto_sync_enabled?` | `list_response<repository>` | Read model для repositories. Default `status` filter is `active`; `full_path` без provider/provider_host может вернуть несколько repositories. |
 | `GET /api/repos/{id}` | n/a | `repository` | Возвращает repository card. |
 | `GET /api/repo-provider-instances` | `limit`, `cursor`, `provider?`, `provider_host?`, `enabled?` | `list_response<repository_provider_instance>` | GitKraken-like integration profiles for cloud, on-premise and multi-domain provider hosts. |

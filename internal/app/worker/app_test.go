@@ -48,7 +48,7 @@ func TestRuntimeOptionsUseProviderWorkerSettings(t *testing.T) {
 	moduleStore := modules.NewStore(handle)
 	app := New(Config{PollInterval: time.Millisecond}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	opts, err := app.runtimeOptions(ctx, handle.Provider, configStore, jobs.NewStore(handle), moduleStore)
+	opts, err := app.runtimeOptions(ctx, handle, configStore, jobs.NewStore(handle), moduleStore)
 	if err != nil {
 		t.Fatalf("runtime options: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRuntimeOptionsRejectSQLiteConcurrencyOverride(t *testing.T) {
 	configStore := appconfig.NewStore(handle)
 	moduleStore := modules.NewStore(handle)
 	app := New(Config{Concurrency: 2}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if _, err := app.runtimeOptions(ctx, handle.Provider, configStore, jobs.NewStore(handle), moduleStore); err == nil {
+	if _, err := app.runtimeOptions(ctx, handle, configStore, jobs.NewStore(handle), moduleStore); err == nil {
 		t.Fatal("expected sqlite_worker_concurrency_unsupported")
 	}
 }
@@ -92,7 +92,7 @@ func TestSQLiteWorkerProcessLimitLockRejectsSecondActiveWorker(t *testing.T) {
 	configStore := appconfig.NewStore(handle)
 	moduleStore := modules.NewStore(handle)
 	app := New(Config{WorkerLockDir: t.TempDir()}, registry, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	opts, err := app.runtimeOptions(ctx, handle.Provider, configStore, jobs.NewStore(handle), moduleStore)
+	opts, err := app.runtimeOptions(ctx, handle, configStore, jobs.NewStore(handle), moduleStore)
 	if err != nil {
 		t.Fatalf("runtime options: %v", err)
 	}

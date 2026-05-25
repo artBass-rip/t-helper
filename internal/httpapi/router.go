@@ -32,6 +32,23 @@ func New(health *HealthHandler, optionalHandlers ...any) *Server {
 			r.Get("/api/status/workflows/{job_group_id}", h.Workflow)
 			r.Get("/api/status/jobs/{job_id}", h.Job)
 			r.Get("/api/status/workers", h.Workers)
+		case *ScannerHandler:
+			r.Get("/api/root-paths", h.ListRootPaths)
+			r.Put("/api/root-paths", h.PutRootPaths)
+			r.Post("/api/scans", h.CreateScan)
+			r.Get("/api/scans/{job_id}", h.GetScan)
+			r.Get("/api/projects", h.ListProjects)
+			r.Get("/api/projects/{id}", h.GetProject)
+			r.Get("/api/projects/{id}/links", h.ListProjectLinks)
+			r.Post("/api/project-scans", h.CreateProjectScan)
+			r.Get("/api/repos", h.ListRepositories)
+			r.Get("/api/repos/{id}", h.GetRepository)
+			r.Get("/api/ignore-rules", h.ListIgnoreRules)
+			r.Put("/api/ignore-rules", h.PutIgnoreRules)
+			r.Get("/api/environments", h.ListEnvironments)
+			r.Get("/api/environments/{id}", h.GetEnvironment)
+			r.Get("/api/workspaces", h.ListWorkspaces)
+			r.Get("/api/workspaces/{id}", h.GetWorkspace)
 		}
 	}
 	return &Server{router: r}

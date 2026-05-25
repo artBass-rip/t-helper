@@ -219,7 +219,9 @@ capabilities outside the MVP backend scope are delivered separately:
 ### Производительность
 
 - global-scanner минимизирует число операций `stat/open`;
-- global-scanner использует worker pool с ограничением параллелизма;
+- global-scanner использует worker pool с ограничением параллелизма; SQLite
+  runtime may use effective traversal concurrency 1 to avoid local writer
+  contention;
 - security-validator использует отдельную очередь задач;
 - background jobs выполняются отдельными worker-процессами;
 - глобальное и проектное сканирование выполняются независимо.

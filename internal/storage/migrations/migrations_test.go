@@ -49,12 +49,12 @@ func TestApplyIsIdempotentForSQLite(t *testing.T) {
 	if err := db.QueryRow("SELECT value FROM system_metadata WHERE key = 'schema_version'").Scan(&value); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if value != "stage-03" {
-		t.Fatalf("schema_version = %q, want stage-03", value)
+	if value != "stage-04" {
+		t.Fatalf("schema_version = %q, want stage-04", value)
 	}
 }
 
-func TestStage03ReadPathIndexesExistForSQLite(t *testing.T) {
+func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +81,30 @@ func TestStage03ReadPathIndexesExistForSQLite(t *testing.T) {
 		},
 		"job_locks": {
 			"job_locks_cleanup_idx",
+		},
+		"ignore_rules": {
+			"ignore_rules_scope_order_idx",
+		},
+		"root_paths": {
+			"root_paths_enabled_path_idx",
+		},
+		"projects": {
+			"projects_root_path_status_idx",
+			"projects_repository_id_idx",
+			"projects_status_updated_at_idx",
+		},
+		"repositories": {
+			"repositories_provider_host_full_path_idx",
+			"repositories_local_path_idx",
+			"repositories_status_idx",
+			"repositories_discovery_source_idx",
+		},
+		"project_links": {
+			"project_links_repository_id_idx",
+		},
+		"workspaces": {
+			"workspaces_project_id_idx",
+			"workspaces_environment_id_idx",
 		},
 	} {
 		got := sqliteIndexes(t, db, table)
