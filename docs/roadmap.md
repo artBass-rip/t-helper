@@ -128,6 +128,7 @@ update/distribution policy remain release artifact exit decisions.
 
 - расширить observability и `status-monitor`;
 - усилить scheduler, worker shutdown/recovery и module runtime;
+- выполнить приоритизированный runtime/scanner optimization backlog из Stage 09 implementation spec;
 - реализовать full `.gitignore` semantics с `!pattern`;
 - реализовать optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;
 - формализовать degraded states, retention cleanup и operator diagnostics для jobs, locks, modules, workers and scans.
