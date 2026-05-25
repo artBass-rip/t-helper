@@ -1,86 +1,149 @@
 # T-Helper
 
-`t-helper` - on-premise платформа для обнаружения Terraform-проектов, учёта репозиториев, локального security-анализа и централизованного управления конфигурацией, доступом и модулями.
+[Русская версия](README.ru.md)
 
-Репозиторий находится на Stage 04 scanner/registry baseline: backend entrypoints,
-storage foundation, migrations, health endpoint, persisted runtime
-configuration, module lifecycle, singleton runtime lock, jobs/workers
-execution, status read models, global scanner, Terraform project discovery,
-root paths, project registry and tests/CI are implemented. Repository manager,
-auth and frontend remain stage-owned by later roadmap stages.
+`t-helper` is an on-premise platform for discovering Terraform projects,
+tracking repository metadata, running local security analysis, and managing
+runtime configuration, modules, jobs and access control from one backend.
+
+The repository is currently at the **Stage 04 scanner/registry baseline**.
+The executable backend foundation is implemented: service entrypoints, storage
+adapters, migrations, health checks, persisted runtime configuration, module
+lifecycle, singleton runtime locking, jobs/workers/status, global scanning,
+Terraform project discovery, root paths, project registry and scanner/registry
+HTTP APIs.
+
+Repository operations, project/security scans, authentication/RBAC and the
+frontend are intentionally owned by later roadmap stages.
 
 ## License
 
 Internal proprietary project. All rights reserved.
 
-Use, copying, modification, distribution, and access outside the authorized organization or team are prohibited without prior written permission from the copyright holder.
+Use, copying, modification, distribution, and access outside the authorized
+organization or team are prohibited without prior written permission from the
+copyright holder.
 
-`t-helper` - on-premise система для:
+## What Is Implemented
 
-- обнаружения Terraform-проектов в файловой системе;
-- регистрации проектов и репозиториев в БД;
-- локального security-анализа Terraform-кода без SaaS;
-- управления конфигурацией, модулями и доступом через `GUI`, `Web UI` и `thelper-ctl`.
+- Terraform working directory discovery by `*.tf` filenames.
+- Persistent root path, project, project link, minimal repository,
+  environment and workspace registries.
+- Runtime configuration stored in the database and imported through
+  `thelper-ctl`.
+- Module state persistence, reload and restart operations.
+- Background job queue with persistent leases, heartbeat, retry/backoff,
+  `job_locks`, job events and status read models.
+- `global_scan` jobs that enqueue coalesced `project_discovery` jobs for Git
+  repository association without blocking the global scan result.
+- SQLite and PostgreSQL storage adapters for the current MVP baseline.
+- HTTP APIs for health, config, modules, jobs/status and scanner/registry.
 
-## Исполняемые компоненты
+## Executables
 
-- `thelper` - backend runtime и service process
-- `thelper-worker` - отдельный worker process для выполнения background jobs
-- `thelper-ctl` - административный CLI
+- `thelper` - backend runtime and HTTP service process.
+- `thelper-worker` - worker process for queued background jobs.
+- `thelper-ctl` - administrative CLI for storage diagnostics, configuration
+  import, reload, module restart and controlled database migration.
 
-Stage 04 реализует executable backend baseline plus scanner/registry MVP.
-`thelper` starts the HTTP runtime, applies Stage 01-04 migrations and exposes
-`GET /api/health`, Stage 02 config/modules API, Stage 03 jobs/status API and
-Stage 04 scanner registry API.
-`thelper-worker` executes queued background jobs through persistent leases,
-heartbeats, retry/backoff and `job_locks`.
-`thelper-ctl` includes provider diagnostics, config import, synchronous reload,
-module restart and controlled storage migration commands.
+Common commands:
 
-## Карта документации
+```text
+go run ./cmd/thelper -listen 127.0.0.1:8080 -storage-provider sqlite -storage-dsn .artifacts/dev/sqlite/t-helper.db
+go run ./cmd/thelper-worker -storage-provider sqlite -storage-dsn .artifacts/dev/sqlite/t-helper.db -concurrency 1
+go run ./cmd/thelper-ctl -storage-provider sqlite -storage-dsn .artifacts/dev/sqlite/t-helper.db providers
+go run ./cmd/thelper-ctl -config config.example.json -ignore .t-helper.ignore -reconfigure
+go run ./cmd/thelper-ctl -reload
+go run ./cmd/thelper-ctl -restart global-scanner
+go run ./cmd/thelper-ctl -migrate-db
+```
 
-- [`docs/requirements.md`](docs/requirements.md) - функциональные и нефункциональные требования.
-- [`docs/architecture.md`](docs/architecture.md) - модули, deployment modes, storage strategy и runtime flow.
-- [`docs/interfaces.md`](docs/interfaces.md) - CLI, backend API, конфигурация и алгоритм глобального сканирования.
-- [`docs/api.md`](docs/api.md) - HTTP API conventions, response schemas и endpoint skeleton для MVP scaffolding.
-- [`docs/configuration.md`](docs/configuration.md) - структура `config.json`, `.t-helper.ignore`, reloadability и валидация.
-- [`docs/technology-stack.md`](docs/technology-stack.md) - зафиксированный backend, frontend и desktop GUI stack.
-- [`docs/frontend-ui-contract.md`](docs/frontend-ui-contract.md) - route map, navigation, density и Tauri delivery policy для Stage 08.
-- [`docs/adr/`](docs/adr/) - принятые implementation-level architecture decisions.
-- [`docs/development.md`](docs/development.md) - локальный dev/test contract для scaffolding, dialect-specific migrations, SQLite/PostgreSQL и secret references.
-- [`docs/local-dev-environment.md`](docs/local-dev-environment.md) - Docker-based локальное окружение разработчика, product containers, dependency services, OS matrix, automated/manual testing.
-- [`docs/data-model.md`](docs/data-model.md) - сущности, связи, enum-значения и storage-инварианты.
-- [`docs/payload-schemas.md`](docs/payload-schemas.md) - версионируемые JSON payload/result contracts для jobs, scans и module states.
-- [`docs/access-control.md`](docs/access-control.md) - auth, SCIM, RBAC, permissions и API authorization matrix.
-- [`docs/traceability.md`](docs/traceability.md) - трассировка требований к API, модели данных, permissions, этапам и приёмке.
-- [`docs/test-plan.md`](docs/test-plan.md) - mapping MVP acceptance к API, storage, authorization и runtime checks.
-- [`docs/roadmap.md`](docs/roadmap.md) - этапы реализации, критерии приёмки и статусы открытых решений.
-- [`docs/stage-00-delivery-contract.md`](docs/stage-00-delivery-contract.md) - принятый Stage 00 delivery contract, Stage 01 checklist и backlog Stage 01-03.
-- [`config.example.json`](config.example.json) - валидный пример входного `config.json` для `thelper-ctl -reconfigure`.
+When using built binaries, replace `go run ./cmd/<name>` with the binary name.
 
-## Текущий executable baseline
+## HTTP API
+
+Stage 04 exposes the following runtime API surface:
+
+- `GET /api/health`
+- `GET /api/config`, `PUT /api/config`
+- `GET /api/modules`, `POST /api/modules/reload`,
+  `POST /api/modules/restart`
+- `GET /api/jobs`, `GET /api/jobs/{id}`
+- `GET /api/status`, `GET /api/status/workflows`,
+  `GET /api/status/workflows/{job_group_id}`, `GET /api/status/jobs/{job_id}`,
+  `GET /api/status/workers`
+- `GET /api/root-paths`, `PUT /api/root-paths`
+- `POST /api/scans`, `GET /api/scans/{job_id}`
+- `GET /api/projects`, `GET /api/projects/{id}`,
+  `GET /api/projects/{id}/links`
+- `POST /api/project-scans` lifecycle guard for future Stage 06 scans
+- `GET /api/repos`, `GET /api/repos/{id}`
+- `GET /api/ignore-rules`, `PUT /api/ignore-rules`
+- `GET /api/environments`, `GET /api/environments/{id}`
+- `GET /api/workspaces`, `GET /api/workspaces/{id}`
+
+The canonical contracts are documented in [docs/api.md](docs/api.md) and
+[docs/interfaces.md](docs/interfaces.md).
+
+## Configuration Model
+
+After the first import, the database is the source of truth for runtime
+configuration and working data.
+
+Import files:
+
+- `config.json`
+- `.t-helper.ignore`
+
+[config.example.json](config.example.json) is a valid reference input for
+`thelper-ctl -reconfigure`.
+
+Important behavior:
+
+- `thelper-ctl -reconfigure` validates config strictly, imports config and
+  ignore rules into the database, and does not start or restart the service.
+- `thelper-ctl -reload` applies reloadable settings from the database and
+  reports settings that require a restart.
+- `thelper-ctl -restart <module>` restarts one module and updates
+  `module_states`.
+- `external_databases` prepares a migration target. Runtime storage is switched
+  only after successful `thelper-ctl -migrate-db`.
+- Raw secrets are rejected. Use `secretref://...` references for secret values.
+
+## Storage And Migrations
 
 - Go module: `github.com/artBass-rip/t-helper`, Go `1.23`.
-- Entrypoints: `cmd/thelper`, `cmd/thelper-worker`, `cmd/thelper-ctl`.
-- HTTP: `net/http` + `chi`, correlation IDs, unauthenticated safe
-  `GET /api/health` returning `health_status.v1`; Stage 02 config/modules API.
-- Storage: pluggable registry with `sqlite` and `postgres` MVP adapters;
-  external provider name `postgresql` is normalized to internal `postgres`.
-- Migrations: `goose` runner with dialect-specific synchronized migrations
-  under `internal/storage/migrations/{sqlite,postgres}`; `mysql` and `mssql`
-  directories are reserved for Stage 10.
-- Stage 01 schema ownership: `system_metadata` plus migration metadata.
-- Stage 02 schema ownership: `config_entries`, `storage_profiles`,
-  `storage_provider_settings`, `module_states` and imported system
+- Current storage providers: `sqlite`, `postgres`.
+- External provider name `postgresql` is normalized to internal `postgres`.
+- Migrations are dialect-specific and synchronized by logical version under
+  `internal/storage/migrations/{sqlite,postgres}`.
+- Stage 01 schema: `system_metadata` plus migration metadata.
+- Stage 02 schema: `config_entries`, `storage_profiles`,
+  `storage_provider_settings`, `module_states`, imported system
   `ignore_rules`.
-- Stage 03 schema ownership: `jobs`, `job_locks`, `job_events` and
+- Stage 03 schema: `jobs`, `job_locks`, `job_events`,
   `workflow_statuses`.
-- Stage 04 schema ownership: `root_paths`, `projects`, `project_links`,
-  minimal `repositories`, `environments` and `workspaces`.
-- CI: GitHub Actions `ci / go` runs format check, `go test ./...` with
-  PostgreSQL service and build checks for all three entrypoints.
+- Stage 04 schema: `root_paths`, `projects`, `project_links`, minimal
+  `repositories`, `environments`, `workspaces`.
+- MySQL and MSSQL are roadmap targets for Stage 10, not current runtime
+  adapters.
 
-Recommended local checks:
+## Scanner Behavior
+
+- The global scanner detects Terraform projects by `*.tf` filenames.
+- The scanner does not parse Terraform source contents during discovery.
+- Symlinked directories and `.git/` directories are skipped in Stage 04.
+- Traversal stops below a discovered Terraform project.
+- Stage 04 ignore matching is exclude-only. `!pattern` rules are preserved but
+  not applied until full `.gitignore` semantics are implemented in a later
+  hardening stage.
+- Missing projects are tracked without merging separate project rows.
+- Projects from the same Git repository are related with `same_repository`
+  project links.
+
+## Local Development
+
+Recommended checks:
 
 ```text
 go test ./...
@@ -88,43 +151,66 @@ go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
 docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 ```
 
-## Технологический стек
+PostgreSQL contract tests run when `THELPER_POSTGRES_DSN` is set. SQLite tests
+run by default.
 
-- Backend: `Go`.
-- Frontend: `React`, `TypeScript`, `Vite`, `TanStack Router`, `TanStack Query`, `Zod`, `React Hook Form`, `Ant Design`.
-- Desktop GUI: `Tauri` поверх той же React/TypeScript codebase.
-- Storage MVP: `SQLite` для локального режима и `PostgreSQL` для server setup.
-- Storage platform targets: `SQLite`, `PostgreSQL`, `MySQL`, `MSSQL`.
-- Jobs: отдельные `thelper-worker` процессы.
+## Documentation
 
-## Stage внедрения MVP
+- [docs/requirements.md](docs/requirements.md) - functional and
+  non-functional requirements.
+- [docs/architecture.md](docs/architecture.md) - architecture, modules,
+  deployment modes and runtime flow.
+- [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration
+  and global scanning behavior.
+- [docs/api.md](docs/api.md) - HTTP API contracts and response schemas.
+- [docs/configuration.md](docs/configuration.md) - `config.json`,
+  `.t-helper.ignore`, reloadability and validation.
+- [docs/development.md](docs/development.md) - local development and test
+  contract.
+- [docs/local-dev-environment.md](docs/local-dev-environment.md) -
+  Docker-based local environment.
+- [docs/data-model.md](docs/data-model.md) - entities, relationships and
+  storage invariants.
+- [docs/payload-schemas.md](docs/payload-schemas.md) - versioned JSON
+  payload/result contracts.
+- [docs/access-control.md](docs/access-control.md) - auth, SCIM, RBAC and
+  authorization matrix.
+- [docs/frontend-ui-contract.md](docs/frontend-ui-contract.md) - Stage 08 Web
+  UI and local GUI contract.
+- [docs/roadmap.md](docs/roadmap.md) - implementation stages and acceptance
+  criteria.
+- [docs/adr/](docs/adr/) - architecture decision records.
+- [docs/implementation-specs/](docs/implementation-specs/) - stage-level
+  implementation specs.
+- [CHANGELOG.md](CHANGELOG.md) and [CHANGELOG.ru.md](CHANGELOG.ru.md) -
+  change history.
 
-- Stage 00: delivery contract, Definition of Done и закрытие открытых продуктовых решений.
-- Stage 01: completed backend skeleton, `thelper`, `thelper-worker`, `thelper-ctl`, storage abstraction, `SQLite`, `PostgreSQL`, migrations и HTTP skeleton.
-- Stage 02: completed runtime configuration, `config_entries`, module lifecycle, reload/restart и singleton runtime policy.
-- Stage 03: jobs framework, worker execution model, leases, `job_locks`, `job_events` и базовый `status-monitor`.
-- Stage 04: completed `global-scanner`, `root_paths`, ignore rules, Terraform project discovery, background `project_discovery`, registry `projects`/`project_links`/`repositories`, `environments`/`workspaces` backend API.
-- Stage 05: repository manager MVP, generic Git + GitLab/GitHub single-repository `clone`/`pull`/`sync`, target path safety, credentials и serialization через `job_locks`.
-- Stage 06A: full external toolchain profile runtime, registry, validator, certified profiles and optional analyzer for `terraform validate`, `TFLint` and `Trivy`.
-- Stage 06B: project/security scans MVP, `terraform validate`, `TFLint`, `Trivy` как обязательный MVP security scanner, rule set registry, findings и parent-child scan workflow.
-- Stage 07: auth, локальная аутентификация, базовые external provider contracts, `RBAC`, SCIM contract/stub и audit security-событий.
-- Stage 08: `Web UI` и локальный `GUI` на общей React/TypeScript codebase для основных read/operate сценариев и full MVP administrative screens.
+## Roadmap Status
 
-Platform hardening поставляется отдельными stages: runtime/observability hardening, storage expansion, security tooling, admin UI hardening/extensions, SCIM full sync и repository webhooks. Distributed deployment поставляется в Stage 15.
+- Stage 00: completed delivery contract.
+- Stage 01: completed backend/storage foundation.
+- Stage 02: completed persisted config, module lifecycle and singleton
+  runtime.
+- Stage 03: completed jobs, workers and status foundation.
+- Stage 04: completed scanner and registry MVP.
+- Stage 05: next planned repository manager MVP: generic Git plus one managed
+  provider, clone/pull/sync jobs, credentials, path safety and serialization
+  through `job_locks`.
+- Stage 06A/06B: external toolchain profiles, project scanner and security
+  validator MVP.
+- Stage 07: auth, RBAC, SCIM contract/stub and audit.
+- Stage 08: React/TypeScript Web UI and local Tauri GUI.
+- Stage 09-15: observability hardening, storage adapter expansion, security
+  policy packs, admin UI hardening, SCIM full sync, repository webhooks and
+  distributed deployment.
 
-## Базовый стек сканирования
+## Security And Privacy Assumptions
 
-- `global-scanner`: файловое обнаружение Terraform-проектов и enqueue фоновых `project_discovery` jobs.
-- `project-scanner`: `terraform validate`, `TFLint`, проверки providers/auth/syntax/deprecations/quality/policy.
-- `security-validator`: `Trivy` как обязательный MVP scanner, findings по misconfiguration и secrets.
-- Security/policy extensions: `Gitleaks`, `Checkov`, `OPA`/`Conftest`.
-
-## Базовые технические решения
-
-- source of truth для runtime-конфигурации и рабочих данных - БД;
-- Terraform-проект в MVP определяется по наличию `*.tf`;
-- глобальное сканирование не читает содержимое Terraform-файлов без необходимости;
-- `GUI` и `Web UI` используют единый backend API;
-- `GUI` работает только локально;
-- в одной локальной установке активен только один `t-helper` runtime: если `thelper` уже запущен, Tauri подключается к нему; если нет - Tauri запускает его, а `Web UI` подключается к тому же runtime;
-- findings и исходный код не отправляются во внешние сервисы.
+- Runtime configuration and working data use the database as source of truth.
+- `GET /api/health` is safe for unauthenticated local discovery and must not
+  expose secrets, DSNs, users, object-scoped details or filesystem paths.
+- Secret values are represented as `secretref://...` references and must not be
+  persisted or returned as plaintext.
+- Global scan does not send source code to external services.
+- Findings and source code are not sent to external SaaS services by the
+  planned local security stack.
