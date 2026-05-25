@@ -9,6 +9,11 @@ grouped by completed roadmap stages and merge commits.
 
 - Next planned implementation stage: Stage 05 repository manager MVP.
 - Russian changelog added as [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
+- English README promoted to the primary [`README.md`](README.md).
+- Russian README added as [`README.ru.md`](README.ru.md).
+- README content expanded with Stage 04 status, executable commands, HTTP API
+  surface, configuration model, storage/migration scope, scanner behavior,
+  documentation map, roadmap status and security/privacy assumptions.
 
 ## Stage 04: Scanner and Registry MVP - 2026-05-26
 

@@ -9,6 +9,11 @@
 
 - Следующий плановый этап реализации: Stage 05 repository manager MVP.
 - Добавлен русский журнал изменений: [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
+- Английский README сделан основным файлом [`README.md`](README.md).
+- Добавлен русский README: [`README.ru.md`](README.ru.md).
+- README расширены описанием Stage 04 status, executable commands, HTTP API
+  surface, configuration model, storage/migration scope, scanner behavior,
+  documentation map, roadmap status и security/privacy assumptions.
 
 ## Stage 04: Scanner and Registry MVP - 2026-05-26
 
