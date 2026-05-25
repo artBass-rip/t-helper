@@ -219,7 +219,9 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 		} else {
 			result.ProjectsUpdated++
 		}
-		result.DirectoriesSkipped += countChildDirectories(entries, dir)
+		childDirectories, childSymlinks := countSkippedChildren(entries)
+		result.DirectoriesSkipped += childDirectories
+		result.SymlinksSkipped += childSymlinks
 		mu.Unlock()
 		enqueued, err := h.enqueueProjectDiscovery(ctx, env, job, project)
 		if err != nil {
@@ -250,12 +252,10 @@ func (h globalScanHandler) scanDirectory(ctx context.Context, env jobs.HandlerEn
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			if isDirectorySymlink(childPath) {
-				mu.Lock()
-				result.DirectoriesSkipped++
-				result.SymlinksSkipped++
-				mu.Unlock()
-			}
+			mu.Lock()
+			result.DirectoriesSkipped++
+			result.SymlinksSkipped++
+			mu.Unlock()
 			continue
 		}
 		if matcher.ignored(childRelativePath, true) {
@@ -453,23 +453,20 @@ func containsTerraformFile(entries []os.DirEntry, dirRelativePath string, matche
 	return false
 }
 
-func countChildDirectories(entries []os.DirEntry, parent string) int {
-	count := 0
+func countSkippedChildren(entries []os.DirEntry) (int, int) {
+	directories := 0
+	symlinks := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
-			count++
+			directories++
 			continue
 		}
-		if entry.Type()&os.ModeSymlink != 0 && isDirectorySymlink(filepath.Join(parent, entry.Name())) {
-			count++
+		if entry.Type()&os.ModeSymlink != 0 {
+			directories++
+			symlinks++
 		}
 	}
-	return count
-}
-
-func isDirectorySymlink(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
+	return directories, symlinks
 }
 
 func relativePath(rootPath, childPath string) string {

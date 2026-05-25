@@ -361,6 +361,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
 	}
 	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		if isUniqueConstraintError(err) {
+			_ = tx.Rollback()
+			return s.UpsertProject(ctx, root, relativePath, now)
+		}
 		return Project{}, false, err
 	}
 	if err := tx.Commit(); err != nil {

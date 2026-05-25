@@ -38,7 +38,9 @@ func TestGlobalScanDetectsTerraformProjectsAndMissingLifecycle(t *testing.T) {
 	mustWriteFile(t, filepath.Join(rootDir, ".git", "hidden", "main.tf"), "terraform {}\n")
 	linkedTarget := filepath.Join(t.TempDir(), "linked-target")
 	mustWriteFile(t, filepath.Join(linkedTarget, "main.tf"), "terraform {}\n")
+	symlinkCreated := true
 	if err := os.Symlink(linkedTarget, filepath.Join(rootDir, "linked")); err != nil {
+		symlinkCreated = false
 		t.Logf("symlink fixture skipped: %v", err)
 	}
 
@@ -69,6 +71,9 @@ func TestGlobalScanDetectsTerraformProjectsAndMissingLifecycle(t *testing.T) {
 	}
 	if result.DirectoriesSkipped < 2 {
 		t.Fatalf("expected ignored and nested directories to be skipped, got %+v", result)
+	}
+	if symlinkCreated && result.SymlinksSkipped == 0 {
+		t.Fatalf("expected symlink directory to be counted as skipped, got %+v", result)
 	}
 	projects, err := scannerStore.ListProjects(ctx, scanner.ProjectListOptions{Status: "all"})
 	if err != nil {
@@ -614,6 +619,67 @@ func TestUpsertGenericRepositoryHandlesConcurrentDiscovery(t *testing.T) {
 	}
 	if repoCount != 1 {
 		t.Fatalf("generic repository count = %d, want 1", repoCount)
+	}
+}
+
+func TestUpsertProjectHandlesConcurrentDiscovery(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+
+	rootDir := t.TempDir()
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "root", Path: rootDir, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	ids := make(chan string, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			project, _, err := scannerStore.UpsertProject(ctx, roots[0], "service", time.Now().UTC())
+			if err != nil {
+				errs <- err
+				return
+			}
+			ids <- project.ID
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	close(ids)
+
+	for err := range errs {
+		t.Fatalf("concurrent project upsert failed: %v", err)
+	}
+	var firstID string
+	for id := range ids {
+		if firstID == "" {
+			firstID = id
+			continue
+		}
+		if id != firstID {
+			t.Fatalf("concurrent upsert returned different project ids: first=%s current=%s", firstID, id)
+		}
+	}
+	if firstID == "" {
+		t.Fatal("concurrent upsert did not return any project ids")
+	}
+	var projectCount int
+	if err := handle.DB.QueryRowContext(ctx, "SELECT count(*) FROM projects WHERE root_path_id = ? AND relative_path = ?", roots[0].ID, "service").Scan(&projectCount); err != nil {
+		t.Fatalf("count projects: %v", err)
+	}
+	if projectCount != 1 {
+		t.Fatalf("project count = %d, want 1", projectCount)
 	}
 }
 

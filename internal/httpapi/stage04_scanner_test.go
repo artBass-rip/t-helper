@@ -104,6 +104,20 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 			t.Fatalf("GET %s status = %d body = %s", path, rec.Code, rec.Body.String())
 		}
 	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/workspaces?project_id="+project.ID+"&environment_id=env_http_stage04", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/workspaces filters status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var filteredWorkspaces struct {
+		Items []scanner.Workspace `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&filteredWorkspaces); err != nil {
+		t.Fatalf("decode filtered workspaces: %v", err)
+	}
+	if len(filteredWorkspaces.Items) != 1 || filteredWorkspaces.Items[0].ID != "workspace_http_stage04" {
+		t.Fatalf("unexpected filtered workspaces: %+v", filteredWorkspaces.Items)
+	}
 
 	rec = httptest.NewRecorder()
 	scanReq := httptest.NewRequest(http.MethodPost, "/api/scans", bytes.NewReader([]byte(`{"root_path_ids":["`+roots.Items[0].ID+`"],"reason":"manual"}`)))
@@ -149,6 +163,20 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert repository fixture: %v", err)
 	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repos?provider=generic&provider_host=local&full_path=.&discovery_source=filesystem&auto_sync_enabled=false", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/repos filters status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var repos struct {
+		Items []scanner.Repository `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&repos); err != nil {
+		t.Fatalf("decode filtered repos: %v", err)
+	}
+	if len(repos.Items) != 1 || repos.Items[0].ID != repo.ID {
+		t.Fatalf("unexpected filtered repos: %+v", repos.Items)
+	}
 	if _, err := scannerStore.UpsertProjectLink(ctx, project.ID, otherProject.ID, repo.ID, ""); err != nil {
 		t.Fatalf("upsert project link fixture: %v", err)
 	}
@@ -173,6 +201,41 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	}
 	if _, err := handle.DB.ExecContext(ctx, `UPDATE projects SET status = ? WHERE id = ?`, scanner.ProjectStatusMissing, missing.ID); err != nil {
 		t.Fatalf("mark project missing: %v", err)
+	}
+	disabled, _, err := scannerStore.UpsertProject(ctx, roots.Items[0], "disabled-service", now)
+	if err != nil {
+		t.Fatalf("upsert disabled project fixture: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE projects SET status = ? WHERE id = ?`, scanner.ProjectStatusDisabled, disabled.ID); err != nil {
+		t.Fatalf("mark project disabled: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects?status=disabled", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/projects?status=disabled status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var disabledProjects struct {
+		Items []scanner.Project `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&disabledProjects); err != nil {
+		t.Fatalf("decode disabled projects: %v", err)
+	}
+	if len(disabledProjects.Items) != 1 || disabledProjects.Items[0].ID != disabled.ID {
+		t.Fatalf("unexpected disabled projects: %+v", disabledProjects.Items)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects?status=all", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/projects?status=all status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var allProjects struct {
+		Items []scanner.Project `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&allProjects); err != nil {
+		t.Fatalf("decode all projects: %v", err)
+	}
+	if len(allProjects.Items) < 4 {
+		t.Fatalf("expected all project statuses to be returned, got %+v", allProjects.Items)
 	}
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+missing.ID+`"}`))))
