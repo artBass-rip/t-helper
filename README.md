@@ -16,6 +16,18 @@ HTTP APIs.
 Repository operations, project/security scans, authentication/RBAC and the
 frontend are intentionally owned by later roadmap stages.
 
+## Project Pages
+
+GitHub Pages are provided as a static bilingual project landing page:
+
+- Russian page: [docs/index.html](docs/index.html)
+- English page: [docs/en.html](docs/en.html)
+- Deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml)
+
+The landing page explicitly states at the top that the project is implemented
+exclusively by AI. Pages are published from the `docs` directory through GitHub
+Actions when the repository Pages source is configured to `GitHub Actions`.
+
 ## License
 
 Internal proprietary project. All rights reserved.
@@ -167,6 +179,8 @@ run by default.
   `.t-helper.ignore`, reloadability and validation.
 - [docs/development.md](docs/development.md) - local development and test
   contract.
+- [docs/github-pages.md](docs/github-pages.md) - bilingual GitHub Pages
+  structure and deployment workflow.
 - [docs/local-dev-environment.md](docs/local-dev-environment.md) -
   Docker-based local environment.
 - [docs/data-model.md](docs/data-model.md) - entities, relationships and

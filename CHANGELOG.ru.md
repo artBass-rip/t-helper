@@ -7,6 +7,14 @@
 
 ## Не выпущено
 
+- Добавлены двуязычные GitHub Pages в `docs/index.html` и `docs/en.html` с
+  видимой пометкой в начале каждой страницы, что проект реализуется
+  исключительно ИИ.
+- Добавлен deployment GitHub Pages через `.github/workflows/pages.yml` из
+  директории `docs`.
+- Добавлена документация GitHub Pages и ссылки на неё из обеих версий README.
+- Development, local environment и test-plan документация обновлены под текущий
+  Stage 04 baseline.
 - Следующий плановый этап реализации: Stage 05 repository manager MVP.
 - Stage 09 implementation spec и roadmap теперь фиксируют приоритизированный
   runtime/scanner optimization backlog из code review.

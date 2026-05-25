@@ -2,16 +2,17 @@
 
 ## Purpose
 
-This document defines the local development contract for the current Stage 02
-backend baseline and storage tests.
+This document defines the local development contract for the current Stage 04
+scanner/registry baseline and storage tests.
 
 The Docker-based developer environment, product/dependency containers, manual
 testing profile and OS-family test matrix are defined in
 [`local-dev-environment.md`](local-dev-environment.md).
 
-Stage 02 has delivered the executable backend scaffold, persisted runtime
-configuration, module lifecycle and singleton runtime policy. The current local
-baseline is:
+Stage 04 has delivered the executable backend scaffold, persisted runtime
+configuration, module lifecycle, singleton runtime policy, jobs/workers/status,
+global scanning, Terraform project discovery and scanner/registry HTTP APIs.
+The current local baseline is:
 
 - `go test ./...`;
 - `go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl`;
@@ -77,7 +78,12 @@ migration versions:
 
 - `000001_create_system_tables.sql` for Stage 01 system metadata;
 - `000002_stage02_config_modules_runtime.sql` for Stage 02 config, storage
-  profiles, module state and imported system ignore rules.
+  profiles, module state and imported system ignore rules;
+- `000003_stage03_jobs_workers_status.sql` for jobs, job locks, job events and
+  workflow statuses;
+- `000004_stage04_scanner_registry.sql` for root paths, projects, project
+  links, minimal repositories, environments and workspaces;
+- `000005_stage04_root_path_source.sql` for root path source tracking.
 
 The `mysql` and `mssql` directories are reserved for Stage 10 adapter expansion
 and contain no current SQL migrations.
@@ -102,15 +108,26 @@ Stage 03 migrations create:
 - `job_events`;
 - `workflow_statuses`.
 
-Stage 01-03 migrations must not create later-stage tables such as
-`root_paths`, `projects`, `repositories` or `users`.
+Stage 04 migrations create:
 
-## Stage 03 runtime behavior
+- `root_paths`;
+- `projects`;
+- `project_links`;
+- minimal `repositories`;
+- `environments`;
+- `workspaces`.
 
-- `cmd/thelper` applies Stage 01-03 migrations, starts the HTTP runtime and
+Stage 01-04 migrations must not create later-stage tables such as `users`,
+`groups`, `security_findings`, `project_scans` or repository operation tables
+owned by Stage 05 and later.
+
+## Stage 04 runtime behavior
+
+- `cmd/thelper` applies Stage 01-04 migrations, starts the HTTP runtime and
   exposes `GET /api/health`, `GET/PUT /api/config`, `GET /api/modules`,
   `POST /api/modules/reload`, `POST /api/modules/restart`, `GET /api/jobs`,
-  `GET /api/jobs/{id}` and `GET /api/status*`.
+  `GET /api/jobs/{id}`, `GET /api/status*` and Stage 04 scanner/registry
+  endpoints.
 - `GET /api/health` returns `health_status.v1` with `instance_id`, `mode`,
   safe `database_fingerprint`, `started_at`, `readiness` and `schema_version`.
 - `database_fingerprint` is derived from safe storage locator components and
@@ -129,6 +146,27 @@ Stage 01-03 migrations must not create later-stage tables such as
   synchronously and returns a Stage 02 result DTO.
 - `cmd/thelper-ctl -migrate-db` promotes a prepared `migration` storage profile
   only after successful schema/data copy.
+- Stage 04 scanner endpoints expose root paths, ignore rules, scans, projects,
+  project links, repositories, environments and workspaces.
+- Global scan detects Terraform projects by `*.tf` filenames and does not
+  parse Terraform source contents during discovery.
+- Global scan enqueues coalesced `project_discovery` jobs for Git repository
+  association without blocking the global scan result.
+- Symlinked directories and `.git/` directories are skipped in Stage 04.
+- Traversal stops below a discovered Terraform project.
+- Stage 04 ignore matching is exclude-only. `!pattern` rules are preserved but
+  not applied until full `.gitignore` semantics are implemented in a later
+  hardening stage.
+
+## Project Pages
+
+- `docs/index.html` is the default Russian GitHub Pages entrypoint.
+- `docs/en.html` is the English language variant.
+- Both pages share `docs/pages.css` and `docs/pages.js`.
+- `.github/workflows/pages.yml` publishes the `docs` directory through GitHub
+  Actions when repository Pages source is set to `GitHub Actions`.
+- The Pages landing page is documentation/presentation only and is separate
+  from the Stage 08 React/Tauri frontend deliverable.
 
 ## Secret references in development
 

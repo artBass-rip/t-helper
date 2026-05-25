@@ -79,10 +79,10 @@ Recommended profiles:
 | `offline` | Run tests with no external network assumptions. |
 | `os-matrix` | Run Linux OS-family compatibility test containers. |
 
-Stage 02 provides the current executable backend baseline and test runner.
+Stage 04 provides the current executable backend baseline and test runner.
 Compose commands may now be used directly for the `postgres` and `test-runner`
-services, including config/module/runtime checks; later product containers are
-still introduced by their owning stages.
+services, including config/module/runtime, jobs/status and scanner/registry
+checks; later product containers are still introduced by their owning stages.
 
 ## Product Containers
 
@@ -369,8 +369,9 @@ Environment implementation is stage-owned like migrations:
 - Stage 01 adds `postgres`, test runner and storage tests. Product images are
   expanded by the owning runtime/frontend stages.
 - Stage 02 added config import, module registry and singleton runtime smoke tests.
-- Stage 03 adds worker/status integration tests.
-- Stage 04 adds scanner fixtures and global scan tests.
+- Stage 03 added worker/status integration tests.
+- Stage 04 added scanner fixtures, scanner/registry API tests and global scan
+  tests.
 - Stage 05 adds Git/repository/provider mock services.
 - Stage 06A/06B add toolchain profile and scanner/security tests.
 - Stage 07 adds auth, RBAC, SCIM and audit test doubles.
