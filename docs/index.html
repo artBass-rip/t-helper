@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="T-Helper - on-premise платформа для обнаружения Terraform-проектов, учета репозиториев, jobs, модулей и локального security-анализа."
+    >
+    <title>T-Helper</title>
+    <link rel="alternate" hreflang="en" href="en.html">
+    <link rel="alternate" hreflang="ru" href="index.html">
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header" aria-label="Навигация">
+      <a class="brand" href="#top" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы страницы">
+        <a href="#status">Статус</a>
+        <a href="#architecture">Архитектура</a>
+        <a href="#docs">Документация</a>
+      </nav>
+      <div class="lang-switch" aria-label="Переключение языка">
+        <a class="is-active" href="index.html" aria-current="page">RU</a>
+        <a href="en.html">EN</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="page-title">
+        <div class="ai-note">
+          Проект реализуется исключительно ИИ: архитектура, код, документация и эта страница созданы AI-driven процессом.
+        </div>
+
+        <div class="hero-grid">
+          <div class="hero-copy" data-reveal>
+            <p class="eyebrow">On-premise Terraform operations platform</p>
+            <h1 id="page-title">T-Helper</h1>
+            <p class="hero-lead">
+              Платформа для обнаружения Terraform-проектов, учета репозиториев,
+              локального security-анализа и управления runtime-конфигурацией.
+            </p>
+            <div class="hero-actions" aria-label="Основные действия">
+              <a class="button primary" href="https://github.com/artBass-rip/t-helper/blob/master/README.ru.md">README</a>
+              <a class="button secondary" href="architecture.md">Архитектура</a>
+            </div>
+          </div>
+
+          <div class="system-visual" aria-label="Схема текущей платформы" data-reveal>
+            <div class="visual-grid" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="node core">
+              <span>core API</span>
+              <strong>thelper</strong>
+            </div>
+            <div class="node scan">
+              <span>scanner</span>
+              <strong><code>*.tf</code> discovery</strong>
+            </div>
+            <div class="node worker">
+              <span>worker</span>
+              <strong>jobs + leases</strong>
+            </div>
+            <div class="node store">
+              <span>storage</span>
+              <strong>SQLite / PostgreSQL</strong>
+            </div>
+            <div class="trace trace-a"></div>
+            <div class="trace trace-b"></div>
+            <div class="trace trace-c"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section status-section" id="status" aria-labelledby="status-title">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">Текущий baseline</p>
+          <h2 id="status-title">Stage 04: scanner и registry MVP</h2>
+          <p>
+            Реализована backend foundation: entrypoints, storage adapters,
+            migrations, runtime config, module lifecycle, jobs/workers/status,
+            global scanning и scanner/registry HTTP API.
+          </p>
+        </div>
+
+        <div class="status-rail" data-reveal>
+          <article>
+            <span>01</span>
+            <h3>Проекты</h3>
+            <p>Обнаружение Terraform working directories по наличию файлов <code>*.tf</code>.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Registry</h3>
+            <p>Root paths, projects, links, repositories, environments и workspaces в БД.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Runtime</h3>
+            <p>Персистентная конфигурация, lifecycle модулей и singleton runtime lock.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>Jobs</h3>
+            <p>Очередь фоновых задач с leases, heartbeat, retry/backoff и status read models.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section architecture-section" id="architecture" aria-labelledby="architecture-title">
+        <div class="split-layout">
+          <div class="section-heading compact" data-reveal>
+            <p class="eyebrow">Модель работы</p>
+            <h2 id="architecture-title">Локальный контроль без передачи исходников наружу</h2>
+            <p>
+              Runtime-конфигурация и рабочие сущности хранятся в базе данных,
+              а глобальный сканер не отправляет Terraform-код во внешние SaaS.
+            </p>
+          </div>
+          <div class="pipeline" data-reveal>
+            <div>
+              <span>01</span>
+              <strong>Root paths</strong>
+              <p>Администратор задает области сканирования и ignore rules.</p>
+            </div>
+            <div>
+              <span>02</span>
+              <strong>Global scan</strong>
+              <p>Scanner регистрирует Terraform-проекты и ставит discovery jobs.</p>
+            </div>
+            <div>
+              <span>03</span>
+              <strong>Project links</strong>
+              <p>Проекты из одного Git repository связываются без merge записей.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section roadmap-section" aria-labelledby="roadmap-title">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">Roadmap</p>
+          <h2 id="roadmap-title">Следующие этапы уже разложены по acceptance criteria</h2>
+        </div>
+        <ol class="roadmap" data-reveal>
+          <li>
+            <span>Stage 05</span>
+            Repository manager MVP: clone, pull, sync, credentials и path safety.
+          </li>
+          <li>
+            <span>Stage 06</span>
+            Project scanner и security validator на локальных toolchain profiles.
+          </li>
+          <li>
+            <span>Stage 07-08</span>
+            Auth/RBAC, SCIM contract, React Web UI и Tauri GUI.
+          </li>
+          <li>
+            <span>Stage 09-15</span>
+            Observability, storage expansion, policy packs, webhooks и distributed deployment.
+          </li>
+        </ol>
+      </section>
+
+      <section class="section docs-section" id="docs" aria-labelledby="docs-title">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">Project docs</p>
+          <h2 id="docs-title">Канонические материалы</h2>
+        </div>
+        <div class="doc-links" data-reveal>
+          <a href="requirements.md">
+            <span>Requirements</span>
+            Функциональные и нефункциональные требования.
+          </a>
+          <a href="api.md">
+            <span>HTTP API</span>
+            Контракты endpoints и схемы ответов.
+          </a>
+          <a href="configuration.md">
+            <span>Configuration</span>
+            <code>config.json</code>, <code>.t-helper.ignore</code>, reloadability и validation.
+          </a>
+          <a href="development.md">
+            <span>Development</span>
+            Локальная разработка и тестовый контракт.
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>T-Helper</span>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/README.md">English README</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/README.ru.md">Русский README</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/CHANGELOG.ru.md">Changelog</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>
