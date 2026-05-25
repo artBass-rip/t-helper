@@ -34,6 +34,11 @@ Repository settings must use:
 
 - Pages source: `GitHub Actions`.
 
+The workflow passes `enablement: true` to `actions/configure-pages@v5`, so it
+attempts to enable Pages and select the GitHub Actions source automatically. If
+repository or organization policy blocks this, enable Pages manually in
+repository settings and re-run the workflow.
+
 The workflow permissions are intentionally limited to:
 
 - `contents: read`;

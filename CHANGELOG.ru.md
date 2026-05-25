@@ -12,6 +12,8 @@
   исключительно ИИ.
 - Добавлен deployment GitHub Pages через `.github/workflows/pages.yml` из
   директории `docs`.
+- Pages workflow настроен на запрос автоматического включения Pages перед
+  загрузкой deployment artifact.
 - Добавлена документация GitHub Pages и ссылки на неё из обеих версий README.
 - Development, local environment и test-plan документация обновлены под текущий
   Stage 04 baseline.

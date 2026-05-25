@@ -164,7 +164,8 @@ owned by Stage 05 and later.
 - `docs/en.html` is the English language variant.
 - Both pages share `docs/pages.css` and `docs/pages.js`.
 - `.github/workflows/pages.yml` publishes the `docs` directory through GitHub
-  Actions when repository Pages source is set to `GitHub Actions`.
+  Actions and attempts to enable Pages automatically through
+  `actions/configure-pages`.
 - The Pages landing page is documentation/presentation only and is separate
   from the Stage 08 React/Tauri frontend deliverable.
 
