@@ -1,6 +1,38 @@
-# Backend API skeleton
+# Backend API Contracts
 
-Документ фиксирует минимальный HTTP API contract для MVP scaffolding. Канонический список endpoint'ов остаётся в [`interfaces.md`](interfaces.md), а правила авторизации - в [`access-control.md`](access-control.md).
+Документ фиксирует текущий executable HTTP API baseline и целевые API
+contracts для следующих roadmap stages. Канонический список capability-level
+interfaces остаётся в [`interfaces.md`](interfaces.md), а правила авторизации -
+в [`access-control.md`](access-control.md).
+
+## Текущий executable baseline
+
+Репозиторий сейчас находится на Stage 04 scanner/registry baseline. В текущем
+runtime реализованы:
+
+- `GET /api/health`;
+- `GET /api/config`, `PUT /api/config`;
+- `GET /api/modules`, `POST /api/modules/reload`,
+  `POST /api/modules/restart`;
+- `GET /api/jobs`, `GET /api/jobs/{id}`;
+- `GET /api/status`, `GET /api/status/workflows`,
+  `GET /api/status/workflows/{job_group_id}`, `GET /api/status/jobs/{job_id}`,
+  `GET /api/status/workers`;
+- `GET /api/root-paths`, `PUT /api/root-paths`;
+- `POST /api/scans`, `GET /api/scans/{job_id}`;
+- `GET /api/projects`, `GET /api/projects/{id}`,
+  `GET /api/projects/{id}/links`;
+- `POST /api/project-scans` only as the Stage 04 lifecycle guard for future
+  Stage 06 scans;
+- `GET /api/repos`, `GET /api/repos/{id}`;
+- `GET /api/ignore-rules`, `PUT /api/ignore-rules`;
+- `GET /api/environments`, `GET /api/environments/{id}`;
+- `GET /api/workspaces`, `GET /api/workspaces/{id}`.
+
+The endpoint table below also includes accepted future-stage contracts. Rows
+whose Notes column identifies a later stage are specification targets, not
+current runtime routes, unless the Notes column explicitly says that Stage 04
+exposes a guard or compatibility endpoint.
 
 ## Общие правила
 
