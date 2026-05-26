@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrValidation = errors.New("repository validation error")
-	ErrNotFound   = errors.New("repository record not found")
+	ErrValidation          = errors.New("repository validation error")
+	ErrNotFound            = errors.New("repository record not found")
+	ErrReservationConflict = errors.New("repository operation reservation conflict")
 )
 
 type Identity struct {
@@ -35,7 +36,10 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	if protocol != ProtocolHTTPS && protocol != ProtocolSSH {
 		return Identity{}, validationErrorf("unsupported protocol %q", protocol)
 	}
-	host := strings.ToLower(strings.TrimSpace(req.ProviderHost))
+	host, err := normalizeProviderHost(req.ProviderHost)
+	if err != nil {
+		return Identity{}, err
+	}
 	if instance != nil {
 		if provider != instance.Provider {
 			return Identity{}, validationErrorf("provider_instance_id does not match provider")
@@ -51,9 +55,19 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 		}
 		if host == "" {
 			host = parsed.ProviderHost
+		} else if parsed.ProviderHost != "" && host != parsed.ProviderHost {
+			return Identity{}, validationErrorf("invalid_provider_host")
 		}
 		if fullPath == "" {
 			fullPath = parsed.FullPath
+		} else {
+			normalizedRequestPath, err := NormalizeFullPath(provider, fullPath)
+			if err != nil {
+				return Identity{}, err
+			}
+			if normalizedRequestPath != parsed.FullPath {
+				return Identity{}, validationErrorf("provider_path_shape_mismatch")
+			}
 		}
 		cloneURL = parsed.CloneURL
 	}
@@ -66,7 +80,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	if host == "" {
 		return Identity{}, validationErrorf("provider_host is required")
 	}
-	fullPath, err := NormalizeFullPath(provider, fullPath)
+	fullPath, err = NormalizeFullPath(provider, fullPath)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -103,16 +117,41 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 	if u.Scheme == "file" {
 		return identityFromHostPath(provider, "local", strings.TrimPrefix(u.Path, "/"), ProtocolHTTPS)
 	}
-	return identityFromHostPath(provider, u.Hostname(), strings.TrimPrefix(u.Path, "/"), u.Scheme)
+	return identityFromHostPath(provider, u.Host, strings.TrimPrefix(u.Path, "/"), u.Scheme)
 }
 
 func identityFromHostPath(provider, host, rawPath, protocol string) (Identity, error) {
-	host = strings.ToLower(strings.TrimSpace(host))
+	host, err := normalizeProviderHost(host)
+	if err != nil {
+		return Identity{}, err
+	}
 	fullPath, err := NormalizeFullPath(provider, rawPath)
 	if err != nil {
 		return Identity{}, err
 	}
 	return Identity{Provider: provider, ProviderHost: host, FullPath: fullPath, CloneURL: TransportURL(provider, host, fullPath, protocol), Protocol: protocol}, nil
+}
+
+func normalizeProviderHost(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "", nil
+	}
+	if strings.Contains(value, "://") || strings.Contains(value, "/") || strings.Contains(value, "@") || strings.ContainsAny(value, " \t\r\n") {
+		return "", validationErrorf("invalid_provider_host")
+	}
+	host := value
+	if strings.Contains(value, ":") {
+		parsedHost, port, err := strings.Cut(value, ":")
+		if !err || parsedHost == "" || port == "" {
+			return "", validationErrorf("invalid_provider_host")
+		}
+		host = parsedHost
+	}
+	if host == "." || host == "-" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return "", validationErrorf("invalid_provider_host")
+	}
+	return value, nil
 }
 
 func NormalizeFullPath(provider, value string) (string, error) {

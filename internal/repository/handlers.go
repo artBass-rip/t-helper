@@ -3,8 +3,11 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/scanner"
@@ -50,8 +53,20 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
 	}
+	pathReservationKey := "repository-path:" + payload.RootPathID + ":" + payload.TargetDirectory
+	held, err := h.store.ReserveOperationKeys(ctx, job.ID, time.Hour, pathReservationKey)
+	if err != nil {
+		if errors.Is(err, ErrReservationConflict) {
+			return nil, jobs.HandlerError{Code: "repository_target_path_busy", Message: pathReservationKey, Retryable: true}
+		}
+		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
+	}
+	defer h.store.ReleaseOperationReservations(ctx, job.ID, held...)
 	if _, err := os.Stat(localPath); err == nil {
 		if _, statErr := os.Stat(localPath + string(os.PathSeparator) + ".git"); statErr == nil {
+			if err := h.validateExistingRemote(ctx, localPath, payload); err != nil {
+				return nil, err
+			}
 			return h.runGit(ctx, payload.RepositoryID, localPath, "pull", "--ff-only")
 		}
 		entries, readErr := os.ReadDir(localPath)
@@ -76,6 +91,24 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}
 	return json.Marshal(OperationResult{SchemaVersion: RepoOperationResultSchema, RepositoryID: payload.RepositoryID, Operation: "clone"})
+}
+
+func (h operationHandler) validateExistingRemote(ctx context.Context, localPath string, payload RepoClonePayload) error {
+	cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
+	cmd.Dir = localPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return jobs.HandlerError{Code: "repository_remote_unavailable", Message: strings.TrimSpace(string(out)), Retryable: false}
+	}
+	remote := strings.TrimSpace(string(out))
+	identity, err := ParseCloneURL(payload.Provider, remote)
+	if err != nil {
+		return jobs.HandlerError{Code: "repository_remote_mismatch", Message: "existing repository remote cannot be normalized", Retryable: false}
+	}
+	if identity.ProviderHost != payload.ProviderHost || identity.FullPath != payload.FullPath {
+		return jobs.HandlerError{Code: "repository_remote_mismatch", Message: "existing repository remote does not match requested repository", Retryable: false}
+	}
+	return nil
 }
 
 func (h operationHandler) handlePull(ctx context.Context, job jobs.Job) (json.RawMessage, error) {

@@ -3,8 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/repository"
@@ -138,6 +140,26 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
+	identityReservationKey := fmt.Sprintf("repository-identity:%s:%s:%s", identity.Provider, identity.ProviderHost, identity.FullPath)
+	pathReservationKey := fmt.Sprintf("repository-path:%s:%s", root.ID, targetDirectory)
+	reservationOwner := CorrelationIDFromContext(r.Context())
+	heldReservations, err := h.store.ReserveOperationKeys(r.Context(), reservationOwner, 5*time.Minute, identityReservationKey, pathReservationKey)
+	if err != nil {
+		var conflict repository.ReservationConflictError
+		if errors.As(err, &conflict) {
+			code := "repository_operation_already_running"
+			if conflict.Key == pathReservationKey {
+				code = "repository_target_path_busy"
+			}
+			writeErrorDetails(w, r, http.StatusConflict, code, "repository clone conflict", map[string]any{
+				"lock_key": conflict.Key,
+			})
+			return
+		}
+		writeRepositoryError(w, r, err)
+		return
+	}
+	defer h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
 	if active, conflictCode, err := h.activeCloneConflict(r, identity, root.ID, targetDirectory); err == nil {
 		writeErrorDetails(w, r, http.StatusConflict, conflictCode, "repository clone conflict", map[string]any{
 			"lock_key":        active.LockKey,
@@ -248,8 +270,8 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		writeScannerReadError(w, r, err)
 		return
 	}
-	if repo.Status == "superseded" {
-		writeError(w, r, http.StatusBadRequest, "validation_error", "superseded repositories cannot be operated")
+	if repo.Status == "superseded" || repo.Status == "disabled" {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "repository status "+repo.Status+" cannot be operated")
 		return
 	}
 	if credentialID != "" && repo.ProviderInstanceID != "" {

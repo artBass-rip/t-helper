@@ -38,6 +38,35 @@ func TestNormalizeIdentityRejectsUserInfo(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityPreservesProviderHostPort(t *testing.T) {
+	identity, err := NormalizeIdentity(CloneRequest{
+		Provider:   ProviderGitHub,
+		Protocol:   ProtocolHTTPS,
+		CloneURL:   "https://ghe.example.internal:8443/example/repo.git",
+		CloneScope: "single_repository",
+	}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	if identity.ProviderHost != "ghe.example.internal:8443" {
+		t.Fatalf("provider_host = %q, want host:port", identity.ProviderHost)
+	}
+}
+
+func TestNormalizeIdentityRejectsExplicitURLMismatch(t *testing.T) {
+	_, err := NormalizeIdentity(CloneRequest{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Protocol:     ProtocolHTTPS,
+		CloneURL:     "https://ghe.example.internal/example/repo.git",
+		FullPath:     "example/repo",
+		CloneScope:   "single_repository",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected provider host mismatch validation error")
+	}
+}
+
 func TestNormalizeTargetRejectsTraversal(t *testing.T) {
 	root := t.TempDir()
 	if _, _, err := NormalizeTarget(root, "../escape"); err == nil {
