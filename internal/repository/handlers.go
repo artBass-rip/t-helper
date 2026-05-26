@@ -75,7 +75,10 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 	if payload.LocalPath != "" && filepath.Clean(payload.LocalPath) != filepath.Clean(localPath) {
 		return nil, jobs.HandlerError{Code: "invalid_repository_path", Message: "repository local_path no longer matches target_directory", Retryable: false}
 	}
-	pathReservationKey := "repository-path:" + payload.RootPathID + ":" + payload.TargetDirectory
+	pathReservationKey, err := TargetReservationKey(root.Path, payload.RootPathID, payload.TargetDirectory)
+	if err != nil {
+		return nil, jobs.HandlerError{Code: ValidationCode(err), Message: err.Error(), Retryable: false}
+	}
 	held, err := h.store.ReserveOperationKeys(ctx, job.ID, time.Hour, pathReservationKey)
 	if err != nil {
 		if errors.Is(err, ErrReservationConflict) {

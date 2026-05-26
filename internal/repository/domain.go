@@ -3,12 +3,15 @@ package repository
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
@@ -53,7 +56,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	if protocol != ProtocolHTTPS && protocol != ProtocolSSH {
 		return Identity{}, validationError("unsupported_url_protocol", fmt.Sprintf("unsupported protocol %q", protocol))
 	}
-	host, err := normalizeProviderHost(req.ProviderHost)
+	host, err := normalizeProviderHostForProtocol(req.ProviderHost, protocol)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -89,7 +92,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 		cloneURL = parsed.CloneURL
 	}
 	if provider == ProviderGeneric && host == "" {
-		host = "generic"
+		host = "local"
 	}
 	if provider == ProviderGitHub && host == "" {
 		host = "github.com"
@@ -146,7 +149,7 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 }
 
 func identityFromHostPath(provider, host, rawPath, protocol string) (Identity, error) {
-	host, err := normalizeProviderHost(host)
+	host, err := normalizeProviderHostForProtocol(host, protocol)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -158,6 +161,10 @@ func identityFromHostPath(provider, host, rawPath, protocol string) (Identity, e
 }
 
 func normalizeProviderHost(value string) (string, error) {
+	return normalizeProviderHostForProtocol(value, "")
+}
+
+func normalizeProviderHostForProtocol(value, protocol string) (string, error) {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
 		return "", nil
@@ -167,9 +174,12 @@ func normalizeProviderHost(value string) (string, error) {
 	}
 	host := value
 	if strings.Contains(value, ":") {
-		parsedHost, port, err := strings.Cut(value, ":")
-		if !err || parsedHost == "" || port == "" {
+		parsedHost, port, err := splitHostPortLenient(value)
+		if err != nil || parsedHost == "" || port == "" {
 			return "", validationError("invalid_provider_host", "invalid provider_host")
+		}
+		if (protocol == ProtocolHTTPS && port == "443") || (protocol == ProtocolSSH && port == "22") {
+			value = parsedHost
 		}
 		host = parsedHost
 	}
@@ -179,8 +189,19 @@ func normalizeProviderHost(value string) (string, error) {
 	return value, nil
 }
 
+func splitHostPortLenient(value string) (string, string, error) {
+	if host, port, err := net.SplitHostPort(value); err == nil {
+		return strings.Trim(host, "[]"), port, nil
+	}
+	host, port, ok := strings.Cut(value, ":")
+	if !ok || strings.Contains(port, ":") {
+		return "", "", fmt.Errorf("invalid host port")
+	}
+	return host, port, nil
+}
+
 func NormalizeFullPath(provider, value string) (string, error) {
-	value = strings.TrimSpace(value)
+	value = norm.NFC.String(strings.TrimSpace(value))
 	if value == "" || hasControl(value) || strings.Contains(value, "\\") {
 		return "", validationError("invalid_repository_path", "invalid repository path")
 	}
@@ -222,7 +243,7 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 	} else if !os.IsNotExist(evalErr) {
 		return "", "", validationError("invalid_repository_path", "root_path is unavailable")
 	}
-	target = strings.TrimSpace(target)
+	target = norm.NFC.String(strings.TrimSpace(target))
 	if target == "" {
 		return "", "", validationError("invalid_repository_path", "target_directory is required")
 	}
@@ -253,6 +274,18 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 		return "", "", err
 	}
 	return filepath.ToSlash(rel), local, nil
+}
+
+func TargetReservationKey(rootPath, rootPathID, targetDirectory string) (string, error) {
+	normalizedTarget, _, err := NormalizeTarget(rootPath, targetDirectory)
+	if err != nil {
+		return "", err
+	}
+	keyTarget := norm.NFC.String(normalizedTarget)
+	if filesystemCaseInsensitive(rootPath) {
+		keyTarget = strings.ToLower(keyTarget)
+	}
+	return "repository-path:" + rootPathID + ":" + keyTarget, nil
 }
 
 func containedTargetPath(root, slashTarget string) (string, error) {
@@ -300,6 +333,46 @@ func withinRoot(root, child string) bool {
 	}
 	rel = filepath.ToSlash(rel)
 	return rel == "." || (!strings.HasPrefix(rel, "../") && rel != "..")
+}
+
+func filesystemCaseInsensitive(root string) bool {
+	probeDir := root
+	if evaluatedRoot, err := filepath.EvalSymlinks(root); err == nil {
+		probeDir = evaluatedRoot
+	}
+	info, err := os.Stat(probeDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	probe, err := os.CreateTemp(probeDir, ".thelper-case-probe-*")
+	if err != nil {
+		return false
+	}
+	probeName := filepath.Base(probe.Name())
+	_ = probe.Close()
+	defer os.Remove(probe.Name())
+	swapped := swapASCIICase(probeName)
+	if swapped == probeName {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(probeDir, swapped))
+	return err == nil
+}
+
+func swapASCIICase(value string) string {
+	var builder strings.Builder
+	builder.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r - ('a' - 'A'))
+		case r >= 'A' && r <= 'Z':
+			builder.WriteRune(r + ('a' - 'A'))
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
 }
 
 func validateSecretRef(value string) error {

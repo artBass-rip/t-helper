@@ -109,6 +109,77 @@ func TestStage05RepositoryCloneValidationCodeAndIdempotentReplay(t *testing.T) {
 	if conflict.Error.Details["repository_id"] == "" || conflict.Error.Details["active_job_id"] != first.JobID || conflict.Error.Details["active_job_type"] != "repo_clone" {
 		t.Fatalf("conflict details missing active repository operation fields: %+v", conflict.Error.Details)
 	}
+
+	changedBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/other.git",
+		"root_path_id":     root.ID,
+		"target_directory": "other",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(changedBody))
+	req.Header.Set("Idempotency-Key", "clone-replay")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("changed idempotency replay status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&conflict); err != nil {
+		t.Fatalf("decode idempotency conflict: %v", err)
+	}
+	if conflict.Error.Code != "idempotency_conflict" {
+		t.Fatalf("idempotency conflict code = %q", conflict.Error.Code)
+	}
+}
+
+func TestStage05CloneRejectsBusyTargetPathForDifferentRepository(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	firstBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(firstBody)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	secondBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/other.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(secondBody)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("busy target clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode busy target error: %v", err)
+	}
+	if apiErr.Error.Code != "repository_target_path_busy" {
+		t.Fatalf("busy target code = %q", apiErr.Error.Code)
+	}
 }
 
 func TestStage05CloneRejectsDisabledProviderInstance(t *testing.T) {
@@ -195,6 +266,54 @@ func TestStage05PullRejectsSupersededRepository(t *testing.T) {
 	}
 	if apiErr.Error.Code != "repository_status_not_operable" {
 		t.Fatalf("error code = %q", apiErr.Error.Code)
+	}
+}
+
+func TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	repo, _, _, err := scannerStore.UpsertGenericRepository(ctx, root, filepath.Join(root.Path, "repo"))
+	if err != nil {
+		t.Fatalf("upsert generic repo: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{"repository_id": repo.ID})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/pull", bytes.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("pull status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var pullRef jobs.JobRef
+	if err := json.NewDecoder(rec.Body).Decode(&pullRef); err != nil {
+		t.Fatalf("decode pull job ref: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/sync", bytes.NewReader(body)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("sync conflict status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var conflict struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&conflict); err != nil {
+		t.Fatalf("decode sync conflict: %v", err)
+	}
+	if conflict.Error.Code != "repository_operation_already_running" || conflict.Error.Details["active_job_id"] != pullRef.JobID || conflict.Error.Details["active_job_type"] != "repo_pull" {
+		t.Fatalf("unexpected sync conflict: %+v", conflict.Error)
 	}
 }
 

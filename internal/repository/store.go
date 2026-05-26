@@ -119,7 +119,11 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 	if provider != ProviderGeneric && provider != ProviderGitHub {
 		return ProviderInstance{}, validationErrorf("unsupported provider %q", provider)
 	}
-	host, err := normalizeProviderHost(input.ProviderHost)
+	hostProtocol := ""
+	if provider == ProviderGitHub {
+		hostProtocol = ProtocolHTTPS
+	}
+	host, err := normalizeProviderHostForProtocol(input.ProviderHost, hostProtocol)
 	if err != nil {
 		return ProviderInstance{}, err
 	}
@@ -127,7 +131,7 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 		if provider == ProviderGitHub {
 			host = "github.com"
 		} else {
-			host = "generic"
+			host = "local"
 		}
 	}
 	name := strings.TrimSpace(input.Name)

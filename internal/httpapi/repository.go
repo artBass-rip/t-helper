@@ -162,6 +162,11 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
+	pathReservationKey, err := repository.TargetReservationKey(root.Path, root.ID, targetDirectory)
+	if err != nil {
+		writeRepositoryError(w, r, err)
+		return
+	}
 	if replay, replayErr := h.cloneIdempotentReplay(r, identity, root.ID, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID); replayErr == nil {
 		writeJSON(w, http.StatusAccepted, replay)
 		return
@@ -170,7 +175,6 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	identityReservationKey := fmt.Sprintf("repository-identity:%s:%s:%s", identity.Provider, identity.ProviderHost, identity.FullPath)
-	pathReservationKey := fmt.Sprintf("repository-path:%s:%s", root.ID, targetDirectory)
 	reservationOwner := CorrelationIDFromContext(r.Context())
 	heldReservations, err := h.store.ReserveOperationKeys(r.Context(), reservationOwner, 5*time.Minute, identityReservationKey, pathReservationKey)
 	if err != nil {
@@ -189,7 +193,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
-	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, root.ID, targetDirectory); err == nil {
+	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, root.ID, root.Path, pathReservationKey); err == nil {
 		writeErrorDetails(w, r, http.StatusConflict, conflictCode, "repository clone conflict", map[string]any{
 			"repository_id":   conflictRepositoryID,
 			"lock_key":        active.LockKey,
@@ -280,7 +284,7 @@ func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repo
 	return jobs.JobRef{JobID: job.ID, Status: job.Status, SchemaVersion: jobs.JobRefSchemaVersion}, nil
 }
 
-func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, targetDirectory string) (jobs.Job, string, string, error) {
+func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, rootPath, pathReservationKey string) (jobs.Job, string, string, error) {
 	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
 		active, err := h.jobStore.List(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status})
 		if err != nil {
@@ -297,8 +301,11 @@ func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity reposi
 			if payload.Provider == identity.Provider && payload.ProviderHost == identity.ProviderHost && payload.FullPath == identity.FullPath {
 				return job, "repository_operation_already_running", payload.RepositoryID, nil
 			}
-			if payload.RootPathID == rootPathID && payload.TargetDirectory == targetDirectory {
-				return job, "repository_target_path_busy", payload.RepositoryID, nil
+			if payload.RootPathID == rootPathID {
+				payloadPathKey, err := repository.TargetReservationKey(rootPath, rootPathID, payload.TargetDirectory)
+				if err == nil && payloadPathKey == pathReservationKey {
+					return job, "repository_target_path_busy", payload.RepositoryID, nil
+				}
 			}
 		}
 	}

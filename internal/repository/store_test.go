@@ -196,6 +196,21 @@ func TestCredentialValidationUsesADRAuthTypesAndUsages(t *testing.T) {
 	}
 }
 
+func TestProviderInstanceNormalizesDefaultHTTPSPort(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com:443",
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	if instances[0].ProviderHost != "github.com" {
+		t.Fatalf("provider_host = %q, want github.com", instances[0].ProviderHost)
+	}
+}
+
 func TestGitCredentialEnvResolvesSecretRef(t *testing.T) {
 	ctx := context.Background()
 	handle := openRepositorySQLite(t)

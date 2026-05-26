@@ -55,6 +55,46 @@ func TestNormalizeIdentityPreservesProviderHostPort(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityDropsDefaultPorts(t *testing.T) {
+	for _, tc := range []struct {
+		protocol string
+		raw      string
+		wantHost string
+		wantURL  string
+	}{
+		{ProtocolHTTPS, "https://github.com:443/example/repo.git", "github.com", "https://github.com/example/repo.git"},
+		{ProtocolSSH, "ssh://git@github.com:22/example/repo.git", "github.com", "git@github.com:example/repo.git"},
+	} {
+		identity, err := NormalizeIdentity(CloneRequest{
+			Provider:   ProviderGitHub,
+			Protocol:   tc.protocol,
+			CloneURL:   tc.raw,
+			CloneScope: "single_repository",
+		}, nil)
+		if err != nil {
+			t.Fatalf("normalize %q: %v", tc.raw, err)
+		}
+		if identity.ProviderHost != tc.wantHost || identity.CloneURL != tc.wantURL {
+			t.Fatalf("identity for %q = %+v, want host %q clone_url %q", tc.raw, identity, tc.wantHost, tc.wantURL)
+		}
+	}
+}
+
+func TestNormalizeIdentityGenericDefaultsToLocalHost(t *testing.T) {
+	identity, err := NormalizeIdentity(CloneRequest{
+		Provider:   ProviderGeneric,
+		Protocol:   ProtocolHTTPS,
+		FullPath:   "repo",
+		CloneScope: "single_repository",
+	}, nil)
+	if err != nil {
+		t.Fatalf("normalize generic identity: %v", err)
+	}
+	if identity.ProviderHost != "local" {
+		t.Fatalf("generic provider_host = %q, want local", identity.ProviderHost)
+	}
+}
+
 func TestNormalizeIdentityAcceptsBareHostPath(t *testing.T) {
 	identity, err := NormalizeIdentity(CloneRequest{
 		Provider:   ProviderGitHub,
@@ -130,6 +170,17 @@ func TestNormalizeTargetReturnsContainedPath(t *testing.T) {
 	}
 	if local != filepath.Join(expectedRoot, "teams", "repo") {
 		t.Fatalf("local = %q", local)
+	}
+}
+
+func TestNormalizeTargetCanonicalizesUnicodeNFC(t *testing.T) {
+	root := t.TempDir()
+	target, _, err := NormalizeTarget(root, "teams/re\u0301po")
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
+	if target != "teams/répo" {
+		t.Fatalf("target = %q, want NFC normalized path", target)
 	}
 }
 
