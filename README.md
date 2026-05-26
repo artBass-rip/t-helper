@@ -175,7 +175,8 @@ run by default.
   deployment modes and runtime flow.
 - [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration
   and global scanning behavior.
-- [docs/api.md](docs/api.md) - HTTP API contracts and response schemas.
+- [docs/api.md](docs/api.md) - current Stage 04 HTTP API baseline, future
+  endpoint contracts and response schemas.
 - [docs/configuration.md](docs/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability and validation.
 - [docs/development.md](docs/development.md) - local development and test

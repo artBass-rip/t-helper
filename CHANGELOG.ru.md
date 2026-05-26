@@ -7,6 +7,11 @@
 
 ## Не выпущено
 
+- Уточнен `docs/api.md`: теперь он явно разделяет текущий executable API
+  baseline Stage 04 и future-stage endpoint contracts, чтобы плановые маршруты
+  Stage 05+ и Stage 06+ не выглядели как реализованные runtime routes.
+- Обновлены карты документации в README: API-документ описан как текущий
+  Stage 04 baseline и roadmap contract surface.
 - Добавлены двуязычные GitHub Pages в `docs/index.html` и `docs/en.html` с
   видимой пометкой в начале каждой страницы, что проект реализуется
   исключительно ИИ.

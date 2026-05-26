@@ -175,7 +175,8 @@ SQLite tests запускаются по умолчанию.
   deployment modes и runtime flow.
 - [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration и
   global scanning behavior.
-- [docs/api.md](docs/api.md) - HTTP API contracts и response schemas.
+- [docs/api.md](docs/api.md) - текущий Stage 04 HTTP API baseline, будущие
+  endpoint contracts и response schemas.
 - [docs/configuration.md](docs/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability и validation.
 - [docs/development.md](docs/development.md) - local development и test

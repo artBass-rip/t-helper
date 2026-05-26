@@ -7,6 +7,11 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Clarified `docs/api.md` as the current Stage 04 executable API baseline plus
+  future-stage endpoint contracts, so planned Stage 05+ and Stage 06+ routes
+  are not confused with current runtime routes.
+- Updated README documentation maps to describe the API document as both the
+  implemented Stage 04 baseline and roadmap contract surface.
 - Added bilingual GitHub Pages under `docs/index.html` and `docs/en.html`,
   including a visible AI-only implementation notice at the top of both pages.
 - Added GitHub Pages deployment through `.github/workflows/pages.yml` from the
