@@ -16,6 +16,33 @@
 - `docs/adr/0015-repository-provider-integration-profiles.md`
 - `docs/adr/0016-repository-provider-url-parsing.md`
 
+## Entry baseline
+
+Stage 05 starts from a completed Stage 04 scanner/registry baseline:
+
+- `repositories` already exists with `provider`, `provider_host`, `full_path`,
+  lifecycle fields and uniqueness indexes for provider-aware and generic local
+  identities;
+- Stage 04 `project_discovery` can create generic local repository cards and
+  `project_links`;
+- `GET /api/repos` and `GET /api/repos/{id}` are read-only Stage 04 routes;
+- the job system already accepts `repo_clone`, `repo_pull` and `repo_sync`
+  payload schemas and maps them to `repository_operation` workflow status;
+- worker runtime and `job_locks` exist, but repository-manager handlers are not
+  registered yet;
+- the module registry contains `repository-manager` as unavailable until this
+  stage enables it.
+
+Current gaps that must be closed inside Stage 05:
+
+- `POST /api/repos/clone`, `POST /api/repos/pull` and `POST /api/repos/sync`
+  are not executable routes yet;
+- `repository_provider_instances` and `repository_credentials` do not exist yet;
+- provider URL parsing and path normalization are not implemented as
+  repository-manager domain services yet;
+- the existing generic active-lock helper is scoped by `job_type + lock_key` and
+  is not sufficient for the Stage 05 cross-operation conflict policy by itself.
+
 ## Scope
 
 - модуль `repository-manager`;
@@ -74,6 +101,24 @@
 - конфликтующие repo operations сериализуются через `job_locks` and the MVP conflict policy below;
 - provider-aware operations reject `status = superseded` repositories with controlled validation error.
 
+## Implementation sequencing
+
+Stage 05 should be implemented in this order to keep the risk surface small:
+
+1. Add repository-manager storage migrations and stores for
+   `repository_provider_instances` and `repository_credentials`, including
+   `secretref://env/...` validation and masked API responses.
+2. Add provider URL parsing and repository identity normalization tests before
+   wiring clone/pull/sync. The MVP managed provider must be selected explicitly
+   in the implementation branch: `gitlab` or `github`.
+3. Add clone target normalization and containment checks as a domain service
+   used by both API handlers and worker handlers.
+4. Add repository operation enqueue APIs with idempotency and conflict handling.
+5. Add worker handlers for `repo_clone`, `repo_pull` and `repo_sync`, then enable
+   the `repository-manager` module.
+6. Add filesystem/Git integration tests after pure normalization, credential and
+   conflict tests are passing.
+
 ## Repository enrichment contract
 
 Stage 04 `project_discovery` may create conservative local cards:
@@ -118,6 +163,12 @@ strict and predictable:
 
 - at most one active repository operation job may exist for one
   `lock_key = repository:<repository_id>`;
+- this check is cross-operation: an active `repo_clone` blocks `repo_pull` and
+  `repo_sync` for the same repository, and the same applies to every other
+  pair among `repo_clone`, `repo_pull` and `repo_sync`;
+- implementation must not rely only on a helper that searches by exact
+  `job_type + lock_key`; repository operation conflict lookup must search all
+  active repository operation job types for the same `lock_key`;
 - `clone` must also use pre-create conflict checks before `repository_id` is
   available;
 - active means `jobs.status in (queued, running)`;
@@ -151,14 +202,24 @@ Required API/domain flow:
    `repository-path:<root_path_id>:<normalized_target_path>`.
 4. Upsert or find `repositories` by `provider + provider_host + full_path`.
 5. Create the job with final `lock_key = repository:<repository_id>`.
-6. Worker execution acquires `job_locks` for `repository:<repository_id>` and
-   the normalized target path lock before writing to disk.
+6. Worker execution acquires the final repository lock
+   `repository:<repository_id>`.
+7. Before writing to disk, the worker also holds the normalized target path lock
+   `repository-path:<root_path_id>:<normalized_target_path>` or an equivalent
+   repository-manager storage lock, then re-validates the target path against
+   the persisted `root_path` and expected repository identity.
 
 The identity lock prevents duplicate clone jobs for the same Git repository
 before a stable repository row exists. The path lock prevents two different
 repositories from writing into the same local directory. The final
 `repository:<repository_id>` lock remains the common serialization key for later
 `pull` and `sync`.
+
+Pre-create and worker-side identity/path locks may be represented as queued job
+lock keys, multiple held `job_locks`, transactional conflict rows or an
+equivalent repository-manager storage primitive. They must expire or be released
+safely when enqueue or execution fails so a failed clone request cannot
+permanently block later operations.
 
 Conflict errors from pre-create locking use machine-readable codes:
 
@@ -188,9 +249,17 @@ Required cases:
 - existing Git repository with a different remote must reject clone unless an
   explicit future takeover workflow is documented.
 
+The implementation must include domain-level tests for the same path safety
+rules in addition to HTTP API tests. Worker handlers must repeat containment
+checks immediately before filesystem writes, because queued jobs may run after
+root paths or symlinks have changed.
+
 ## Stage-local blockers
 
-- none.
+- none for starting implementation.
+- Before merging Stage 05, the implementation branch must record which managed
+  provider was selected for the MVP (`gitlab` or `github`) in this document,
+  `CHANGELOG.md` and `CHANGELOG.ru.md`.
 
 ## Traceability
 
