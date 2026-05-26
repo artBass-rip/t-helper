@@ -25,10 +25,9 @@ GitHub Pages поставляются как статическая двуязы
 - deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml).
 
 В начале страницы явно указано, что проект реализуется исключительно ИИ.
-Публикация идет из директории `docs` через GitHub Actions. Workflow пытается
-включить GitHub Pages автоматически; если политика репозитория блокирует
-автоматическое включение, в настройках репозитория нужно выбрать Pages source
-`GitHub Actions`.
+Публикация идет из директории `docs` через GitHub Actions в ветку `gh-pages`.
+В настройках Pages нужно выбрать source `Deploy from a branch`, branch
+`gh-pages`, folder `/ (root)`.
 
 ## Лицензия
 

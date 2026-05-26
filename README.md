@@ -26,9 +26,8 @@ GitHub Pages are provided as a static bilingual project landing page:
 
 The landing page explicitly states at the top that the project is implemented
 exclusively by AI. Pages are published from the `docs` directory through GitHub
-Actions. The workflow attempts to enable GitHub Pages automatically; if
-repository policy blocks automatic enablement, configure Pages source as
-`GitHub Actions` in repository settings.
+Actions to the `gh-pages` branch. Repository Pages settings must use source
+`Deploy from a branch`, branch `gh-pages`, folder `/ (root)`.
 
 ## License
 

@@ -27,23 +27,24 @@ This keeps the published site usable even when JavaScript is unavailable.
 
 ## Deployment
 
-The `github-pages` workflow publishes the `docs` directory as the Pages
-artifact on pushes to `master` and on manual `workflow_dispatch` runs.
+The `github-pages` workflow publishes the `docs` directory to the `gh-pages`
+branch on pushes to `master` and on manual `workflow_dispatch` runs.
 
 Repository settings must use:
 
-- Pages source: `GitHub Actions`.
+- Pages source: `Deploy from a branch`;
+- branch: `gh-pages`;
+- folder: `/ (root)`.
 
-The workflow passes `enablement: true` to `actions/configure-pages@v5`, so it
-attempts to enable Pages and select the GitHub Actions source automatically. If
-repository or organization policy blocks this, enable Pages manually in
-repository settings and re-run the workflow.
+This branch-based deployment avoids the GitHub Pages REST API calls used by
+`actions/configure-pages` and `actions/deploy-pages`. Those REST calls can fail
+with `Resource not accessible by integration` when the repository or
+organization does not allow `GITHUB_TOKEN` to create or configure the Pages
+site.
 
 The workflow permissions are intentionally limited to:
 
-- `contents: read`;
-- `pages: write`;
-- `id-token: write`.
+- `contents: write`.
 
 ## Maintenance contract
 
