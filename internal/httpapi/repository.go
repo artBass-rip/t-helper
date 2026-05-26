@@ -115,6 +115,20 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		}
 		instance = &item
 	}
+	if req.CredentialID != "" && instance == nil {
+		cred, err := h.store.GetCredential(r.Context(), req.CredentialID)
+		if err != nil {
+			writeRepositoryError(w, r, err)
+			return
+		}
+		item, err := h.store.GetProviderInstance(r.Context(), cred.ProviderInstanceID)
+		if err != nil {
+			writeRepositoryError(w, r, err)
+			return
+		}
+		req.ProviderInstanceID = item.ID
+		instance = &item
+	}
 	identity, err := repository.NormalizeIdentity(req, instance)
 	if err != nil {
 		writeRepositoryError(w, r, err)
@@ -138,6 +152,13 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	targetDirectory, localPath, err := repository.NormalizeTarget(root.Path, target)
 	if err != nil {
 		writeRepositoryError(w, r, err)
+		return
+	}
+	if replay, replayErr := h.cloneIdempotentReplay(r, identity, root.ID, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID); replayErr == nil {
+		writeJSON(w, http.StatusAccepted, replay)
+		return
+	} else if !errors.Is(replayErr, jobs.ErrNotFound) {
+		writeEnqueueError(w, r, replayErr)
 		return
 	}
 	identityReservationKey := fmt.Sprintf("repository-identity:%s:%s:%s", identity.Provider, identity.ProviderHost, identity.FullPath)
@@ -221,6 +242,35 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, ref)
 }
 
+func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repository.Identity, rootPathID, targetDirectory, localPath, providerInstanceID, credentialID string) (jobs.JobRef, error) {
+	key := r.Header.Get(idempotencyKeyHeader)
+	if key == "" {
+		return jobs.JobRef{}, jobs.ErrNotFound
+	}
+	job, err := h.jobStore.JobByIdempotency(r.Context(), "api", "repo_clone", key)
+	if err != nil {
+		return jobs.JobRef{}, err
+	}
+	var payload repository.RepoClonePayload
+	if err := json.Unmarshal(job.Payload, &payload); err != nil {
+		return jobs.JobRef{}, err
+	}
+	same := payload.Provider == identity.Provider &&
+		payload.ProviderHost == identity.ProviderHost &&
+		payload.FullPath == identity.FullPath &&
+		payload.Protocol == identity.Protocol &&
+		payload.CloneURL == identity.CloneURL &&
+		payload.RootPathID == rootPathID &&
+		payload.TargetDirectory == targetDirectory &&
+		payload.LocalPath == localPath &&
+		payload.ProviderInstanceID == providerInstanceID &&
+		payload.CredentialID == credentialID
+	if !same {
+		return jobs.JobRef{}, jobs.ErrIdempotencyConflict
+	}
+	return jobs.JobRef{JobID: job.ID, Status: job.Status, SchemaVersion: jobs.JobRefSchemaVersion}, nil
+}
+
 func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, targetDirectory string) (jobs.Job, string, error) {
 	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
 		active, err := h.jobStore.List(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status})
@@ -271,10 +321,14 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		return
 	}
 	if repo.Status == "superseded" || repo.Status == "disabled" {
-		writeError(w, r, http.StatusBadRequest, "validation_error", "repository status "+repo.Status+" cannot be operated")
+		writeError(w, r, http.StatusBadRequest, "repository_status_not_operable", "repository status "+repo.Status+" cannot be operated")
 		return
 	}
-	if credentialID != "" && repo.ProviderInstanceID != "" {
+	if credentialID != "" {
+		if repo.ProviderInstanceID == "" {
+			writeError(w, r, http.StatusBadRequest, "credential_provider_instance_required", "repository provider_instance_id is required for credential validation")
+			return
+		}
 		if err := h.store.ValidateCredential(r.Context(), credentialID, repo.ProviderInstanceID, repository.UsageGitTransport); err != nil {
 			writeRepositoryError(w, r, err)
 			return
@@ -316,7 +370,7 @@ func (h *RepositoryHandler) cloneRoot(r *http.Request, req repository.CloneReque
 		return h.scannerStore.GetRootPath(r.Context(), req.RootPathID)
 	}
 	if req.NewRootPath == "" {
-		return scanner.RootPath{}, repository.ErrValidation
+		return scanner.RootPath{}, repository.ValidationError{Code: "invalid_repository_path", Message: "root_path_id or new_root_path is required"}
 	}
 	enabled := true
 	items, err := h.scannerStore.UpsertRootPaths(r.Context(), []scanner.RootPathInput{{Path: req.NewRootPath, Enabled: &enabled, Source: scanner.RootPathSourceAPI}})
@@ -348,7 +402,7 @@ func writeRepositoryError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, repository.ErrNotFound), errors.Is(err, scanner.ErrNotFound):
 		writeError(w, r, http.StatusNotFound, "not_found", "record not found")
 	case errors.Is(err, repository.ErrValidation), errors.Is(err, scanner.ErrValidation):
-		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		writeError(w, r, http.StatusBadRequest, repository.ValidationCode(err), err.Error())
 	default:
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 	}

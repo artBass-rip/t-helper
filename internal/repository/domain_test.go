@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -53,6 +54,21 @@ func TestNormalizeIdentityPreservesProviderHostPort(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityAcceptsBareHostPath(t *testing.T) {
+	identity, err := NormalizeIdentity(CloneRequest{
+		Provider:   ProviderGitHub,
+		Protocol:   ProtocolHTTPS,
+		CloneURL:   "github.com/example/repo",
+		CloneScope: "single_repository",
+	}, nil)
+	if err != nil {
+		t.Fatalf("normalize bare host/path: %v", err)
+	}
+	if identity.ProviderHost != "github.com" || identity.FullPath != "example/repo" {
+		t.Fatalf("unexpected identity: %+v", identity)
+	}
+}
+
 func TestNormalizeIdentityRejectsExplicitURLMismatch(t *testing.T) {
 	_, err := NormalizeIdentity(CloneRequest{
 		Provider:     ProviderGitHub,
@@ -71,6 +87,30 @@ func TestNormalizeTargetRejectsTraversal(t *testing.T) {
 	root := t.TempDir()
 	if _, _, err := NormalizeTarget(root, "../escape"); err == nil {
 		t.Fatal("expected traversal validation error")
+	}
+}
+
+func TestNormalizeFullPathRejectsUnsafeSegmentsBeforeCleaning(t *testing.T) {
+	for _, value := range []string{"example/../repo", "example\\repo", "example/\x01repo"} {
+		_, err := NormalizeFullPath(ProviderGitHub, value)
+		if err == nil {
+			t.Fatalf("expected validation error for %q", value)
+		}
+		var validation ValidationError
+		if !errors.As(err, &validation) || validation.Code != "invalid_repository_path" {
+			t.Fatalf("error for %q = %v, want invalid_repository_path", value, err)
+		}
+	}
+}
+
+func TestNormalizeTargetRejectsBackslash(t *testing.T) {
+	root := t.TempDir()
+	_, _, err := NormalizeTarget(root, "teams\\repo")
+	if err == nil {
+		t.Fatal("expected backslash validation error")
+	}
+	if code := ValidationCode(err); code != "invalid_repository_path" {
+		t.Fatalf("validation code = %q", code)
 	}
 }
 

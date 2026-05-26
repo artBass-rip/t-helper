@@ -265,11 +265,11 @@ func (s *Store) upsertCredential(ctx context.Context, input CredentialInput) (Cr
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return Credential{}, validationErrorf("name is required")
+		return Credential{}, validationError("validation_error", "name is required")
 	}
 	authType := strings.ToLower(strings.TrimSpace(input.AuthType))
-	if authType != ProtocolSSH && authType != ProtocolHTTPS && authType != "token" {
-		return Credential{}, validationErrorf("unsupported auth_type %q", authType)
+	if !validCredentialAuthType(authType) {
+		return Credential{}, validationError("unsupported_credential_auth_type", fmt.Sprintf("unsupported auth_type %q", authType))
 	}
 	if err := validateSecretRef(input.SecretRef); err != nil {
 		return Credential{}, err
@@ -374,13 +374,13 @@ func (s *Store) ValidateCredential(ctx context.Context, id, providerInstanceID, 
 		return err
 	}
 	if !cred.Enabled {
-		return validationErrorf("credential is disabled")
+		return validationError("credential_disabled", "credential is disabled")
 	}
 	if cred.ProviderInstanceID != providerInstanceID {
-		return validationErrorf("credential does not belong to provider_instance_id")
+		return validationError("credential_provider_instance_mismatch", "credential does not belong to provider_instance_id")
 	}
 	if !hasUsage(cred.Usages, usage) {
-		return validationErrorf("credential does not allow %s", usage)
+		return validationError("credential_usage_not_allowed", fmt.Sprintf("credential does not allow %s", usage))
 	}
 	return nil
 }
@@ -423,7 +423,7 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 	defer tx.Rollback()
 	if existingFound {
 		if existing.Status == "superseded" || existing.Status == "disabled" {
-			return scanner.Repository{}, validationErrorf("repository status %q cannot be operated", existing.Status)
+			return scanner.Repository{}, validationError("repository_status_not_operable", fmt.Sprintf("repository status %q cannot be operated", existing.Status))
 		}
 		query := `UPDATE repositories SET name = ?, provider_instance_id = ?, clone_url = ?, root_path_id = ?, target_directory = ?, local_path = ?, auth_type = ?, default_credential_id = ?, status = 'active', discovery_source = 'clone', identity_confirmed_at = ?, updated_at = ? WHERE id = ?`
 		args := []any{name, nullEmpty(providerInstanceID), identity.CloneURL, root.ID, targetDirectory, localPath, nullEmpty(identity.Protocol), nullEmpty(credentialID), formatTime(now), formatTime(now), existing.ID}
@@ -618,13 +618,22 @@ func normalizeUsages(values []string) []string {
 		if value == "" || seen[value] {
 			continue
 		}
-		if value != UsageGitTransport && value != "provider_api" {
+		if value != UsageGitTransport && value != UsageProviderAPI && value != UsageWebhook {
 			continue
 		}
 		seen[value] = true
 		out = append(out, value)
 	}
 	return out
+}
+
+func validCredentialAuthType(value string) bool {
+	switch value {
+	case AuthTypeSSHKey, AuthTypeHTTPSToken, AuthTypeHTTPSBasic, AuthTypeOAuthToken, AuthTypeAppPassword, AuthTypeWebhookSecret:
+		return true
+	default:
+		return false
+	}
 }
 
 func hasUsage(values []string, usage string) bool {

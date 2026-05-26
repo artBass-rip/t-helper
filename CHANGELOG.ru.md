@@ -10,11 +10,15 @@
 - Реализован Stage 05 repository manager MVP: выбран managed provider GitHub,
   добавлены generic Git, provider profiles, masked credentials, enqueue API для
   clone/pull/sync и worker handlers.
-- Уточнен `docs/api.md`: теперь он явно разделяет текущий executable API
-  baseline Stage 04 и future-stage endpoint contracts, чтобы плановые маршруты
-  Stage 05+ и Stage 06+ не выглядели как реализованные runtime routes.
-- Обновлены карты документации в README: API-документ описан как текущий
-  Stage 04 baseline и roadmap contract surface.
+- Усилен Stage 05 repository manager: добавлена строгая ADR 0016 path parsing
+  validation, machine-readable коды repository validation, более строгая
+  проверка credential usages, worker-side разрешение `secretref://env/...`,
+  clone idempotent replay до pre-create reservations и worker-side проверка
+  статуса/пути repository.
+- Уточнен `docs/api.md`: теперь он явно разделяет executable API baseline и
+  future-stage endpoint contracts.
+- Обновлены карты документации в README: API-документ описан как executable
+  baseline и roadmap contract surface.
 - Добавлены двуязычные GitHub Pages в `docs/index.html` и `docs/en.html` с
   видимой пометкой в начале каждой страницы, что проект реализуется
   исключительно ИИ.
@@ -23,15 +27,16 @@
 - Pages workflow переведен на публикацию директории `docs` в ветку `gh-pages`
   вместо GitHub Pages REST deployment API.
 - Добавлена документация GitHub Pages и ссылки на неё из обеих версий README.
-- Development, local environment и test-plan документация обновлены под текущий
-  Stage 04 baseline.
-- Следующий плановый этап реализации: Stage 05 repository manager MVP.
+- Development, local environment и test-plan документация обновлены под
+  executable baseline.
+- Следующий плановый этап реализации: Stage 06 project scanner/security
+  validator MVP.
 - Stage 09 implementation spec и roadmap теперь фиксируют приоритизированный
   runtime/scanner optimization backlog из code review.
 - Добавлен русский журнал изменений: [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
 - Английский README сделан основным файлом [`README.md`](README.md).
 - Добавлен русский README: [`README.ru.md`](README.ru.md).
-- README расширены описанием Stage 04 status, executable commands, HTTP API
+- README расширены описанием Stage 05 status, executable commands, HTTP API
   surface, configuration model, storage/migration scope, scanner behavior,
   documentation map, roadmap status и security/privacy assumptions.
 
@@ -300,9 +305,9 @@ Merge commit: `cf9474d` (`stage-00-delivery-contract`).
 
 ### Состояние репозитория
 
-- Текущий implemented backend scope: Stage 04.
+- Текущий implemented backend scope: Stage 05.
 - Текущие supported storage adapters: SQLite и PostgreSQL.
 - Текущая public runtime API surface: health, config, module lifecycle,
-  jobs/status и scanner/registry.
+  jobs/status, scanner/registry и repository manager.
 - Frontend directory существует как placeholder; React/Tauri implementation
   начинается в Stage 08.

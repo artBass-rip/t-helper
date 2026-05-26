@@ -7,8 +7,8 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 
 ## Текущий executable baseline
 
-Репозиторий сейчас находится на Stage 04 scanner/registry baseline. В текущем
-runtime реализованы:
+Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В
+текущем runtime реализованы:
 
 - `GET /api/health`;
 - `GET /api/config`, `PUT /api/config`;
@@ -25,14 +25,18 @@ runtime реализованы:
 - `POST /api/project-scans` only as the Stage 04 lifecycle guard for future
   Stage 06 scans;
 - `GET /api/repos`, `GET /api/repos/{id}`;
+- `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`;
+- `GET /api/repo-credentials`, `PUT /api/repo-credentials`;
+- `POST /api/repos/clone`, `POST /api/repos/pull`,
+  `POST /api/repos/sync`;
 - `GET /api/ignore-rules`, `PUT /api/ignore-rules`;
 - `GET /api/environments`, `GET /api/environments/{id}`;
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`.
 
 The endpoint table below also includes accepted future-stage contracts. Rows
 whose Notes column identifies a later stage are specification targets, not
-current runtime routes, unless the Notes column explicitly says that Stage 04
-exposes a guard or compatibility endpoint.
+current runtime routes, unless the Notes column explicitly says that the current
+baseline exposes a guard or compatibility endpoint.
 
 ## Общие правила
 

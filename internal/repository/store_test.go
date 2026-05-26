@@ -153,6 +153,81 @@ func TestReserveOperationKeysReportsConflict(t *testing.T) {
 	}
 }
 
+func TestCredentialValidationUsesADRAuthTypesAndUsages(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Name:         "GitHub",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "read-only",
+		AuthType:           AuthTypeHTTPSToken,
+		SecretRef:          "secretref://env/GITHUB_TOKEN",
+		Usages:             []string{UsageGitTransport, UsageWebhook},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	if err := store.ValidateCredential(ctx, credentials[0].ID, instances[0].ID, UsageGitTransport); err != nil {
+		t.Fatalf("validate git transport credential: %v", err)
+	}
+	if err := store.ValidateCredential(ctx, credentials[0].ID, instances[0].ID, UsageProviderAPI); err == nil {
+		t.Fatal("expected provider_api usage validation error")
+	}
+	listed, err := store.ListCredentials(ctx, CredentialListOptions{ProviderInstanceID: instances[0].ID, Usage: UsageWebhook})
+	if err != nil {
+		t.Fatalf("list credentials: %v", err)
+	}
+	if len(listed) != 1 || listed[0].SecretRef != "secretref://env/***" {
+		t.Fatalf("unexpected listed credentials: %+v", listed)
+	}
+}
+
+func TestGitCredentialEnvResolvesSecretRef(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	store := NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "token",
+		AuthType:           AuthTypeHTTPSToken,
+		SecretRef:          "secretref://env/REPOSITORY_TOKEN",
+		Usages:             []string{UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	t.Setenv("REPOSITORY_TOKEN", "secret-token")
+	env, cleanup, err := (operationHandler{store: store, scannerStore: scannerStore}).gitCredentialEnv(ctx, credentials[0].ID)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("credential env: %v", err)
+	}
+	if len(env) != 3 || env[0] != "GIT_CONFIG_COUNT=1" || env[1] != "GIT_CONFIG_KEY_0=http.extraHeader" {
+		t.Fatalf("unexpected credential env: %+v", env)
+	}
+}
+
 func upsertRepositoryRoot(t *testing.T, ctx context.Context, store *scanner.Store) scanner.RootPath {
 	t.Helper()
 	enabled := true

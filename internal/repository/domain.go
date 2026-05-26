@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -15,6 +15,22 @@ var (
 	ErrNotFound            = errors.New("repository record not found")
 	ErrReservationConflict = errors.New("repository operation reservation conflict")
 )
+
+type ValidationError struct {
+	Code    string
+	Message string
+}
+
+func (e ValidationError) Error() string {
+	if e.Message == "" {
+		return ErrValidation.Error() + ": " + e.Code
+	}
+	return ErrValidation.Error() + ": " + e.Message
+}
+
+func (e ValidationError) Unwrap() error {
+	return ErrValidation
+}
 
 type Identity struct {
 	Provider     string
@@ -30,11 +46,11 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 		provider = instance.Provider
 	}
 	if provider != ProviderGeneric && provider != ProviderGitHub {
-		return Identity{}, validationErrorf("unsupported provider %q", provider)
+		return Identity{}, validationError("unsupported_provider", fmt.Sprintf("unsupported provider %q", provider))
 	}
 	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
 	if protocol != ProtocolHTTPS && protocol != ProtocolSSH {
-		return Identity{}, validationErrorf("unsupported protocol %q", protocol)
+		return Identity{}, validationError("unsupported_url_protocol", fmt.Sprintf("unsupported protocol %q", protocol))
 	}
 	host, err := normalizeProviderHost(req.ProviderHost)
 	if err != nil {
@@ -42,7 +58,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	}
 	if instance != nil {
 		if provider != instance.Provider {
-			return Identity{}, validationErrorf("provider_instance_id does not match provider")
+			return Identity{}, validationError("provider_instance_mismatch", "provider_instance_id does not match provider")
 		}
 		host = instance.ProviderHost
 	}
@@ -56,7 +72,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 		if host == "" {
 			host = parsed.ProviderHost
 		} else if parsed.ProviderHost != "" && host != parsed.ProviderHost {
-			return Identity{}, validationErrorf("invalid_provider_host")
+			return Identity{}, validationError("invalid_provider_host", "provider_host does not match clone_url host")
 		}
 		if fullPath == "" {
 			fullPath = parsed.FullPath
@@ -66,7 +82,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 				return Identity{}, err
 			}
 			if normalizedRequestPath != parsed.FullPath {
-				return Identity{}, validationErrorf("provider_path_shape_mismatch")
+				return Identity{}, validationError("provider_path_shape_mismatch", "full_path does not match clone_url path")
 			}
 		}
 		cloneURL = parsed.CloneURL
@@ -78,7 +94,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 		host = "github.com"
 	}
 	if host == "" {
-		return Identity{}, validationErrorf("provider_host is required")
+		return Identity{}, validationError("provider_host_required", "provider_host is required")
 	}
 	fullPath, err = NormalizeFullPath(provider, fullPath)
 	if err != nil {
@@ -91,13 +107,17 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 }
 
 func ParseCloneURL(provider, raw string) (Identity, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || hasControl(raw) {
+		return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
+	}
 	if strings.Contains(raw, "@") && strings.Contains(raw, "://") {
 		u, err := url.Parse(raw)
 		if err != nil {
-			return Identity{}, validationErrorf("unsupported_provider_url")
+			return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
 		}
 		if u.User != nil && !(u.Scheme == ProtocolSSH && u.User.Username() == "git") {
-			return Identity{}, validationErrorf("credential_userinfo_not_allowed")
+			return Identity{}, validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")
 		}
 	}
 	if strings.HasPrefix(raw, "git@") && strings.Contains(raw, ":") && !strings.Contains(raw, "://") {
@@ -106,13 +126,17 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" {
-		return Identity{}, validationErrorf("unsupported_provider_url")
+		if strings.Count(raw, "/") >= 1 && !strings.Contains(raw, "://") && !strings.Contains(raw, "@") {
+			parts := strings.SplitN(raw, "/", 2)
+			return identityFromHostPath(provider, parts[0], parts[1], ProtocolHTTPS)
+		}
+		return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
 	}
 	if u.User != nil && !(u.Scheme == ProtocolSSH && u.User.Username() == "git") {
-		return Identity{}, validationErrorf("credential_userinfo_not_allowed")
+		return Identity{}, validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")
 	}
 	if u.Scheme != ProtocolHTTPS && u.Scheme != ProtocolSSH && u.Scheme != "file" {
-		return Identity{}, validationErrorf("unsupported_url_protocol")
+		return Identity{}, validationError("unsupported_url_protocol", "unsupported URL protocol")
 	}
 	if u.Scheme == "file" {
 		return identityFromHostPath(provider, "local", strings.TrimPrefix(u.Path, "/"), ProtocolHTTPS)
@@ -137,37 +161,39 @@ func normalizeProviderHost(value string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
-	if strings.Contains(value, "://") || strings.Contains(value, "/") || strings.Contains(value, "@") || strings.ContainsAny(value, " \t\r\n") {
-		return "", validationErrorf("invalid_provider_host")
+	if hasControl(value) || strings.Contains(value, "://") || strings.Contains(value, "/") || strings.Contains(value, "@") || strings.ContainsAny(value, " \t\r\n") {
+		return "", validationError("invalid_provider_host", "invalid provider_host")
 	}
 	host := value
 	if strings.Contains(value, ":") {
 		parsedHost, port, err := strings.Cut(value, ":")
 		if !err || parsedHost == "" || port == "" {
-			return "", validationErrorf("invalid_provider_host")
+			return "", validationError("invalid_provider_host", "invalid provider_host")
 		}
 		host = parsedHost
 	}
 	if host == "." || host == "-" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
-		return "", validationErrorf("invalid_provider_host")
+		return "", validationError("invalid_provider_host", "invalid provider_host")
 	}
 	return value, nil
 }
 
 func NormalizeFullPath(provider, value string) (string, error) {
-	value = strings.TrimSpace(strings.TrimSuffix(value, ".git"))
-	value = path.Clean(strings.ReplaceAll(value, "\\", "/"))
-	value = strings.TrimPrefix(value, "/")
-	if value == "." || value == "" || strings.HasPrefix(value, "../") || strings.Contains(value, "/../") {
-		return "", validationErrorf("invalid_repository_path")
+	value = strings.TrimSpace(value)
+	if value == "" || hasControl(value) || strings.Contains(value, "\\") {
+		return "", validationError("invalid_repository_path", "invalid repository path")
+	}
+	value = strings.TrimSuffix(value, ".git")
+	if strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
+		return "", validationError("invalid_repository_path", "invalid repository path")
 	}
 	for _, part := range strings.Split(value, "/") {
 		if part == "" || part == "." || part == ".." {
-			return "", validationErrorf("invalid_repository_path")
+			return "", validationError("invalid_repository_path", "invalid repository path")
 		}
 	}
 	if provider == ProviderGitHub && len(strings.Split(value, "/")) != 2 {
-		return "", validationErrorf("provider_path_shape_mismatch")
+		return "", validationError("provider_path_shape_mismatch", "provider path shape mismatch")
 	}
 	return value, nil
 }
@@ -189,15 +215,18 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 	}
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return "", "", validationErrorf("target_directory is required")
+		return "", "", validationError("invalid_repository_path", "target_directory is required")
+	}
+	if hasControl(target) || strings.Contains(target, "\\") {
+		return "", "", validationError("invalid_repository_path", "target_directory is invalid")
 	}
 	target = filepath.Clean(target)
 	if filepath.IsAbs(target) {
-		return "", "", validationErrorf("target_directory must be relative")
+		return "", "", validationError("invalid_repository_path", "target_directory must be relative")
 	}
 	slash := filepath.ToSlash(target)
 	if slash == "." || strings.HasPrefix(slash, "../") || slash == ".." || strings.Contains(slash, "/../") {
-		return "", "", validationErrorf("target_directory must stay within root_path")
+		return "", "", validationError("invalid_repository_path", "target_directory must stay within root_path")
 	}
 	local := filepath.Join(root, filepath.FromSlash(slash))
 	evaluated, err := filepath.EvalSymlinks(local)
@@ -209,7 +238,7 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 		return "", "", err
 	}
 	if !withinRoot(root, local) {
-		return "", "", validationErrorf("target_directory must stay within root_path")
+		return "", "", validationError("invalid_repository_path", "target_directory must stay within root_path")
 	}
 	rel, err := filepath.Rel(root, local)
 	if err != nil {
@@ -221,10 +250,10 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 func normalizeAbsPath(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "", validationErrorf("path is required")
+		return "", validationError("invalid_repository_path", "path is required")
 	}
 	if !filepath.IsAbs(value) {
-		return "", validationErrorf("path must be absolute")
+		return "", validationError("invalid_repository_path", "path must be absolute")
 	}
 	cleaned, err := filepath.Abs(filepath.Clean(value))
 	if err != nil {
@@ -244,11 +273,32 @@ func withinRoot(root, child string) bool {
 
 func validateSecretRef(value string) error {
 	if !regexp.MustCompile(`^secretref://env/[A-Za-z_][A-Za-z0-9_]*$`).MatchString(strings.TrimSpace(value)) {
-		return validationErrorf("secret_ref must use secretref://env/NAME")
+		return validationError("invalid_secret_ref", "secret_ref must use secretref://env/NAME")
 	}
 	return nil
 }
 
 func validationErrorf(format string, args ...any) error {
-	return fmt.Errorf("%w: %s", ErrValidation, fmt.Sprintf(format, args...))
+	return validationError("validation_error", fmt.Sprintf(format, args...))
+}
+
+func validationError(code, message string) error {
+	return ValidationError{Code: code, Message: message}
+}
+
+func ValidationCode(err error) string {
+	var validation ValidationError
+	if errors.As(err, &validation) && validation.Code != "" {
+		return validation.Code
+	}
+	return "validation_error"
+}
+
+func hasControl(value string) bool {
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return true
+		}
+	}
+	return false
 }

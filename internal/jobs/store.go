@@ -143,6 +143,16 @@ func (s *Store) IdempotentReplay(ctx context.Context, req EnqueueRequest) (JobRe
 	return s.idempotentReplay(ctx, req)
 }
 
+func (s *Store) JobByIdempotency(ctx context.Context, actor, jobType, key string) (Job, error) {
+	if strings.TrimSpace(key) == "" {
+		return Job{}, ErrNotFound
+	}
+	if strings.TrimSpace(actor) == "" {
+		actor = "system"
+	}
+	return s.findByIdempotency(ctx, actor, jobType, key)
+}
+
 func (s *Store) idempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey)
 	if err != nil {

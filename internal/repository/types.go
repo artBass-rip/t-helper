@@ -10,6 +10,15 @@ const (
 	ProtocolSSH   = "ssh"
 
 	UsageGitTransport = "git_transport"
+	UsageProviderAPI  = "provider_api"
+	UsageWebhook      = "webhook"
+
+	AuthTypeSSHKey        = "ssh_key"
+	AuthTypeHTTPSToken    = "https_token"
+	AuthTypeHTTPSBasic    = "https_basic"
+	AuthTypeOAuthToken    = "oauth_token"
+	AuthTypeAppPassword   = "app_password"
+	AuthTypeWebhookSecret = "webhook_secret"
 
 	ProviderInstanceSchemaVersion = "repository_provider_instance.v1"
 	CredentialSchemaVersion       = "repository_credential.v1"

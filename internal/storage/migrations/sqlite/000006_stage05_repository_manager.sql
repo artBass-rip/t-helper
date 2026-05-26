@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS repository_credentials (
   id TEXT PRIMARY KEY,
   provider_instance_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  auth_type TEXT NOT NULL CHECK (auth_type IN ('ssh', 'https', 'token')),
+  auth_type TEXT NOT NULL CHECK (auth_type IN ('ssh_key', 'https_token', 'https_basic', 'oauth_token', 'app_password', 'webhook_secret')),
   secret_ref TEXT NOT NULL,
   username TEXT,
   usages TEXT NOT NULL,

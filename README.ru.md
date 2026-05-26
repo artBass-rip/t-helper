@@ -6,15 +6,15 @@
 метаданных репозиториев, локального security-анализа и централизованного
 управления runtime-конфигурацией, модулями, jobs и доступом.
 
-Текущий репозиторий находится на **Stage 04 scanner/registry baseline**.
+Текущий репозиторий находится на **Stage 05 repository manager MVP baseline**.
 Реализована executable backend foundation: entrypoints сервисов, storage
 adapters, миграции, health checks, persisted runtime configuration, module
 lifecycle, singleton runtime lock, jobs/workers/status, global scanning,
-Terraform project discovery, root paths, project registry и scanner/registry
-HTTP APIs.
+Terraform project discovery, root paths, project registry, scanner/registry
+HTTP APIs и repository manager clone/pull/sync workflows.
 
-Repository operations, project/security scans, authentication/RBAC и frontend
-намеренно отнесены к следующим roadmap stages.
+Project/security scans, authentication/RBAC и frontend намеренно отнесены к
+следующим roadmap stages.
 
 ## Страница проекта
 
@@ -48,8 +48,12 @@ copyright holder.
   `job_locks`, job events и status read models.
 - `global_scan` jobs, которые ставят coalesced `project_discovery` jobs для
   определения Git-связей без блокировки результата global scan.
+- Stage 05 repository manager APIs для provider profiles, masked credentials,
+  safe repository identity normalization, clone/pull/sync job enqueueing и
+  worker execution.
 - SQLite и PostgreSQL storage adapters для текущего MVP baseline.
-- HTTP APIs для health, config, modules, jobs/status и scanner/registry.
+- HTTP APIs для health, config, modules, jobs/status, scanner/registry и
+  repository management.
 
 ## Исполняемые компоненты
 
@@ -75,7 +79,7 @@ go run ./cmd/thelper-ctl -migrate-db
 
 ## HTTP API
 
-Stage 04 предоставляет следующую runtime API surface:
+Stage 05 предоставляет следующую runtime API surface:
 
 - `GET /api/health`
 - `GET /api/config`, `PUT /api/config`
@@ -91,6 +95,10 @@ Stage 04 предоставляет следующую runtime API surface:
   `GET /api/projects/{id}/links`
 - `POST /api/project-scans` lifecycle guard для будущих Stage 06 scans
 - `GET /api/repos`, `GET /api/repos/{id}`
+- `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`
+- `GET /api/repo-credentials`, `PUT /api/repo-credentials`
+- `POST /api/repos/clone`, `POST /api/repos/pull`,
+  `POST /api/repos/sync`
 - `GET /api/ignore-rules`, `PUT /api/ignore-rules`
 - `GET /api/environments`, `GET /api/environments/{id}`
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`
@@ -175,7 +183,7 @@ SQLite tests запускаются по умолчанию.
   deployment modes и runtime flow.
 - [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration и
   global scanning behavior.
-- [docs/api.md](docs/api.md) - текущий Stage 04 HTTP API baseline, будущие
+- [docs/api.md](docs/api.md) - текущий Stage 05 HTTP API baseline, будущие
   endpoint contracts и response schemas.
 - [docs/configuration.md](docs/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability и validation.
@@ -208,9 +216,9 @@ SQLite tests запускаются по умолчанию.
 - Stage 02: completed persisted config, module lifecycle и singleton runtime.
 - Stage 03: completed jobs, workers и status foundation.
 - Stage 04: completed scanner и registry MVP.
-- Stage 05: следующий planned repository manager MVP: generic Git plus one
-  managed provider, clone/pull/sync jobs, credentials, path safety и
-  serialization через `job_locks`.
+- Stage 05: completed repository manager MVP: generic Git plus GitHub,
+  clone/pull/sync jobs, provider profiles, masked credentials, path safety,
+  repository enrichment и operation serialization.
 - Stage 06A/06B: external toolchain profiles, project scanner и security
   validator MVP.
 - Stage 07: auth, RBAC, SCIM contract/stub и audit.
