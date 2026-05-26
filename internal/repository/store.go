@@ -369,6 +369,13 @@ func (s *Store) ValidateCredential(ctx context.Context, id, providerInstanceID, 
 	if strings.TrimSpace(id) == "" {
 		return nil
 	}
+	instance, err := s.GetProviderInstance(ctx, providerInstanceID)
+	if err != nil {
+		return err
+	}
+	if !instance.Enabled {
+		return validationError("provider_instance_disabled", "provider instance is disabled")
+	}
 	cred, err := s.GetCredential(ctx, id)
 	if err != nil {
 		return err

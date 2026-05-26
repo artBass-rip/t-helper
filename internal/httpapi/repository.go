@@ -113,6 +113,10 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			writeRepositoryError(w, r, err)
 			return
 		}
+		if !item.Enabled {
+			writeError(w, r, http.StatusBadRequest, "provider_instance_disabled", "provider instance is disabled")
+			return
+		}
 		instance = &item
 	}
 	if req.CredentialID != "" && instance == nil {
@@ -124,6 +128,10 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		item, err := h.store.GetProviderInstance(r.Context(), cred.ProviderInstanceID)
 		if err != nil {
 			writeRepositoryError(w, r, err)
+			return
+		}
+		if !item.Enabled {
+			writeError(w, r, http.StatusBadRequest, "provider_instance_disabled", "provider instance is disabled")
 			return
 		}
 		req.ProviderInstanceID = item.ID
@@ -181,8 +189,9 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
-	if active, conflictCode, err := h.activeCloneConflict(r, identity, root.ID, targetDirectory); err == nil {
+	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, root.ID, targetDirectory); err == nil {
 		writeErrorDetails(w, r, http.StatusConflict, conflictCode, "repository clone conflict", map[string]any{
+			"repository_id":   conflictRepositoryID,
 			"lock_key":        active.LockKey,
 			"active_job_id":   active.ID,
 			"active_job_type": active.JobType,
@@ -271,11 +280,11 @@ func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repo
 	return jobs.JobRef{JobID: job.ID, Status: job.Status, SchemaVersion: jobs.JobRefSchemaVersion}, nil
 }
 
-func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, targetDirectory string) (jobs.Job, string, error) {
+func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, targetDirectory string) (jobs.Job, string, string, error) {
 	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
 		active, err := h.jobStore.List(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status})
 		if err != nil {
-			return jobs.Job{}, "", err
+			return jobs.Job{}, "", "", err
 		}
 		for _, job := range active {
 			if key := r.Header.Get(idempotencyKeyHeader); key != "" && job.IdempotencyKey == key {
@@ -286,14 +295,14 @@ func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity reposi
 				continue
 			}
 			if payload.Provider == identity.Provider && payload.ProviderHost == identity.ProviderHost && payload.FullPath == identity.FullPath {
-				return job, "repository_operation_already_running", nil
+				return job, "repository_operation_already_running", payload.RepositoryID, nil
 			}
 			if payload.RootPathID == rootPathID && payload.TargetDirectory == targetDirectory {
-				return job, "repository_target_path_busy", nil
+				return job, "repository_target_path_busy", payload.RepositoryID, nil
 			}
 		}
 	}
-	return jobs.Job{}, "", jobs.ErrNotFound
+	return jobs.Job{}, "", "", jobs.ErrNotFound
 }
 
 func (h *RepositoryHandler) Pull(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +329,7 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		writeScannerReadError(w, r, err)
 		return
 	}
-	if repo.Status == "superseded" || repo.Status == "disabled" {
+	if repo.Status == "superseded" || repo.Status == "disabled" || repo.Status == "missing" {
 		writeError(w, r, http.StatusBadRequest, "repository_status_not_operable", "repository status "+repo.Status+" cannot be operated")
 		return
 	}

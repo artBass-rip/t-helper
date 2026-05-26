@@ -87,6 +87,76 @@ func TestStage05RepositoryCloneValidationCodeAndIdempotentReplay(t *testing.T) {
 	if replay.JobID != first.JobID {
 		t.Fatalf("replay job id = %q, want %q", replay.JobID, first.JobID)
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("conflicting clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var conflict struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&conflict); err != nil {
+		t.Fatalf("decode conflict: %v", err)
+	}
+	if conflict.Error.Code != "repository_operation_already_running" {
+		t.Fatalf("conflict code = %q", conflict.Error.Code)
+	}
+	if conflict.Error.Details["repository_id"] == "" || conflict.Error.Details["active_job_id"] != first.JobID || conflict.Error.Details["active_job_type"] != "repo_clone" {
+		t.Fatalf("conflict details missing active repository operation fields: %+v", conflict.Error.Details)
+	}
+}
+
+func TestStage05CloneRejectsDisabledProviderInstance(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	disabled := false
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &disabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"provider_instance_id": instances[0].ID,
+		"provider":             "github",
+		"protocol":             "https",
+		"clone_url":            "https://github.com/example/repo.git",
+		"root_path_id":         root.ID,
+		"target_directory":     "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("disabled provider clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if apiErr.Error.Code != "provider_instance_disabled" {
+		t.Fatalf("error code = %q", apiErr.Error.Code)
+	}
 }
 
 func TestStage05PullRejectsSupersededRepository(t *testing.T) {

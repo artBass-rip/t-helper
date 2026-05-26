@@ -2,11 +2,15 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
 	"github.com/artBass-rip/t-helper/internal/storage/sqlite"
@@ -225,6 +229,91 @@ func TestGitCredentialEnvResolvesSecretRef(t *testing.T) {
 	}
 	if len(env) != 3 || env[0] != "GIT_CONFIG_COUNT=1" || env[1] != "GIT_CONFIG_KEY_0=http.extraHeader" {
 		t.Fatalf("unexpected credential env: %+v", env)
+	}
+}
+
+func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	source := filepath.Join(t.TempDir(), "source")
+	runGitCommand(t, "", "init", source)
+	mustWriteRepositoryTestFile(t, filepath.Join(source, "README.md"), "fixture\n")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "add", "README.md")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")
+	targetDirectory := "cloned/repo"
+	localPath := filepath.Join(root.Path, "cloned", "repo")
+	repo, err := repoStore.UpsertRepository(ctx, Identity{
+		Provider:     ProviderGeneric,
+		ProviderHost: "local",
+		FullPath:     "source",
+		CloneURL:     source,
+		Protocol:     ProtocolHTTPS,
+	}, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        ProviderGeneric,
+		ProviderHost:    "local",
+		Protocol:        ProtocolHTTPS,
+		CloneURL:        source,
+		CloneScope:      "single_repository",
+		FullPath:        "source",
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	result, err := (operationHandler{store: repoStore, scannerStore: scannerStore, operation: "clone"}).handleClone(ctx, jobs.Job{
+		ID:      "job_clone_git",
+		JobType: "repo_clone",
+		Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("handle clone: %v", err)
+	}
+	var op OperationResult
+	if err := json.Unmarshal(result, &op); err != nil {
+		t.Fatalf("decode operation result: %v", err)
+	}
+	if op.Operation != "clone" || op.RepositoryID != repo.ID {
+		t.Fatalf("unexpected operation result: %+v", op)
+	}
+	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {
+		t.Fatalf("cloned working tree missing .git: %v", err)
+	}
+}
+
+func requireGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skipf("git unavailable: %v", err)
+	}
+}
+
+func runGitCommand(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+	}
+}
+
+func mustWriteRepositoryTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -213,6 +214,14 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+	if evaluatedRoot, evalErr := filepath.EvalSymlinks(root); evalErr == nil {
+		root, err = normalizeAbsPath(evaluatedRoot)
+		if err != nil {
+			return "", "", err
+		}
+	} else if !os.IsNotExist(evalErr) {
+		return "", "", validationError("invalid_repository_path", "root_path is unavailable")
+	}
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return "", "", validationError("invalid_repository_path", "target_directory is required")
@@ -228,10 +237,9 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 	if slash == "." || strings.HasPrefix(slash, "../") || slash == ".." || strings.Contains(slash, "/../") {
 		return "", "", validationError("invalid_repository_path", "target_directory must stay within root_path")
 	}
-	local := filepath.Join(root, filepath.FromSlash(slash))
-	evaluated, err := filepath.EvalSymlinks(local)
-	if err == nil {
-		local = evaluated
+	local, err := containedTargetPath(root, slash)
+	if err != nil {
+		return "", "", err
 	}
 	local, err = normalizeAbsPath(local)
 	if err != nil {
@@ -245,6 +253,29 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 		return "", "", err
 	}
 	return filepath.ToSlash(rel), local, nil
+}
+
+func containedTargetPath(root, slashTarget string) (string, error) {
+	current := root
+	for _, part := range strings.Split(slashTarget, "/") {
+		next := filepath.Join(current, part)
+		evaluated, err := filepath.EvalSymlinks(next)
+		if err == nil {
+			if !withinRoot(root, evaluated) {
+				return "", validationError("invalid_repository_path", "target_directory must stay within root_path")
+			}
+			current = evaluated
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return "", validationError("invalid_repository_path", "target_directory is unavailable")
+		}
+		current = next
+		if !withinRoot(root, current) {
+			return "", validationError("invalid_repository_path", "target_directory must stay within root_path")
+		}
+	}
+	return current, nil
 }
 
 func normalizeAbsPath(value string) (string, error) {

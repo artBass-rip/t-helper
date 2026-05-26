@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -123,7 +124,26 @@ func TestNormalizeTargetReturnsContainedPath(t *testing.T) {
 	if target != "teams/repo" {
 		t.Fatalf("target = %q, want teams/repo", target)
 	}
-	if local != filepath.Join(root, "teams", "repo") {
+	expectedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("eval root: %v", err)
+	}
+	if local != filepath.Join(expectedRoot, "teams", "repo") {
 		t.Fatalf("local = %q", local)
+	}
+}
+
+func TestNormalizeTargetRejectsSymlinkEscapeInExistingParent(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	_, _, err := NormalizeTarget(root, "linked/repo")
+	if err == nil {
+		t.Fatal("expected symlink escape validation error")
+	}
+	if code := ValidationCode(err); code != "invalid_repository_path" {
+		t.Fatalf("validation code = %q", code)
 	}
 }
