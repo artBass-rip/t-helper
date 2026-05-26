@@ -49,8 +49,8 @@ func TestApplyIsIdempotentForSQLite(t *testing.T) {
 	if err := db.QueryRow("SELECT value FROM system_metadata WHERE key = 'schema_version'").Scan(&value); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if value != "stage-04" {
-		t.Fatalf("schema_version = %q, want stage-04", value)
+	if value != "stage-05" {
+		t.Fatalf("schema_version = %q, want stage-05", value)
 	}
 }
 
@@ -105,6 +105,12 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 		"workspaces": {
 			"workspaces_project_id_idx",
 			"workspaces_environment_id_idx",
+		},
+		"repository_provider_instances": {
+			"repository_provider_instances_provider_host_idx",
+		},
+		"repository_credentials": {
+			"repository_credentials_provider_instance_idx",
 		},
 	} {
 		got := sqliteIndexes(t, db, table)

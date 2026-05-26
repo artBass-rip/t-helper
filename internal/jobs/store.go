@@ -129,6 +129,20 @@ func (s *Store) EnqueueIfNoActive(ctx context.Context, req EnqueueRequest) (JobR
 	return ref, true, nil
 }
 
+func (s *Store) ActiveRepositoryOperation(ctx context.Context, lockKey string) (Job, error) {
+	return s.findActiveRepositoryOperation(ctx, lockKey)
+}
+
+func (s *Store) IdempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	if strings.TrimSpace(req.IdempotencyKey) == "" {
+		return JobRef{}, ErrNotFound
+	}
+	if strings.TrimSpace(req.Actor) == "" {
+		req.Actor = "system"
+	}
+	return s.idempotentReplay(ctx, req)
+}
+
 func (s *Store) idempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey)
 	if err != nil {
@@ -626,6 +640,19 @@ func (s *Store) findActiveByLock(ctx context.Context, jobType, lockKey string) (
 	args := []any{jobType, lockKey}
 	if s.handle.Provider == "postgres" {
 		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type = $1 AND lock_key = $2 AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
+	}
+	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) findActiveRepositoryOperation(ctx context.Context, lockKey string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type IN ('repo_clone', 'repo_pull', 'repo_sync') AND lock_key = ? AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
+	args := []any{lockKey}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type IN ('repo_clone', 'repo_pull', 'repo_sync') AND lock_key = $1 AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
 	}
 	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {

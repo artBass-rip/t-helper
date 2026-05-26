@@ -49,6 +49,14 @@ func New(health *HealthHandler, optionalHandlers ...any) *Server {
 			r.Get("/api/environments/{id}", h.GetEnvironment)
 			r.Get("/api/workspaces", h.ListWorkspaces)
 			r.Get("/api/workspaces/{id}", h.GetWorkspace)
+		case *RepositoryHandler:
+			r.Get("/api/repo-provider-instances", h.ListProviderInstances)
+			r.Put("/api/repo-provider-instances", h.PutProviderInstances)
+			r.Get("/api/repo-credentials", h.ListCredentials)
+			r.Put("/api/repo-credentials", h.PutCredentials)
+			r.Post("/api/repos/clone", h.Clone)
+			r.Post("/api/repos/pull", h.Pull)
+			r.Post("/api/repos/sync", h.Sync)
 		}
 	}
 	return &Server{router: r}

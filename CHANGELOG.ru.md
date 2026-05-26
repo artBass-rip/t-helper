@@ -7,6 +7,9 @@
 
 ## Не выпущено
 
+- Реализован Stage 05 repository manager MVP: выбран managed provider GitHub,
+  добавлены generic Git, provider profiles, masked credentials, enqueue API для
+  clone/pull/sync и worker handlers.
 - Уточнен `docs/api.md`: теперь он явно разделяет текущий executable API
   baseline Stage 04 и future-stage endpoint contracts, чтобы плановые маршруты
   Stage 05+ и Stage 06+ не выглядели как реализованные runtime routes.

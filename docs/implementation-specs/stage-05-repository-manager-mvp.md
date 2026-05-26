@@ -71,7 +71,7 @@ Current gaps that must be closed inside Stage 05:
 
 - repository-manager module;
 - provider adapter для `generic` Git;
-- provider adapter для одного managed provider: `gitlab` или `github`;
+- provider adapter для одного managed provider: `github`;
 - provider instance/profile API and storage;
 - repository credentials API and storage using `secretref://...`;
 - normalized repository identity handling with `provider_host`;
@@ -257,9 +257,7 @@ root paths or symlinks have changed.
 ## Stage-local blockers
 
 - none for starting implementation.
-- Before merging Stage 05, the implementation branch must record which managed
-  provider was selected for the MVP (`gitlab` or `github`) in this document,
-  `CHANGELOG.md` and `CHANGELOG.ru.md`.
+- MVP managed provider selection: `github`.
 
 ## Traceability
 

@@ -7,6 +7,9 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Implemented Stage 05 repository manager MVP with GitHub as the selected
+  managed provider, generic Git support, provider profiles, masked credentials,
+  clone/pull/sync enqueue APIs and worker handlers.
 - Clarified `docs/api.md` as the current Stage 04 executable API baseline plus
   future-stage endpoint contracts, so planned Stage 05+ and Stage 06+ routes
   are not confused with current runtime routes.
