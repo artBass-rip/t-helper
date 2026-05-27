@@ -252,6 +252,11 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 }
 
 func (s *Store) ListProviderInstances(ctx context.Context, opts ProviderInstanceListOptions) ([]ProviderInstance, error) {
+	page, err := s.ListProviderInstancesPage(ctx, opts)
+	return page.Items, err
+}
+
+func (s *Store) ListProviderInstancesPage(ctx context.Context, opts ProviderInstanceListOptions) (Page[ProviderInstance], error) {
 	var where []string
 	var args []any
 	add := func(clause string, value any) {
@@ -271,22 +276,54 @@ func (s *Store) ListProviderInstances(ctx context.Context, opts ProviderInstance
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	query += " ORDER BY created_at DESC, id DESC LIMIT " + s.placeholder(len(args)+1)
-	args = append(args, limit(opts.Limit))
+	return listPage(ctx, s, query, args, opts.ListOptions, scanProviderInstance, func(item ProviderInstance) time.Time {
+		return item.CreatedAt
+	}, func(item ProviderInstance) string {
+		return item.ID
+	})
+}
+
+func listPage[T any](ctx context.Context, s *Store, baseQuery string, args []any, opts ListOptions, scan func(interface{ Scan(dest ...any) error }) (T, error), itemTime func(T) time.Time, itemID func(T) string) (Page[T], error) {
+	limitValue := limit(opts.Limit)
+	query := baseQuery
+	if opts.Cursor != "" {
+		cursor, err := decodeCursor(opts.Cursor)
+		if err != nil {
+			return Page[T]{}, err
+		}
+		clause := fmt.Sprintf("(created_at < %s OR (created_at = %s AND id < %s))", s.placeholder(len(args)+1), s.placeholder(len(args)+2), s.placeholder(len(args)+3))
+		if strings.Contains(strings.ToUpper(query), " WHERE ") {
+			query += " AND " + clause
+		} else {
+			query += " WHERE " + clause
+		}
+		args = append(args, formatTime(cursor.Time), formatTime(cursor.Time), cursor.ID)
+	}
+	args = append(args, limitValue+1)
+	query += " ORDER BY created_at DESC, id DESC LIMIT " + s.placeholder(len(args))
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return Page[T]{}, err
 	}
 	defer rows.Close()
-	var out []ProviderInstance
+	var out []T
 	for rows.Next() {
-		item, err := scanProviderInstance(rows)
+		item, err := scan(rows)
 		if err != nil {
-			return nil, err
+			return Page[T]{}, err
 		}
 		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return Page[T]{}, err
+	}
+	var next string
+	if len(out) > limitValue {
+		out = out[:limitValue]
+		last := out[len(out)-1]
+		next = encodeCursor(itemTime(last), itemID(last))
+	}
+	return Page[T]{Items: out, NextCursor: next}, nil
 }
 
 func (s *Store) GetProviderInstance(ctx context.Context, id string) (ProviderInstance, error) {
@@ -388,6 +425,11 @@ func (s *Store) upsertCredential(ctx context.Context, input CredentialInput) (Cr
 }
 
 func (s *Store) ListCredentials(ctx context.Context, opts CredentialListOptions) ([]Credential, error) {
+	page, err := s.ListCredentialsPage(ctx, opts)
+	return page.Items, err
+}
+
+func (s *Store) ListCredentialsPage(ctx context.Context, opts CredentialListOptions) (Page[Credential], error) {
 	var where []string
 	var args []any
 	add := func(clause string, value any) {
@@ -400,30 +442,30 @@ func (s *Store) ListCredentials(ctx context.Context, opts CredentialListOptions)
 	if opts.AuthType != "" {
 		add("auth_type = %s", opts.AuthType)
 	}
+	if opts.Usage != "" {
+		if opts.Usage != UsageGitTransport && opts.Usage != UsageProviderAPI && opts.Usage != UsageWebhook {
+			return Page[Credential]{}, validationError("credential_usage_not_allowed", "unsupported credential usage")
+		}
+		add("usages LIKE %s", "%\""+opts.Usage+"\"%")
+	}
 	query := "SELECT " + s.credentialColumns() + " FROM repository_credentials"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	query += " ORDER BY created_at DESC, id DESC LIMIT " + s.placeholder(len(args)+1)
-	args = append(args, limit(opts.Limit))
-	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	page, err := listPage(ctx, s, query, args, opts.ListOptions, scanCredential, func(item Credential) time.Time {
+		return item.CreatedAt
+	}, func(item Credential) string {
+		return item.ID
+	})
 	if err != nil {
-		return nil, err
+		return Page[Credential]{}, err
 	}
-	defer rows.Close()
-	var out []Credential
-	for rows.Next() {
-		item, err := scanCredential(rows)
-		if err != nil {
-			return nil, err
-		}
-		if opts.Usage != "" && !hasUsage(item.Usages, opts.Usage) {
-			continue
-		}
+	for idx := range page.Items {
+		item := page.Items[idx]
 		item.SecretRef = maskSecretRef(item.SecretRef)
-		out = append(out, item)
+		page.Items[idx] = item
 	}
-	return out, rows.Err()
+	return page, nil
 }
 
 func (s *Store) GetCredential(ctx context.Context, id string) (Credential, error) {
@@ -763,6 +805,31 @@ func limit(value int) int {
 		return 100
 	}
 	return value
+}
+
+type listCursor struct {
+	Time time.Time `json:"time"`
+	ID   string    `json:"id"`
+}
+
+func encodeCursor(t time.Time, id string) string {
+	data, _ := json.Marshal(listCursor{Time: t.UTC(), ID: id})
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func decodeCursor(value string) (listCursor, error) {
+	data, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return listCursor{}, ErrInvalidCursor
+	}
+	var cursor listCursor
+	if err := json.Unmarshal(data, &cursor); err != nil {
+		return listCursor{}, ErrInvalidCursor
+	}
+	if cursor.Time.IsZero() || cursor.ID == "" {
+		return listCursor{}, ErrInvalidCursor
+	}
+	return cursor, nil
 }
 
 func formatTime(value time.Time) string {

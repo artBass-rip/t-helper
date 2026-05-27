@@ -2,14 +2,18 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/artBass-rip/t-helper/internal/app/storageproviders"
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
@@ -135,6 +139,58 @@ func TestUpsertRepositoryRelinksAndSupersedesGenericRepository(t *testing.T) {
 	}
 }
 
+func TestRepositoryStoreContractPostgres(t *testing.T) {
+	dsn := os.Getenv("THELPER_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("THELPER_POSTGRES_DSN is not set")
+	}
+	requireRepositoryPostgresTestDatabase(t, dsn)
+	ctx := context.Background()
+	registry := storageproviders.MVPRegistry()
+	handle, err := registry.Open(ctx, storage.Config{Provider: "postgres", DSN: dsn})
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	defer handle.Close()
+	resetRepositoryPostgresTables(t, handle.DB)
+	if err := registry.Migrate(ctx, handle); err != nil {
+		t.Fatalf("migrate postgres: %v", err)
+	}
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	generic, _, _, err := scannerStore.UpsertGenericRepository(ctx, root, filepath.Join(root.Path, "repo"))
+	if err != nil {
+		t.Fatalf("upsert generic repository: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, root, "repo/app", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	if err := scannerStore.SetProjectRepository(ctx, project.ID, generic.ID); err != nil {
+		t.Fatalf("link project repository: %v", err)
+	}
+	canonical, _, err := repoStore.UpsertRepositoryForClone(ctx, Identity{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/repo",
+		CloneURL:     "https://github.com/example/repo.git",
+		Protocol:     ProtocolHTTPS,
+	}, root, "repo", filepath.Join(root.Path, "repo"), "", "")
+	if err != nil {
+		t.Fatalf("upsert provider-aware repository: %v", err)
+	}
+	if canonical.ID != generic.ID || canonical.IdentityConfirmedAt == nil {
+		t.Fatalf("repository was not enriched in place: canonical=%+v generic=%+v", canonical, generic)
+	}
+	if _, err := repoStore.ReserveOperationKeys(ctx, "owner-one", time.Minute, IdentityReservationKey(ProviderGitHub, "github.com", "example/repo")); err != nil {
+		t.Fatalf("reserve operation key: %v", err)
+	}
+	if _, err := repoStore.ReserveOperationKeys(ctx, "owner-two", time.Minute, IdentityReservationKey(ProviderGitHub, "github.com", "example/repo")); !errors.Is(err, ErrReservationConflict) {
+		t.Fatalf("second reservation error = %v, want %v", err, ErrReservationConflict)
+	}
+}
+
 func TestReserveOperationKeysReportsConflict(t *testing.T) {
 	ctx := context.Background()
 	store := NewStore(openRepositorySQLite(t))
@@ -172,6 +228,101 @@ func TestTransferOperationReservationsAllowsSameJobRefresh(t *testing.T) {
 	}
 	if _, err := store.ReserveOperationKeys(ctx, "job-two", time.Hour, held...); !errors.Is(err, ErrReservationConflict) {
 		t.Fatalf("second job reserve error = %v, want reservation conflict", err)
+	}
+}
+
+func TestProviderInstanceListUsesCursorPagination(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	for _, input := range []ProviderInstanceInput{
+		{ID: "rpi_a", Provider: ProviderGitHub, ProviderHost: "ghe-a.example.internal"},
+		{ID: "rpi_b", Provider: ProviderGitHub, ProviderHost: "ghe-b.example.internal"},
+		{ID: "rpi_c", Provider: ProviderGitHub, ProviderHost: "ghe-c.example.internal"},
+	} {
+		if _, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{input}); err != nil {
+			t.Fatalf("upsert provider instance %s: %v", input.ID, err)
+		}
+	}
+	first, err := store.ListProviderInstancesPage(ctx, ProviderInstanceListOptions{ListOptions: ListOptions{Limit: 2}})
+	if err != nil {
+		t.Fatalf("list first page: %v", err)
+	}
+	if len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("first page = %+v, want 2 items and next cursor", first)
+	}
+	second, err := store.ListProviderInstancesPage(ctx, ProviderInstanceListOptions{ListOptions: ListOptions{Limit: 2, Cursor: first.NextCursor}})
+	if err != nil {
+		t.Fatalf("list second page: %v", err)
+	}
+	if len(second.Items) != 1 || second.NextCursor != "" {
+		t.Fatalf("second page = %+v, want 1 item and no next cursor", second)
+	}
+	seen := map[string]bool{}
+	for _, item := range append(first.Items, second.Items...) {
+		if seen[item.ID] {
+			t.Fatalf("provider instance repeated across pages: %s", item.ID)
+		}
+		seen[item.ID] = true
+	}
+	if _, err := store.ListProviderInstancesPage(ctx, ProviderInstanceListOptions{ListOptions: ListOptions{Cursor: "not-a-cursor"}}); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("invalid cursor error = %v, want %v", err, ErrInvalidCursor)
+	}
+}
+
+func TestCredentialListFiltersUsageBeforeLimitAndUsesCursor(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	inputs := []CredentialInput{
+		{ID: "rcred_webhook", ProviderInstanceID: instances[0].ID, Name: "webhook", AuthType: AuthTypeWebhookSecret, SecretRef: "secretref://env/WEBHOOK_SECRET", Usages: []string{UsageWebhook}, Enabled: &enabled},
+		{ID: "rcred_git_one", ProviderInstanceID: instances[0].ID, Name: "git-one", AuthType: AuthTypeHTTPSToken, SecretRef: "secretref://env/GITHUB_TOKEN_ONE", Usages: []string{UsageGitTransport}, Enabled: &enabled},
+		{ID: "rcred_git_two", ProviderInstanceID: instances[0].ID, Name: "git-two", AuthType: AuthTypeHTTPSToken, SecretRef: "secretref://env/GITHUB_TOKEN_TWO", Usages: []string{UsageGitTransport}, Enabled: &enabled},
+	}
+	for _, input := range inputs {
+		if _, err := store.UpsertCredentials(ctx, []CredentialInput{input}); err != nil {
+			t.Fatalf("upsert credential %s: %v", input.ID, err)
+		}
+	}
+	webhook, err := store.ListCredentialsPage(ctx, CredentialListOptions{
+		ListOptions:        ListOptions{Limit: 1},
+		ProviderInstanceID: instances[0].ID,
+		Usage:              UsageWebhook,
+	})
+	if err != nil {
+		t.Fatalf("list webhook credentials: %v", err)
+	}
+	if len(webhook.Items) != 1 || webhook.Items[0].ID != "rcred_webhook" || webhook.Items[0].SecretRef != "secretref://env/***" {
+		t.Fatalf("webhook page = %+v, want masked webhook credential", webhook)
+	}
+	first, err := store.ListCredentialsPage(ctx, CredentialListOptions{
+		ListOptions:        ListOptions{Limit: 1},
+		ProviderInstanceID: instances[0].ID,
+		Usage:              UsageGitTransport,
+	})
+	if err != nil {
+		t.Fatalf("list first git credential page: %v", err)
+	}
+	if len(first.Items) != 1 || first.NextCursor == "" {
+		t.Fatalf("first git credential page = %+v, want 1 item and next cursor", first)
+	}
+	second, err := store.ListCredentialsPage(ctx, CredentialListOptions{
+		ListOptions:        ListOptions{Limit: 1, Cursor: first.NextCursor},
+		ProviderInstanceID: instances[0].ID,
+		Usage:              UsageGitTransport,
+	})
+	if err != nil {
+		t.Fatalf("list second git credential page: %v", err)
+	}
+	if len(second.Items) != 1 || second.NextCursor != "" || second.Items[0].ID == first.Items[0].ID {
+		t.Fatalf("second git credential page = %+v after first %+v", second, first)
 	}
 }
 
@@ -302,6 +453,14 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 		TargetDirectory: targetDirectory,
 		LocalPath:       localPath,
 	})
+	identityReservationKey := IdentityReservationKey(repo.Provider, repo.ProviderHost, repo.FullPath)
+	pathReservationKey, err := TargetReservationKey(root.Path, root.ID, targetDirectory)
+	if err != nil {
+		t.Fatalf("target reservation key: %v", err)
+	}
+	if _, err := repoStore.ReserveOperationKeys(ctx, "job_clone_git", time.Hour, identityReservationKey, pathReservationKey); err != nil {
+		t.Fatalf("reserve operation keys before worker: %v", err)
+	}
 	result, err := (operationHandler{store: repoStore, scannerStore: scannerStore, operation: "clone"}).handleClone(ctx, jobs.Job{
 		ID:      "job_clone_git",
 		JobType: "repo_clone",
@@ -320,6 +479,18 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {
 		t.Fatalf("cloned working tree missing .git: %v", err)
 	}
+	if held := countHeldOperationReservations(t, ctx, repoStore); held != 0 {
+		t.Fatalf("held operation reservations after clone = %d, want 0", held)
+	}
+}
+
+func countHeldOperationReservations(t *testing.T, ctx context.Context, store *Store) int {
+	t.Helper()
+	var count int
+	if err := store.handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM repository_operation_reservations WHERE status = 'held'`).Scan(&count); err != nil {
+		t.Fatalf("count held operation reservations: %v", err)
+	}
+	return count
 }
 
 func requireGit(t *testing.T) {
@@ -372,4 +543,50 @@ func openRepositorySQLite(t *testing.T) *storage.Handle {
 		t.Fatalf("migrate sqlite: %v", err)
 	}
 	return handle
+}
+
+func requireRepositoryPostgresTestDatabase(t *testing.T, dsn string) {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse THELPER_POSTGRES_DSN: %v", err)
+	}
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if strings.HasSuffix(dbName, "_test") || strings.Contains(dbName, "test") {
+		return
+	}
+	if os.Getenv("THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS") == "1" {
+		return
+	}
+	t.Fatalf("refusing destructive repository contract test against database %q; use a test database or set THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1", dbName)
+}
+
+func resetRepositoryPostgresTables(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS repository_operation_reservations CASCADE",
+		"DROP TABLE IF EXISTS repository_credentials CASCADE",
+		"DROP TABLE IF EXISTS repository_provider_instances CASCADE",
+		"DROP TABLE IF EXISTS project_links CASCADE",
+		"DROP TABLE IF EXISTS workspaces CASCADE",
+		"DROP TABLE IF EXISTS projects CASCADE",
+		"DROP TABLE IF EXISTS repositories CASCADE",
+		"DROP TABLE IF EXISTS environments CASCADE",
+		"DROP TABLE IF EXISTS root_paths CASCADE",
+		"DROP TABLE IF EXISTS workflow_statuses CASCADE",
+		"DROP TABLE IF EXISTS job_events CASCADE",
+		"DROP TABLE IF EXISTS job_locks CASCADE",
+		"DROP TABLE IF EXISTS jobs CASCADE",
+		"DROP TABLE IF EXISTS ignore_rules CASCADE",
+		"DROP TABLE IF EXISTS module_states CASCADE",
+		"DROP TABLE IF EXISTS storage_provider_settings CASCADE",
+		"DROP TABLE IF EXISTS storage_profiles CASCADE",
+		"DROP TABLE IF EXISTS config_entries CASCADE",
+		"DROP TABLE IF EXISTS system_metadata CASCADE",
+		"DROP TABLE IF EXISTS goose_db_version CASCADE",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("reset postgres table with %q: %v", stmt, err)
+		}
+	}
 }

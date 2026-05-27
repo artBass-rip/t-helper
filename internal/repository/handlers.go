@@ -75,14 +75,20 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 	if payload.LocalPath != "" && filepath.Clean(payload.LocalPath) != filepath.Clean(localPath) {
 		return nil, jobs.HandlerError{Code: "invalid_repository_path", Message: "repository local_path no longer matches target_directory", Retryable: false}
 	}
+	identityReservationKey := IdentityReservationKey(payload.Provider, payload.ProviderHost, payload.FullPath)
 	pathReservationKey, err := TargetReservationKey(root.Path, payload.RootPathID, payload.TargetDirectory)
 	if err != nil {
 		return nil, jobs.HandlerError{Code: ValidationCode(err), Message: err.Error(), Retryable: false}
 	}
-	held, err := h.store.ReserveOperationKeys(ctx, job.ID, time.Hour, pathReservationKey)
+	held, err := h.store.ReserveOperationKeys(ctx, job.ID, time.Hour, identityReservationKey, pathReservationKey)
 	if err != nil {
 		if errors.Is(err, ErrReservationConflict) {
-			return nil, jobs.HandlerError{Code: "repository_target_path_busy", Message: pathReservationKey, Retryable: true}
+			code := "repository_target_path_busy"
+			var conflict ReservationConflictError
+			if errors.As(err, &conflict) && conflict.Key == identityReservationKey {
+				code = "repository_operation_already_running"
+			}
+			return nil, jobs.HandlerError{Code: code, Message: err.Error(), Retryable: true}
 		}
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}

@@ -83,6 +83,11 @@ type ListOptions struct {
 	Cursor string
 }
 
+type Page[T any] struct {
+	Items      []T
+	NextCursor string
+}
+
 type ProviderInstanceListOptions struct {
 	ListOptions
 	Provider     string

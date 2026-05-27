@@ -18,6 +18,7 @@ var (
 	ErrValidation          = errors.New("repository validation error")
 	ErrNotFound            = errors.New("repository record not found")
 	ErrReservationConflict = errors.New("repository operation reservation conflict")
+	ErrInvalidCursor       = errors.New("invalid cursor")
 )
 
 type ValidationError struct {
@@ -263,6 +264,10 @@ func TransportURL(provider, host, fullPath, protocol string) string {
 		return fullPath
 	}
 	return "https://" + host + "/" + fullPath + ".git"
+}
+
+func IdentityReservationKey(provider, host, fullPath string) string {
+	return "repository-identity:" + provider + ":" + host + ":" + fullPath
 }
 
 func NormalizeTarget(rootPath, target string) (string, string, error) {

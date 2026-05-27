@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -40,7 +39,7 @@ func (h *RepositoryHandler) ListProviderInstances(w http.ResponseWriter, r *http
 		}
 		enabled = &parsed
 	}
-	items, err := h.store.ListProviderInstances(r.Context(), repository.ProviderInstanceListOptions{
+	page, err := h.store.ListProviderInstancesPage(r.Context(), repository.ProviderInstanceListOptions{
 		ListOptions:  repository.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
 		Provider:     r.URL.Query().Get("provider"),
 		ProviderHost: r.URL.Query().Get("provider_host"),
@@ -50,7 +49,7 @@ func (h *RepositoryHandler) ListProviderInstances(w http.ResponseWriter, r *http
 		writeRepositoryError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, listResponse(items, ""))
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
 }
 
 func (h *RepositoryHandler) PutProviderInstances(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +70,7 @@ func (h *RepositoryHandler) PutProviderInstances(w http.ResponseWriter, r *http.
 
 func (h *RepositoryHandler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := h.store.ListCredentials(r.Context(), repository.CredentialListOptions{
+	page, err := h.store.ListCredentialsPage(r.Context(), repository.CredentialListOptions{
 		ListOptions:        repository.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
 		ProviderInstanceID: r.URL.Query().Get("provider_instance_id"),
 		Usage:              r.URL.Query().Get("usage"),
@@ -81,7 +80,7 @@ func (h *RepositoryHandler) ListCredentials(w http.ResponseWriter, r *http.Reque
 		writeRepositoryError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, listResponse(items, ""))
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
 }
 
 func (h *RepositoryHandler) PutCredentials(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +184,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeEnqueueError(w, r, replayErr)
 		return
 	}
-	identityReservationKey := fmt.Sprintf("repository-identity:%s:%s:%s", identity.Provider, identity.ProviderHost, identity.FullPath)
+	identityReservationKey := repository.IdentityReservationKey(identity.Provider, identity.ProviderHost, identity.FullPath)
 	jobID := jobs.NewJobID()
 	reservationOwner := jobID
 	heldReservations, err := h.store.ReserveOperationKeys(r.Context(), reservationOwner, 5*time.Minute, identityReservationKey, pathReservationKey)
@@ -502,6 +501,8 @@ func writeRepositoryError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound), errors.Is(err, scanner.ErrNotFound):
 		writeError(w, r, http.StatusNotFound, "not_found", "record not found")
+	case errors.Is(err, repository.ErrInvalidCursor):
+		writeError(w, r, http.StatusBadRequest, "validation_error", "invalid cursor")
 	case errors.Is(err, repository.ErrValidation), errors.Is(err, scanner.ErrValidation):
 		writeError(w, r, http.StatusBadRequest, repository.ValidationCode(err), err.Error())
 	default:
