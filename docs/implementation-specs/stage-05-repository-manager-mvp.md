@@ -100,6 +100,9 @@ Current gaps that must be closed inside Stage 05:
 - новый root path при clone сохраняется в `root_paths`;
 - конфликтующие repo operations сериализуются через `job_locks` and the MVP conflict policy below;
 - provider-aware operations reject `status = superseded` repositories with controlled validation error.
+- Stage 05 MVP `repo_sync` is pull-only: the worker runs the same Git pull
+  path as `repo_pull` and records `operation = repo_sync`; project/security
+  scan orchestration is intentionally outside this stage.
 
 ## Implementation sequencing
 

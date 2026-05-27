@@ -25,7 +25,7 @@ const (
 	RepoClonePayloadSchema        = "jobs.repo_clone.payload.v1"
 	RepoPullPayloadSchema         = "jobs.repo_pull.payload.v1"
 	RepoSyncPayloadSchema         = "jobs.repo_sync.payload.v1"
-	RepoOperationResultSchema     = "jobs.repository_operation.result.v1"
+	RepoOperationResultSchema     = "jobs.repo_operation.result.v1"
 )
 
 type ProviderInstance struct {
@@ -154,8 +154,19 @@ type RepoSyncPayload struct {
 }
 
 type OperationResult struct {
-	SchemaVersion string `json:"schema_version"`
-	RepositoryID  string `json:"repository_id"`
-	Operation     string `json:"operation"`
-	ExitCode      int    `json:"exit_code"`
+	SchemaVersion       string  `json:"schema_version"`
+	RepositoryID        string  `json:"repository_id"`
+	ProviderInstanceID  string  `json:"provider_instance_id,omitempty"`
+	CredentialID        string  `json:"credential_id,omitempty"`
+	Operation           string  `json:"operation"`
+	RootPathID          string  `json:"root_path_id,omitempty"`
+	Provider            string  `json:"provider,omitempty"`
+	ProviderHost        string  `json:"provider_host,omitempty"`
+	Protocol            string  `json:"protocol,omitempty"`
+	LocalPath           string  `json:"local_path,omitempty"`
+	RepositoriesCreated int     `json:"repositories_created"`
+	BeforeRevision      *string `json:"before_revision"`
+	AfterRevision       string  `json:"after_revision,omitempty"`
+	Changed             bool    `json:"changed"`
+	ExitCode            int     `json:"exit_code"`
 }

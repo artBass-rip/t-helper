@@ -182,6 +182,111 @@ func TestStage05CloneRejectsBusyTargetPathForDifferentRepository(t *testing.T) {
 	}
 }
 
+func TestStage05CloneRejectsUnsupportedCloneScope(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	body, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+		"clone_scope":      "gitlab_group_recursive",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unsupported clone_scope status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode unsupported clone_scope error: %v", err)
+	}
+	if apiErr.Error.Code != "unsupported_clone_scope" {
+		t.Fatalf("unsupported clone_scope code = %q", apiErr.Error.Code)
+	}
+}
+
+func TestStage05CloneConflictWithActivePullDoesNotMutateRepository(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	repo, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/repo",
+		CloneURL:     "https://github.com/example/repo.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "repo", filepath.Join(root.Path, "repo"), "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	pullPayload, _ := json.Marshal(repositorydomain.RepoPullPayload{SchemaVersion: repositorydomain.RepoPullPayloadSchema, RepositoryID: repo.ID})
+	pullRef, err := jobStore.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "repo_pull",
+		Actor:   "api",
+		LockKey: "repository:" + repo.ID,
+		Payload: pullPayload,
+	})
+	if err != nil {
+		t.Fatalf("enqueue pull: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "ssh",
+		"clone_url":        "git@github.com:example/repo.git",
+		"root_path_id":     root.ID,
+		"target_directory": "changed-target",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("clone during pull status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var conflict struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&conflict); err != nil {
+		t.Fatalf("decode conflict: %v", err)
+	}
+	if conflict.Error.Code != "repository_operation_already_running" || conflict.Error.Details["active_job_id"] != pullRef.JobID || conflict.Error.Details["active_job_type"] != "repo_pull" {
+		t.Fatalf("unexpected conflict details: %+v", conflict.Error)
+	}
+	reloaded, err := scannerStore.GetRepository(ctx, repo.ID)
+	if err != nil {
+		t.Fatalf("reload repository: %v", err)
+	}
+	if reloaded.TargetDirectory != "repo" || reloaded.LocalPath != filepath.Join(root.Path, "repo") || reloaded.AuthType != repositorydomain.ProtocolHTTPS {
+		t.Fatalf("repository mutated before conflict: %+v", reloaded)
+	}
+}
+
 func TestStage05CloneRejectsDisabledProviderInstance(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

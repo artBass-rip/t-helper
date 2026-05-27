@@ -296,7 +296,7 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	if err := json.Unmarshal(result, &op); err != nil {
 		t.Fatalf("decode operation result: %v", err)
 	}
-	if op.Operation != "clone" || op.RepositoryID != repo.ID {
+	if op.SchemaVersion != RepoOperationResultSchema || op.Operation != "repo_clone" || op.RepositoryID != repo.ID || op.Provider != ProviderGeneric || op.ProviderHost != "local" || op.Protocol != ProtocolHTTPS || op.LocalPath != localPath || op.RepositoriesCreated != 1 || !op.Changed || op.AfterRevision == "" {
 		t.Fatalf("unexpected operation result: %+v", op)
 	}
 	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {

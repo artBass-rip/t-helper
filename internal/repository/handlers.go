@@ -92,7 +92,7 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 			if err := h.validateExistingRemote(ctx, localPath, payload); err != nil {
 				return nil, err
 			}
-			return h.runGit(ctx, payload.RepositoryID, localPath, gitEnv, "pull", "--ff-only")
+			return h.runGit(ctx, repo, payload.CredentialID, job.JobType, localPath, gitEnv, "pull", "--ff-only")
 		}
 		entries, readErr := os.ReadDir(localPath)
 		if readErr != nil {
@@ -116,7 +116,23 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 	if err := h.store.TouchRepositoryPulled(ctx, payload.RepositoryID); err != nil {
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}
-	return json.Marshal(OperationResult{SchemaVersion: RepoOperationResultSchema, RepositoryID: payload.RepositoryID, Operation: "clone"})
+	afterRevision, _ := gitRevision(ctx, localPath)
+	return json.Marshal(OperationResult{
+		SchemaVersion:       RepoOperationResultSchema,
+		RepositoryID:        payload.RepositoryID,
+		ProviderInstanceID:  payload.ProviderInstanceID,
+		CredentialID:        payload.CredentialID,
+		Operation:           job.JobType,
+		RootPathID:          payload.RootPathID,
+		Provider:            payload.Provider,
+		ProviderHost:        payload.ProviderHost,
+		Protocol:            payload.Protocol,
+		LocalPath:           localPath,
+		RepositoriesCreated: 1,
+		AfterRevision:       afterRevision,
+		Changed:             true,
+		ExitCode:            0,
+	})
 }
 
 func (h operationHandler) validateExistingRemote(ctx context.Context, localPath string, payload RepoClonePayload) error {
@@ -145,6 +161,7 @@ func (h operationHandler) handlePull(ctx context.Context, job jobs.Job) (json.Ra
 			return nil, jobs.HandlerError{Code: "validation_error", Message: err.Error(), Retryable: false}
 		}
 		payload.RepositoryID = syncPayload.RepositoryID
+		payload.CredentialID = syncPayload.CredentialID
 	}
 	repo, err := h.scannerStore.GetRepository(ctx, payload.RepositoryID)
 	if err != nil {
@@ -184,7 +201,7 @@ func (h operationHandler) handlePull(ctx context.Context, job jobs.Job) (json.Ra
 		return nil, err
 	}
 	defer cleanup()
-	return h.runGit(ctx, repo.ID, localPath, gitEnv, "pull", "--ff-only")
+	return h.runGit(ctx, repo, credentialID, job.JobType, localPath, gitEnv, "pull", "--ff-only")
 }
 
 func (h operationHandler) validateRepositoryOperable(repo scanner.Repository) error {
@@ -216,17 +233,48 @@ func (h operationHandler) validatedRepositoryLocalPath(ctx context.Context, repo
 	return localPath, nil
 }
 
-func (h operationHandler) runGit(ctx context.Context, repositoryID, dir string, extraEnv []string, args ...string) (json.RawMessage, error) {
+func (h operationHandler) runGit(ctx context.Context, repo scanner.Repository, credentialID, operation, dir string, extraEnv []string, args ...string) (json.RawMessage, error) {
+	beforeRevision, _ := gitRevision(ctx, dir)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), extraEnv...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, jobs.HandlerError{Code: "git_operation_failed", Message: string(out), Retryable: true}
 	}
-	if err := h.store.TouchRepositoryPulled(ctx, repositoryID); err != nil {
+	if err := h.store.TouchRepositoryPulled(ctx, repo.ID); err != nil {
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}
-	return json.Marshal(OperationResult{SchemaVersion: RepoOperationResultSchema, RepositoryID: repositoryID, Operation: h.operation})
+	afterRevision, _ := gitRevision(ctx, dir)
+	var before *string
+	if beforeRevision != "" {
+		before = &beforeRevision
+	}
+	return json.Marshal(OperationResult{
+		SchemaVersion:      RepoOperationResultSchema,
+		RepositoryID:       repo.ID,
+		ProviderInstanceID: repo.ProviderInstanceID,
+		CredentialID:       credentialID,
+		Operation:          operation,
+		RootPathID:         repo.RootPathID,
+		Provider:           repo.Provider,
+		ProviderHost:       repo.ProviderHost,
+		Protocol:           repo.AuthType,
+		LocalPath:          dir,
+		BeforeRevision:     before,
+		AfterRevision:      afterRevision,
+		Changed:            beforeRevision != afterRevision,
+		ExitCode:           0,
+	})
+}
+
+func gitRevision(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func (h operationHandler) gitCredentialEnv(ctx context.Context, credentialID string) ([]string, func(), error) {

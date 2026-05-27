@@ -106,6 +106,10 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	if req.CloneScope == "" {
 		req.CloneScope = "single_repository"
 	}
+	if req.CloneScope != "single_repository" {
+		writeError(w, r, http.StatusBadRequest, "unsupported_clone_scope", "only single_repository clone_scope is supported")
+		return
+	}
 	var instance *repository.ProviderInstance
 	if req.ProviderInstanceID != "" {
 		item, err := h.store.GetProviderInstance(r.Context(), req.ProviderInstanceID)
@@ -203,6 +207,19 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if !errors.Is(err, jobs.ErrNotFound) {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	if existing, err := h.store.ExistingRepositoryForClone(r.Context(), identity, root.ID, localPath); err == nil {
+		lockKey := "repository:" + existing.ID
+		if active, err := h.jobStore.ActiveRepositoryOperation(r.Context(), lockKey); err == nil {
+			writeRepositoryConflict(w, r, existing.ID, lockKey, active)
+			return
+		} else if !errors.Is(err, jobs.ErrNotFound) {
+			writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		writeRepositoryError(w, r, err)
 		return
 	}
 	repo, err := h.store.UpsertRepository(r.Context(), identity, root, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID)

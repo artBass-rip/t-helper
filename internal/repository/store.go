@@ -483,6 +483,18 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 	return scanner.NewStore(s.handle).GetRepository(ctx, id)
 }
 
+func (s *Store) ExistingRepositoryForClone(ctx context.Context, identity Identity, rootPathID, localPath string) (scanner.Repository, error) {
+	existing, err := s.findRepository(ctx, identity.Provider, identity.ProviderHost, identity.FullPath)
+	if err == nil || !errors.Is(err, ErrNotFound) {
+		return existing, err
+	}
+	generic, err := s.findGenericRepositoryByLocalPath(ctx, rootPathID, localPath)
+	if err == nil || !errors.Is(err, ErrNotFound) {
+		return generic, err
+	}
+	return scanner.Repository{}, ErrNotFound
+}
+
 func (s *Store) findRepository(ctx context.Context, provider, host, fullPath string) (scanner.Repository, error) {
 	query := "SELECT " + repositoryColumns(s.handle.Provider) + " FROM repositories WHERE provider = ? AND provider_host = ? AND full_path = ?"
 	args := []any{provider, host, fullPath}

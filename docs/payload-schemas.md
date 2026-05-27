@@ -223,6 +223,10 @@ Used by `repo_clone`, `repo_pull` and `repo_sync`.
 
 ### `jobs.repo_sync.payload.v1`
 
+Stage 05 MVP handles `repo_sync` as a pull-only repository operation. It does
+not orchestrate project discovery, project scans or security validation scans;
+those workflows are owned by later stages.
+
 ```json
 {
   "schema_version": "jobs.repo_sync.payload.v1",

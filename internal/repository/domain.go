@@ -120,7 +120,7 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 		if err != nil {
 			return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
 		}
-		if u.User != nil && !(u.Scheme == ProtocolSSH && u.User.Username() == "git") {
+		if hasDisallowedUserInfo(u) {
 			return Identity{}, validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")
 		}
 	}
@@ -136,7 +136,7 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 		}
 		return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
 	}
-	if u.User != nil && !(u.Scheme == ProtocolSSH && u.User.Username() == "git") {
+	if hasDisallowedUserInfo(u) {
 		return Identity{}, validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")
 	}
 	if u.Scheme != ProtocolHTTPS && u.Scheme != ProtocolSSH && u.Scheme != "file" {
@@ -146,6 +146,17 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 		return identityFromHostPath(provider, "local", strings.TrimPrefix(u.Path, "/"), ProtocolHTTPS)
 	}
 	return identityFromHostPath(provider, u.Host, strings.TrimPrefix(u.Path, "/"), u.Scheme)
+}
+
+func hasDisallowedUserInfo(u *url.URL) bool {
+	if u.User == nil {
+		return false
+	}
+	if u.Scheme != ProtocolSSH || u.User.Username() != "git" {
+		return true
+	}
+	_, hasPassword := u.User.Password()
+	return hasPassword
 }
 
 func identityFromHostPath(provider, host, rawPath, protocol string) (Identity, error) {

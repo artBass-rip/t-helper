@@ -214,6 +214,9 @@ roots are preserved.
 
 Инварианты:
 
+- Stage 05 MVP stores `display_name` as `name` and does not yet persist
+  `deployment_type` or `default_clone_protocol`; those fields remain the
+  forward data-model contract for later provider-profile expansion.
 - `provider` принимает `gitlab`, `github`, `bitbucket`, `azure_devops` или `generic`;
 - `deployment_type` принимает `cloud`, `self_managed`, `enterprise_server`, `data_center` или `organization`;
 - `provider_host` normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;
@@ -241,6 +244,10 @@ roots are preserved.
 
 Инварианты:
 
+- Stage 05 MVP persists a single `secret_ref` selected by `auth_type` instead
+  of separate `token_ref`, `password_ref`, `private_key_ref`,
+  `passphrase_ref` and `webhook_secret_ref` columns; the separate columns are
+  the forward data-model contract for richer credential material.
 - `provider_instance_id` обязателен;
 - `auth_type` принимает `ssh_key`, `https_token`, `https_basic`, `oauth_token`, `app_password`, `webhook_secret`;
 - `usages` содержит один или несколько values: `git_transport`, `provider_api`, `webhook`;

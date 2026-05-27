@@ -29,14 +29,22 @@ func TestNormalizeIdentityGitHubEquivalentURLs(t *testing.T) {
 }
 
 func TestNormalizeIdentityRejectsUserInfo(t *testing.T) {
-	_, err := NormalizeIdentity(CloneRequest{
-		Provider:   ProviderGitHub,
-		Protocol:   ProtocolHTTPS,
-		CloneURL:   "https://user:token@github.com/example/repo.git",
-		CloneScope: "single_repository",
-	}, nil)
-	if err == nil {
-		t.Fatal("expected userinfo validation error")
+	for _, raw := range []string{
+		"https://user:token@github.com/example/repo.git",
+		"ssh://git:secret@github.com/example/repo.git",
+	} {
+		_, err := NormalizeIdentity(CloneRequest{
+			Provider:   ProviderGitHub,
+			Protocol:   ProtocolHTTPS,
+			CloneURL:   raw,
+			CloneScope: "single_repository",
+		}, nil)
+		if err == nil {
+			t.Fatalf("expected userinfo validation error for %q", raw)
+		}
+		if code := ValidationCode(err); code != "credential_userinfo_not_allowed" {
+			t.Fatalf("validation code for %q = %q", raw, code)
+		}
 	}
 }
 
