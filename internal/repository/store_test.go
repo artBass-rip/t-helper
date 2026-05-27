@@ -437,6 +437,33 @@ func TestProviderInstanceNormalizesDefaultHTTPSPort(t *testing.T) {
 	}
 }
 
+func TestProviderInstanceValidatesProfileURLs(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "ghe.example.internal:443",
+		APIBaseURL:   "https://ghe.example.internal/api/v3",
+		WebBaseURL:   "https://ghe.example.internal/",
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	if instances[0].ProviderHost != "ghe.example.internal" || instances[0].APIBaseURL != "https://ghe.example.internal/api/v3" {
+		t.Fatalf("unexpected normalized provider instance: %+v", instances[0])
+	}
+
+	for _, tc := range []ProviderInstanceInput{
+		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "http://github.com/api/v3"},
+		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "https://token@github.com/api/v3"},
+		{Provider: ProviderGitHub, ProviderHost: "github.com", WebBaseURL: "https://ghe.example.internal/"},
+	} {
+		if _, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{tc}); err == nil {
+			t.Fatalf("expected provider profile URL validation error for %+v", tc)
+		}
+	}
+}
+
 func TestGitCredentialEnvResolvesSecretRef(t *testing.T) {
 	ctx := context.Background()
 	handle := openRepositorySQLite(t)
@@ -574,6 +601,102 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	}
 	if held := countHeldOperationReservations(t, ctx, repoStore); held != 0 {
 		t.Fatalf("held operation reservations after clone = %d, want 0", held)
+	}
+}
+
+func TestOperationHandlerCloneUsesExistingEmptyTargetDirectory(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	source := createGitFixtureRepository(t)
+	targetDirectory := "empty/repo"
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
+	if err := os.MkdirAll(localPath, 0o755); err != nil {
+		t.Fatalf("mkdir empty target: %v", err)
+	}
+	identity, err := NormalizeIdentity(CloneRequest{Provider: ProviderGeneric, Protocol: ProtocolHTTPS, CloneURL: source, CloneScope: "single_repository"}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, identity, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        identity.Provider,
+		ProviderHost:    identity.ProviderHost,
+		Protocol:        identity.Protocol,
+		CloneURL:        identity.CloneURL,
+		CloneScope:      "single_repository",
+		FullPath:        identity.FullPath,
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	if _, err := (operationHandler{store: repoStore, scannerStore: scannerStore}).handleClone(ctx, jobs.Job{ID: "job_clone_empty", JobType: "repo_clone", Payload: payload}); err != nil {
+		t.Fatalf("handle clone into empty target: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {
+		t.Fatalf("cloned working tree missing .git: %v", err)
+	}
+}
+
+func TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	if err := os.MkdirAll(root.Path, 0o755); err != nil {
+		t.Fatalf("mkdir root: %v", err)
+	}
+	source := createGitFixtureRepository(t)
+	targetDirectory := "linked/repo"
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target before symlink: %v", err)
+	}
+	identity, err := NormalizeIdentity(CloneRequest{Provider: ProviderGeneric, Protocol: ProtocolHTTPS, CloneURL: source, CloneScope: "single_repository"}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, identity, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root.Path, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        identity.Provider,
+		ProviderHost:    identity.ProviderHost,
+		Protocol:        identity.Protocol,
+		CloneURL:        identity.CloneURL,
+		CloneScope:      "single_repository",
+		FullPath:        identity.FullPath,
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	_, err = (operationHandler{store: repoStore, scannerStore: scannerStore}).Handle(ctx, jobs.HandlerEnv{}, jobs.Job{ID: "job_clone_symlink_escape", JobType: "repo_clone", Payload: payload})
+	var handlerErr jobs.HandlerError
+	if !errors.As(err, &handlerErr) || handlerErr.Code != "validation_error" {
+		t.Fatalf("clone symlink escape error = %v, want validation_error", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "repo")); !os.IsNotExist(err) {
+		t.Fatalf("outside target stat error = %v, want not exist", err)
 	}
 }
 

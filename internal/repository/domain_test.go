@@ -28,6 +28,21 @@ func TestNormalizeIdentityGitHubEquivalentURLs(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityUsesSelectedProtocolForManagedTransport(t *testing.T) {
+	identity, err := NormalizeIdentity(CloneRequest{
+		Provider:   ProviderGitHub,
+		Protocol:   ProtocolSSH,
+		CloneURL:   "https://github.com/example/repo.git",
+		CloneScope: "single_repository",
+	}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	if identity.Protocol != ProtocolSSH || identity.CloneURL != "git@github.com:example/repo.git" {
+		t.Fatalf("identity = %+v, want ssh transport URL", identity)
+	}
+}
+
 func TestNormalizeIdentityRejectsUserInfo(t *testing.T) {
 	for _, raw := range []string{
 		"https://user:token@github.com/example/repo.git",

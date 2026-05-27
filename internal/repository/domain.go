@@ -69,6 +69,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	}
 	fullPath := strings.TrimSpace(req.FullPath)
 	cloneURL := strings.TrimSpace(req.CloneURL)
+	cloneURLFromLocalPath := false
 	if cloneURL != "" {
 		parsed, err := ParseCloneURL(provider, cloneURL)
 		if err != nil {
@@ -90,7 +91,10 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 				return Identity{}, validationError("provider_path_shape_mismatch", "full_path does not match clone_url path")
 			}
 		}
-		cloneURL = parsed.CloneURL
+		if provider == ProviderGeneric && parsed.ProviderHost == "local" {
+			cloneURLFromLocalPath = true
+			cloneURL = parsed.CloneURL
+		}
 	}
 	if provider == ProviderGeneric && host == "" {
 		host = "local"
@@ -105,7 +109,7 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 	if err != nil {
 		return Identity{}, err
 	}
-	if cloneURL == "" {
+	if cloneURL == "" || !cloneURLFromLocalPath {
 		cloneURL = TransportURL(provider, host, fullPath, protocol)
 	}
 	return Identity{Provider: provider, ProviderHost: host, FullPath: fullPath, CloneURL: cloneURL, Protocol: protocol}, nil

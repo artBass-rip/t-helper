@@ -268,6 +268,35 @@ rules in addition to HTTP API tests. Worker handlers must repeat containment
 checks immediately before filesystem writes, because queued jobs may run after
 root paths or symlinks have changed.
 
+## Acceptance checklist
+
+Stage 05 is considered complete only when the implementation and tests cover the
+following checklist:
+
+- provider profile APIs validate `api_base_url` and `web_base_url` as safe
+  HTTPS URLs without userinfo and with a host matching normalized
+  `provider_host`;
+- managed provider `clone_url` is used for identity extraction and mismatch
+  validation, while the selected `protocol` controls the persisted transport
+  URL;
+- HTTP clone requests reject credentials embedded in URLs and exact
+  `Idempotency-Key` replay returns the existing `job_ref`;
+- active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are
+  cross-operation for the same `repository:<id>` lock key;
+- clone pre-create locking rejects duplicate normalized repository identities
+  and duplicate normalized target paths before filesystem side effects;
+- worker execution repeats target containment checks and rejects symlink escapes
+  that appear after enqueue;
+- existing empty target directories are accepted after containment/conflict
+  checks, existing non-empty non-Git directories are rejected, matching existing
+  Git remotes degrade clone to pull, and mismatched Git remotes are rejected;
+- provider-aware enrichment keeps generic repository IDs when no canonical
+  provider card exists, and relinks projects/project links plus supersedes the
+  generic row when a canonical card already exists;
+- repository operation job payloads contain `credential_id` only and never raw
+  `secretref` values or resolved secrets;
+- repository operation failure messages are redacted before persistence.
+
 ## Stage-local blockers
 
 - none for starting implementation.

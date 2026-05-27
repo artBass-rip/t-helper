@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -218,6 +219,14 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 			host = "local"
 		}
 	}
+	apiBaseURL, err := normalizeProviderProfileURL(input.APIBaseURL, host)
+	if err != nil {
+		return ProviderInstance{}, err
+	}
+	webBaseURL, err := normalizeProviderProfileURL(input.WebBaseURL, host)
+	if err != nil {
+		return ProviderInstance{}, err
+	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		name = provider + ":" + host
@@ -233,7 +242,7 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 	}
 	if err == nil {
 		query := "UPDATE repository_provider_instances SET name = ?, api_base_url = ?, web_base_url = ?, enabled = ?, updated_at = ? WHERE id = ?"
-		args := []any{name, nullEmpty(input.APIBaseURL), nullEmpty(input.WebBaseURL), s.boolArg(enabled), formatTime(now), existing.ID}
+		args := []any{name, nullEmpty(apiBaseURL), nullEmpty(webBaseURL), s.boolArg(enabled), formatTime(now), existing.ID}
 		if s.handle.Provider == "postgres" {
 			query = "UPDATE repository_provider_instances SET name = $1, api_base_url = $2, web_base_url = $3, enabled = $4, updated_at = $5 WHERE id = $6"
 		}
@@ -247,7 +256,7 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 		id = newID("rpi")
 	}
 	query := "INSERT INTO repository_provider_instances (id, name, provider, provider_host, api_base_url, web_base_url, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-	args := []any{id, name, provider, host, nullEmpty(input.APIBaseURL), nullEmpty(input.WebBaseURL), s.boolArg(enabled), formatTime(now), formatTime(now)}
+	args := []any{id, name, provider, host, nullEmpty(apiBaseURL), nullEmpty(webBaseURL), s.boolArg(enabled), formatTime(now), formatTime(now)}
 	if s.handle.Provider == "postgres" {
 		query = "INSERT INTO repository_provider_instances (id, name, provider, provider_host, api_base_url, web_base_url, enabled, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)"
 	}
@@ -263,6 +272,34 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 		return ProviderInstance{}, err
 	}
 	return s.GetProviderInstance(ctx, id)
+}
+
+func normalizeProviderProfileURL(value, providerHost string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", validationError("invalid_provider_profile_url", "provider profile URL is invalid")
+	}
+	if parsed.Scheme != ProtocolHTTPS {
+		return "", validationError("invalid_provider_profile_url", "provider profile URL must use https")
+	}
+	if parsed.User != nil {
+		return "", validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")
+	}
+	host, err := normalizeProviderHostForProtocol(parsed.Host, ProtocolHTTPS)
+	if err != nil {
+		return "", err
+	}
+	if host != providerHost {
+		return "", validationError("invalid_provider_profile_url", "provider profile URL host must match provider_host")
+	}
+	parsed.Scheme = ProtocolHTTPS
+	parsed.Host = host
+	parsed.User = nil
+	return parsed.String(), nil
 }
 
 func (s *Store) ListProviderInstances(ctx context.Context, opts ProviderInstanceListOptions) ([]ProviderInstance, error) {

@@ -222,6 +222,9 @@ roots are preserved.
 - `provider_host` normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;
 - `provider + provider_host` unique;
 - provider instance stores host/profile metadata only, not secrets.
+- Stage 05 MVP accepts `api_base_url` and `web_base_url` only as HTTPS URLs
+  without userinfo; their host must normalize to the same value as
+  `provider_host`.
 
 ### `repository_credentials`
 
