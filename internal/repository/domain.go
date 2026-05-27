@@ -275,12 +275,8 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if evaluatedRoot, evalErr := filepath.EvalSymlinks(root); evalErr == nil {
-		root, err = normalizeAbsPath(evaluatedRoot)
-		if err != nil {
-			return "", "", err
-		}
-	} else if !os.IsNotExist(evalErr) {
+	root, err = resolvePathWithExistingPrefix(root)
+	if err != nil {
 		return "", "", validationError("invalid_repository_path", "root_path is unavailable")
 	}
 	target = norm.NFC.String(strings.TrimSpace(target))
@@ -317,7 +313,40 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 }
 
 func NormalizeRootPath(rootPath string) (string, error) {
-	return normalizeAbsPath(rootPath)
+	root, err := normalizeAbsPath(rootPath)
+	if err != nil {
+		return "", err
+	}
+	return resolvePathWithExistingPrefix(root)
+}
+
+func resolvePathWithExistingPrefix(path string) (string, error) {
+	if evaluated, err := filepath.EvalSymlinks(path); err == nil {
+		return normalizeAbsPath(evaluated)
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	var missing []string
+	current := path
+	for {
+		evaluated, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			parts := []string{evaluated}
+			for i := len(missing) - 1; i >= 0; i-- {
+				parts = append(parts, missing[i])
+			}
+			return normalizeAbsPath(filepath.Join(parts...))
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return normalizeAbsPath(path)
+		}
+		missing = append(missing, filepath.Base(current))
+		current = parent
+	}
 }
 
 func TargetReservationKey(rootPath, rootPathID, targetDirectory string) (string, error) {

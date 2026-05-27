@@ -32,14 +32,42 @@ func JobHandlers(store *Store, scannerStore *scanner.Store) map[string]jobs.Hand
 func (h operationHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job jobs.Job) (json.RawMessage, error) {
 	switch job.JobType {
 	case "repo_clone":
-		return h.handleClone(ctx, job)
+		result, err := h.handleClone(ctx, job)
+		return result, h.recordRepositoryFailure(ctx, job, err)
 	case "repo_pull":
-		return h.handlePull(ctx, job)
+		result, err := h.handlePull(ctx, job)
+		return result, h.recordRepositoryFailure(ctx, job, err)
 	case "repo_sync":
-		return h.handlePull(ctx, job)
+		result, err := h.handlePull(ctx, job)
+		return result, h.recordRepositoryFailure(ctx, job, err)
 	default:
 		return nil, jobs.HandlerError{Code: "validation_error", Message: "unsupported repository operation", Retryable: false}
 	}
+}
+
+func (h operationHandler) recordRepositoryFailure(ctx context.Context, job jobs.Job, err error) error {
+	if err == nil {
+		return nil
+	}
+	repositoryID := repositoryIDFromPayload(job.Payload)
+	if repositoryID == "" {
+		return err
+	}
+	message := err.Error()
+	var handlerErr jobs.HandlerError
+	if errors.As(err, &handlerErr) && handlerErr.Code != "" {
+		message = handlerErr.Code + ": " + handlerErr.Message
+	}
+	_ = h.store.MarkRepositoryError(ctx, repositoryID, message)
+	return err
+}
+
+func repositoryIDFromPayload(raw json.RawMessage) string {
+	var payload struct {
+		RepositoryID string `json:"repository_id"`
+	}
+	_ = json.Unmarshal(raw, &payload)
+	return strings.TrimSpace(payload.RepositoryID)
 }
 
 func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.RawMessage, error) {
@@ -119,7 +147,8 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, jobs.HandlerError{Code: "git_clone_failed", Message: string(out), Retryable: true}
 	}
-	if err := h.store.TouchRepositoryPulled(ctx, payload.RepositoryID); err != nil {
+	defaultBranch := gitDefaultBranch(ctx, localPath)
+	if err := h.store.TouchRepositoryPulledWithBranch(ctx, payload.RepositoryID, defaultBranch); err != nil {
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}
 	afterRevision, _ := gitRevision(ctx, localPath)
@@ -254,7 +283,8 @@ func (h operationHandler) runGit(ctx context.Context, repo scanner.Repository, c
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, jobs.HandlerError{Code: "git_operation_failed", Message: string(out), Retryable: true}
 	}
-	if err := h.store.TouchRepositoryPulled(ctx, repo.ID); err != nil {
+	defaultBranch := gitDefaultBranch(ctx, dir)
+	if err := h.store.TouchRepositoryPulledWithBranch(ctx, repo.ID, defaultBranch); err != nil {
 		return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}
 	}
 	afterRevision, _ := gitRevision(ctx, dir)
@@ -288,6 +318,23 @@ func gitRevision(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func gitDefaultBranch(ctx context.Context, dir string) string {
+	cmd := exec.CommandContext(ctx, "git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err == nil {
+		branch := strings.TrimSpace(string(out))
+		if branch != "" {
+			return strings.TrimPrefix(branch, "origin/")
+		}
+	}
+	cmd = exec.CommandContext(ctx, "git", "branch", "--show-current")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err == nil {
+		return strings.TrimSpace(string(out))
+	}
+	return ""
 }
 
 func (h operationHandler) gitCredentialEnv(ctx context.Context, credentialID string) ([]string, func(), error) {

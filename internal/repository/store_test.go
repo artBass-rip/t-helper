@@ -429,7 +429,10 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "add", "README.md")
 	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")
 	targetDirectory := "cloned/repo"
-	localPath := filepath.Join(root.Path, "cloned", "repo")
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
 	repo, err := repoStore.UpsertRepository(ctx, Identity{
 		Provider:     ProviderGeneric,
 		ProviderHost: "local",
@@ -479,8 +482,168 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {
 		t.Fatalf("cloned working tree missing .git: %v", err)
 	}
+	reloaded, err := scannerStore.GetRepository(ctx, repo.ID)
+	if err != nil {
+		t.Fatalf("reload repository: %v", err)
+	}
+	if reloaded.DefaultBranch == "" || reloaded.LastError != "" || reloaded.LastPullAt == nil {
+		t.Fatalf("repository pull metadata was not updated: %+v", reloaded)
+	}
 	if held := countHeldOperationReservations(t, ctx, repoStore); held != 0 {
 		t.Fatalf("held operation reservations after clone = %d, want 0", held)
+	}
+}
+
+func TestOperationHandlerCloneExistingExpectedRemoteRunsPull(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	source := createGitFixtureRepository(t)
+	targetDirectory := "existing/repo"
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
+	runGitCommand(t, "", "clone", source, localPath)
+	mustWriteRepositoryTestFile(t, filepath.Join(source, "CHANGELOG.md"), "change\n")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "add", "CHANGELOG.md")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "commit", "-m", "change")
+	identity, err := NormalizeIdentity(CloneRequest{Provider: ProviderGeneric, Protocol: ProtocolHTTPS, CloneURL: source, CloneScope: "single_repository"}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, identity, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        identity.Provider,
+		ProviderHost:    identity.ProviderHost,
+		Protocol:        identity.Protocol,
+		CloneURL:        identity.CloneURL,
+		CloneScope:      "single_repository",
+		FullPath:        identity.FullPath,
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	result, err := (operationHandler{store: repoStore, scannerStore: scannerStore}).handleClone(ctx, jobs.Job{ID: "job_clone_existing", JobType: "repo_clone", Payload: payload})
+	if err != nil {
+		t.Fatalf("handle clone existing: %v", err)
+	}
+	var op OperationResult
+	if err := json.Unmarshal(result, &op); err != nil {
+		t.Fatalf("decode operation result: %v", err)
+	}
+	if op.Operation != "repo_clone" || !op.Changed {
+		t.Fatalf("expected clone request to run pull and change checkout, got %+v", op)
+	}
+	if _, err := os.Stat(filepath.Join(localPath, "CHANGELOG.md")); err != nil {
+		t.Fatalf("pulled file missing: %v", err)
+	}
+}
+
+func TestOperationHandlerCloneExistingDifferentRemoteRejects(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	sourceOne := createGitFixtureRepository(t)
+	sourceTwo := createGitFixtureRepository(t)
+	targetDirectory := "existing/repo"
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
+	runGitCommand(t, "", "clone", sourceOne, localPath)
+	identity, err := NormalizeIdentity(CloneRequest{Provider: ProviderGeneric, Protocol: ProtocolHTTPS, CloneURL: sourceTwo, CloneScope: "single_repository"}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, identity, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        identity.Provider,
+		ProviderHost:    identity.ProviderHost,
+		Protocol:        identity.Protocol,
+		CloneURL:        identity.CloneURL,
+		CloneScope:      "single_repository",
+		FullPath:        identity.FullPath,
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	_, err = (operationHandler{store: repoStore, scannerStore: scannerStore}).Handle(ctx, jobs.HandlerEnv{}, jobs.Job{ID: "job_clone_mismatch", JobType: "repo_clone", Payload: payload})
+	var handlerErr jobs.HandlerError
+	if !errors.As(err, &handlerErr) || handlerErr.Code != "repository_remote_mismatch" {
+		t.Fatalf("clone mismatch error = %v, want repository_remote_mismatch", err)
+	}
+	reloaded, err := scannerStore.GetRepository(ctx, repo.ID)
+	if err != nil {
+		t.Fatalf("reload repository: %v", err)
+	}
+	if !strings.Contains(reloaded.LastError, "repository_remote_mismatch") {
+		t.Fatalf("last_error = %q, want repository_remote_mismatch", reloaded.LastError)
+	}
+}
+
+func TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	source := createGitFixtureRepository(t)
+	targetDirectory := "busy/repo"
+	_, localPath, err := NormalizeTarget(root.Path, targetDirectory)
+	if err != nil {
+		t.Fatalf("normalize target: %v", err)
+	}
+	mustWriteRepositoryTestFile(t, filepath.Join(localPath, "README.md"), "already here\n")
+	identity, err := NormalizeIdentity(CloneRequest{Provider: ProviderGeneric, Protocol: ProtocolHTTPS, CloneURL: source, CloneScope: "single_repository"}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, identity, root, targetDirectory, localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	payload, _ := json.Marshal(RepoClonePayload{
+		SchemaVersion:   RepoClonePayloadSchema,
+		RepositoryID:    repo.ID,
+		Provider:        identity.Provider,
+		ProviderHost:    identity.ProviderHost,
+		Protocol:        identity.Protocol,
+		CloneURL:        identity.CloneURL,
+		CloneScope:      "single_repository",
+		FullPath:        identity.FullPath,
+		RootPathID:      root.ID,
+		TargetDirectory: targetDirectory,
+		LocalPath:       localPath,
+	})
+	_, err = (operationHandler{store: repoStore, scannerStore: scannerStore}).Handle(ctx, jobs.HandlerEnv{}, jobs.Job{ID: "job_clone_busy", JobType: "repo_clone", Payload: payload})
+	var handlerErr jobs.HandlerError
+	if !errors.As(err, &handlerErr) || handlerErr.Code != "repository_target_not_empty" {
+		t.Fatalf("clone busy target error = %v, want repository_target_not_empty", err)
+	}
+	reloaded, err := scannerStore.GetRepository(ctx, repo.ID)
+	if err != nil {
+		t.Fatalf("reload repository: %v", err)
+	}
+	if !strings.Contains(reloaded.LastError, "repository_target_not_empty") {
+		t.Fatalf("last_error = %q, want repository_target_not_empty", reloaded.LastError)
 	}
 }
 
@@ -491,6 +654,16 @@ func countHeldOperationReservations(t *testing.T, ctx context.Context, store *St
 		t.Fatalf("count held operation reservations: %v", err)
 	}
 	return count
+}
+
+func createGitFixtureRepository(t *testing.T) string {
+	t.Helper()
+	source := filepath.Join(t.TempDir(), "source")
+	runGitCommand(t, "", "init", source)
+	mustWriteRepositoryTestFile(t, filepath.Join(source, "README.md"), "fixture\n")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "add", "README.md")
+	runGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")
+	return source
 }
 
 func requireGit(t *testing.T) {

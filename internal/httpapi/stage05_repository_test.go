@@ -227,6 +227,115 @@ func TestStage05CloneConflictDoesNotCreateNewRootPath(t *testing.T) {
 	}
 }
 
+func TestStage05CloneWithNewRootPathCreatesRootPath(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	newRootPath := filepath.Join(t.TempDir(), "new-root")
+	body, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"new_root_path":    newRootPath,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("clone with new root status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	normalizedRootPath, err := repositorydomain.NormalizeRootPath(newRootPath)
+	if err != nil {
+		t.Fatalf("normalize new root path: %v", err)
+	}
+	root, err := scannerStore.RootPathByPath(ctx, normalizedRootPath)
+	if err != nil {
+		t.Fatalf("new root path was not created: %v", err)
+	}
+	if !root.Enabled || root.Source != scanner.RootPathSourceAPI {
+		t.Fatalf("unexpected new root path: %+v", root)
+	}
+	var ref jobs.JobRef
+	if err := json.NewDecoder(rec.Body).Decode(&ref); err != nil {
+		t.Fatalf("decode job ref: %v", err)
+	}
+	job, err := jobStore.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get clone job: %v", err)
+	}
+	var payload repositorydomain.RepoClonePayload
+	if err := json.Unmarshal(job.Payload, &payload); err != nil {
+		t.Fatalf("decode clone payload: %v", err)
+	}
+	if payload.RootPathID != root.ID || payload.TargetDirectory != "repo" {
+		t.Fatalf("unexpected clone payload root/target: %+v", payload)
+	}
+}
+
+func TestStage05CredentialsAPIMasksSecretRefs(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"repository_credentials": []map[string]any{{
+			"provider_instance_id": instances[0].ID,
+			"name":                 "git-token",
+			"auth_type":            repositorydomain.AuthTypeHTTPSToken,
+			"secret_ref":           "secretref://env/GITHUB_TOKEN",
+			"usages":               []string{repositorydomain.UsageGitTransport},
+		}},
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/repo-credentials", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put credentials status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Items []repositorydomain.Credential `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode put credentials: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].SecretRef != "secretref://env/***" {
+		t.Fatalf("put credential secret_ref was not masked: %+v", response.Items)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repo-credentials?provider_instance_id="+instances[0].ID, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list credentials status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	response.Items = nil
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode list credentials: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].SecretRef != "secretref://env/***" {
+		t.Fatalf("listed credential secret_ref was not masked: %+v", response.Items)
+	}
+}
+
 func TestStage05CloneRejectsUnsupportedCloneScope(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

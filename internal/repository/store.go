@@ -677,6 +677,35 @@ func (s *Store) TouchRepositoryPulled(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *Store) TouchRepositoryPulledWithBranch(ctx context.Context, id, defaultBranch string) error {
+	now := time.Now().UTC()
+	defaultBranch = strings.TrimSpace(defaultBranch)
+	if defaultBranch == "" {
+		return s.TouchRepositoryPulled(ctx, id)
+	}
+	query := "UPDATE repositories SET default_branch = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE id = ?"
+	args := []any{defaultBranch, formatTime(now), formatTime(now), id}
+	if s.handle.Provider == "postgres" {
+		query = "UPDATE repositories SET default_branch = $1, last_pull_at = $2, last_error = NULL, updated_at = $3 WHERE id = $4"
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Store) MarkRepositoryError(ctx context.Context, id, message string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	query := "UPDATE repositories SET last_error = ?, updated_at = ? WHERE id = ?"
+	args := []any{strings.TrimSpace(message), formatTime(time.Now().UTC()), id}
+	if s.handle.Provider == "postgres" {
+		query = "UPDATE repositories SET last_error = $1, updated_at = $2 WHERE id = $3"
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
 func (s *Store) placeholder(idx int) string {
 	if s.handle.Provider == "postgres" {
 		return fmt.Sprintf("$%d", idx)
