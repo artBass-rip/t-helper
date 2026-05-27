@@ -157,6 +157,24 @@ func TestReserveOperationKeysReportsConflict(t *testing.T) {
 	}
 }
 
+func TestTransferOperationReservationsAllowsSameJobRefresh(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	held, err := store.ReserveOperationKeys(ctx, "request-one", time.Minute, "repository-identity:github:github.com:example/repo")
+	if err != nil {
+		t.Fatalf("reserve request: %v", err)
+	}
+	if err := store.TransferOperationReservations(ctx, "request-one", "job-one", time.Hour, held...); err != nil {
+		t.Fatalf("transfer reservation: %v", err)
+	}
+	if _, err := store.ReserveOperationKeys(ctx, "job-one", time.Hour, held...); err != nil {
+		t.Fatalf("same job should refresh reservation: %v", err)
+	}
+	if _, err := store.ReserveOperationKeys(ctx, "job-two", time.Hour, held...); !errors.Is(err, ErrReservationConflict) {
+		t.Fatalf("second job reserve error = %v, want reservation conflict", err)
+	}
+}
+
 func TestCredentialValidationUsesADRAuthTypesAndUsages(t *testing.T) {
 	ctx := context.Background()
 	store := NewStore(openRepositorySQLite(t))
@@ -296,7 +314,7 @@ func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	if err := json.Unmarshal(result, &op); err != nil {
 		t.Fatalf("decode operation result: %v", err)
 	}
-	if op.SchemaVersion != RepoOperationResultSchema || op.Operation != "repo_clone" || op.RepositoryID != repo.ID || op.Provider != ProviderGeneric || op.ProviderHost != "local" || op.Protocol != ProtocolHTTPS || op.LocalPath != localPath || op.RepositoriesCreated != 1 || !op.Changed || op.AfterRevision == "" {
+	if op.SchemaVersion != RepoOperationResultSchema || op.Operation != "repo_clone" || op.RepositoryID != repo.ID || op.Provider != ProviderGeneric || op.ProviderHost != "local" || op.Protocol != ProtocolHTTPS || op.LocalPath != localPath || op.RepositoriesCreated != 0 || !op.Changed || op.AfterRevision == "" {
 		t.Fatalf("unexpected operation result: %+v", op)
 	}
 	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {

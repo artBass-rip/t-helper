@@ -128,11 +128,18 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 		ProviderHost:        payload.ProviderHost,
 		Protocol:            payload.Protocol,
 		LocalPath:           localPath,
-		RepositoriesCreated: 1,
+		RepositoriesCreated: boolInt(payload.RepositoryCreated),
 		AfterRevision:       afterRevision,
 		Changed:             true,
 		ExitCode:            0,
 	})
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (h operationHandler) validateExistingRemote(ctx context.Context, localPath string, payload RepoClonePayload) error {

@@ -138,6 +138,7 @@ type RepoClonePayload struct {
 	RootPathID         string `json:"root_path_id"`
 	TargetDirectory    string `json:"target_directory"`
 	LocalPath          string `json:"local_path"`
+	RepositoryCreated  bool   `json:"repository_created,omitempty"`
 }
 
 type RepoPullPayload struct {

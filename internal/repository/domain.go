@@ -115,6 +115,9 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 	if raw == "" || hasControl(raw) {
 		return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
 	}
+	if provider == ProviderGeneric && filepath.IsAbs(raw) {
+		return genericLocalPathIdentity(raw)
+	}
 	if strings.Contains(raw, "@") && strings.Contains(raw, "://") {
 		u, err := url.Parse(raw)
 		if err != nil {
@@ -143,9 +146,30 @@ func ParseCloneURL(provider, raw string) (Identity, error) {
 		return Identity{}, validationError("unsupported_url_protocol", "unsupported URL protocol")
 	}
 	if u.Scheme == "file" {
-		return identityFromHostPath(provider, "local", strings.TrimPrefix(u.Path, "/"), ProtocolHTTPS)
+		if provider != ProviderGeneric {
+			return Identity{}, validationError("unsupported_provider_url", "file URLs are only supported for generic repositories")
+		}
+		return genericLocalPathIdentity(u.Path)
 	}
 	return identityFromHostPath(provider, u.Host, strings.TrimPrefix(u.Path, "/"), u.Scheme)
+}
+
+func genericLocalPathIdentity(rawPath string) (Identity, error) {
+	cleaned, err := normalizeAbsPath(rawPath)
+	if err != nil {
+		return Identity{}, err
+	}
+	fullPath, err := NormalizeFullPath(ProviderGeneric, strings.TrimPrefix(filepath.ToSlash(cleaned), "/"))
+	if err != nil {
+		return Identity{}, err
+	}
+	return Identity{
+		Provider:     ProviderGeneric,
+		ProviderHost: "local",
+		FullPath:     fullPath,
+		CloneURL:     cleaned,
+		Protocol:     ProtocolHTTPS,
+	}, nil
 }
 
 func hasDisallowedUserInfo(u *url.URL) bool {
@@ -285,6 +309,10 @@ func NormalizeTarget(rootPath, target string) (string, string, error) {
 		return "", "", err
 	}
 	return filepath.ToSlash(rel), local, nil
+}
+
+func NormalizeRootPath(rootPath string) (string, error) {
+	return normalizeAbsPath(rootPath)
 }
 
 func TargetReservationKey(rootPath, rootPathID, targetDirectory string) (string, error) {

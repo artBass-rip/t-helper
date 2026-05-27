@@ -63,15 +63,56 @@ func (s *Store) ReserveOperationKeys(ctx context.Context, owner string, ttl time
 			query = `INSERT INTO repository_operation_reservations (id, reservation_key, owner, status, created_at, expires_at) VALUES ($1, $2, $3, 'held', $4, $5)`
 		}
 		if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
-			_ = s.ReleaseOperationReservations(ctx, owner, held...)
 			if isUniqueConstraintError(err) {
+				existingOwner, ownerErr := s.operationReservationOwner(ctx, key)
+				if ownerErr == nil && existingOwner == owner {
+					if refreshErr := s.refreshOperationReservation(ctx, owner, ttl, key); refreshErr != nil {
+						_ = s.ReleaseOperationReservations(ctx, owner, held...)
+						return nil, refreshErr
+					}
+					held = append(held, key)
+					continue
+				}
+				_ = s.ReleaseOperationReservations(ctx, owner, held...)
 				return nil, ReservationConflictError{Key: key}
 			}
+			_ = s.ReleaseOperationReservations(ctx, owner, held...)
 			return nil, err
 		}
 		held = append(held, key)
 	}
 	return held, nil
+}
+
+func (s *Store) TransferOperationReservations(ctx context.Context, fromOwner, toOwner string, ttl time.Duration, keys ...string) error {
+	fromOwner = strings.TrimSpace(fromOwner)
+	toOwner = strings.TrimSpace(toOwner)
+	if fromOwner == "" || toOwner == "" {
+		return validationError("validation_error", "reservation owners are required")
+	}
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	expiresAt := formatTime(time.Now().UTC().Add(ttl))
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		query := `UPDATE repository_operation_reservations SET owner = ?, expires_at = ? WHERE reservation_key = ? AND owner = ? AND status = 'held'`
+		args := []any{toOwner, expiresAt, key, fromOwner}
+		if s.handle.Provider == "postgres" {
+			query = `UPDATE repository_operation_reservations SET owner = $1, expires_at = $2 WHERE reservation_key = $3 AND owner = $4 AND status = 'held'`
+		}
+		result, err := s.handle.DB.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		if rows, _ := result.RowsAffected(); rows == 0 {
+			return ReservationConflictError{Key: key}
+		}
+	}
+	return nil
 }
 
 func (s *Store) ReleaseOperationReservations(ctx context.Context, owner string, keys ...string) error {
@@ -90,6 +131,35 @@ func (s *Store) ReleaseOperationReservations(ctx context.Context, owner string, 
 		}
 	}
 	return nil
+}
+
+func (s *Store) operationReservationOwner(ctx context.Context, key string) (string, error) {
+	query := `SELECT owner FROM repository_operation_reservations WHERE reservation_key = ? AND status = 'held' LIMIT 1`
+	args := []any{key}
+	if s.handle.Provider == "postgres" {
+		query = `SELECT owner FROM repository_operation_reservations WHERE reservation_key = $1 AND status = 'held' LIMIT 1`
+	}
+	var owner string
+	if err := s.handle.DB.QueryRowContext(ctx, query, args...).Scan(&owner); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return owner, nil
+}
+
+func (s *Store) refreshOperationReservation(ctx context.Context, owner string, ttl time.Duration, key string) error {
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	query := `UPDATE repository_operation_reservations SET expires_at = ? WHERE reservation_key = ? AND owner = ? AND status = 'held'`
+	args := []any{formatTime(time.Now().UTC().Add(ttl)), key, owner}
+	if s.handle.Provider == "postgres" {
+		query = `UPDATE repository_operation_reservations SET expires_at = $1 WHERE reservation_key = $2 AND owner = $3 AND status = 'held'`
+	}
+	_, err := s.handle.DB.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (s *Store) expireOperationReservations(ctx context.Context, now time.Time) error {
@@ -416,25 +486,30 @@ func (s *Store) findCredential(ctx context.Context, id, providerInstanceID, name
 }
 
 func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root scanner.RootPath, targetDirectory, localPath, providerInstanceID, credentialID string) (scanner.Repository, error) {
+	repo, _, err := s.UpsertRepositoryForClone(ctx, identity, root, targetDirectory, localPath, providerInstanceID, credentialID)
+	return repo, err
+}
+
+func (s *Store) UpsertRepositoryForClone(ctx context.Context, identity Identity, root scanner.RootPath, targetDirectory, localPath, providerInstanceID, credentialID string) (scanner.Repository, bool, error) {
 	now := time.Now().UTC()
 	name := filepath.Base(identity.FullPath)
 	existing, err := s.findRepository(ctx, identity.Provider, identity.ProviderHost, identity.FullPath)
 	if err != nil && !errors.Is(err, ErrNotFound) {
-		return scanner.Repository{}, err
+		return scanner.Repository{}, false, err
 	}
 	existingFound := err == nil
 	generic, genericErr := s.findGenericRepositoryByLocalPath(ctx, root.ID, localPath)
 	if genericErr != nil && !errors.Is(genericErr, ErrNotFound) {
-		return scanner.Repository{}, genericErr
+		return scanner.Repository{}, false, genericErr
 	}
 	tx, err := s.handle.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return scanner.Repository{}, err
+		return scanner.Repository{}, false, err
 	}
 	defer tx.Rollback()
 	if existingFound {
 		if existing.Status == "superseded" || existing.Status == "disabled" {
-			return scanner.Repository{}, validationError("repository_status_not_operable", fmt.Sprintf("repository status %q cannot be operated", existing.Status))
+			return scanner.Repository{}, false, validationError("repository_status_not_operable", fmt.Sprintf("repository status %q cannot be operated", existing.Status))
 		}
 		query := `UPDATE repositories SET name = ?, provider_instance_id = ?, clone_url = ?, root_path_id = ?, target_directory = ?, local_path = ?, auth_type = ?, default_credential_id = ?, status = 'active', discovery_source = 'clone', identity_confirmed_at = ?, updated_at = ? WHERE id = ?`
 		args := []any{name, nullEmpty(providerInstanceID), identity.CloneURL, root.ID, targetDirectory, localPath, nullEmpty(identity.Protocol), nullEmpty(credentialID), formatTime(now), formatTime(now), existing.ID}
@@ -442,17 +517,18 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 			query = `UPDATE repositories SET name = $1, provider_instance_id = $2, clone_url = $3, root_path_id = $4, target_directory = $5, local_path = $6, auth_type = $7, default_credential_id = $8, status = 'active', discovery_source = 'clone', identity_confirmed_at = $9, updated_at = $10 WHERE id = $11`
 		}
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-			return scanner.Repository{}, err
+			return scanner.Repository{}, false, err
 		}
 		if genericErr == nil && generic.ID != existing.ID {
 			if err := s.supersedeGenericRepository(ctx, tx, generic.ID, existing.ID, now); err != nil {
-				return scanner.Repository{}, err
+				return scanner.Repository{}, false, err
 			}
 		}
 		if err := tx.Commit(); err != nil {
-			return scanner.Repository{}, err
+			return scanner.Repository{}, false, err
 		}
-		return scanner.NewStore(s.handle).GetRepository(ctx, existing.ID)
+		repo, err := scanner.NewStore(s.handle).GetRepository(ctx, existing.ID)
+		return repo, false, err
 	}
 	if genericErr == nil {
 		query := `UPDATE repositories SET name = ?, provider_instance_id = ?, provider = ?, provider_host = ?, full_path = ?, clone_url = ?, root_path_id = ?, target_directory = ?, local_path = ?, auth_type = ?, default_credential_id = ?, status = 'active', discovery_source = 'clone', identity_confirmed_at = ?, updated_at = ? WHERE id = ?`
@@ -461,12 +537,13 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 			query = `UPDATE repositories SET name = $1, provider_instance_id = $2, provider = $3, provider_host = $4, full_path = $5, clone_url = $6, root_path_id = $7, target_directory = $8, local_path = $9, auth_type = $10, default_credential_id = $11, status = 'active', discovery_source = 'clone', identity_confirmed_at = $12, updated_at = $13 WHERE id = $14`
 		}
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-			return scanner.Repository{}, err
+			return scanner.Repository{}, false, err
 		}
 		if err := tx.Commit(); err != nil {
-			return scanner.Repository{}, err
+			return scanner.Repository{}, false, err
 		}
-		return scanner.NewStore(s.handle).GetRepository(ctx, generic.ID)
+		repo, err := scanner.NewStore(s.handle).GetRepository(ctx, generic.ID)
+		return repo, false, err
 	}
 	id := newID("repo")
 	query := `INSERT INTO repositories (id, name, provider_instance_id, provider, provider_host, full_path, clone_url, root_path_id, target_directory, local_path, auth_type, default_credential_id, status, discovery_source, identity_confirmed_at, auto_sync_enabled, webhook_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'clone', ?, ?, ?, ?, ?)`
@@ -475,12 +552,13 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 		query = `INSERT INTO repositories (id, name, provider_instance_id, provider, provider_host, full_path, clone_url, root_path_id, target_directory, local_path, auth_type, default_credential_id, status, discovery_source, identity_confirmed_at, auto_sync_enabled, webhook_enabled, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active','clone',$13,$14,$15,$16,$17)`
 	}
 	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-		return scanner.Repository{}, err
+		return scanner.Repository{}, false, err
 	}
 	if err := tx.Commit(); err != nil {
-		return scanner.Repository{}, err
+		return scanner.Repository{}, false, err
 	}
-	return scanner.NewStore(s.handle).GetRepository(ctx, id)
+	repo, err := scanner.NewStore(s.handle).GetRepository(ctx, id)
+	return repo, true, err
 }
 
 func (s *Store) ExistingRepositoryForClone(ctx context.Context, identity Identity, rootPathID, localPath string) (scanner.Repository, error) {

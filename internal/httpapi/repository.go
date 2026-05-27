@@ -19,6 +19,12 @@ type RepositoryHandler struct {
 	jobStore     *jobs.Store
 }
 
+type cloneRootSelection struct {
+	root       scanner.RootPath
+	existing   bool
+	reserveKey string
+}
+
 func NewRepositoryHandler(store *repository.Store, scannerStore *scanner.Store, jobStore *jobs.Store) *RepositoryHandler {
 	return &RepositoryHandler{store: store, scannerStore: scannerStore, jobStore: jobStore}
 }
@@ -152,11 +158,12 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	root, err := h.cloneRoot(r, req)
+	rootSelection, err := h.cloneRootPreview(r, req)
 	if err != nil {
 		writeRepositoryError(w, r, err)
 		return
 	}
+	root := rootSelection.root
 	target := req.TargetDirectory
 	if target == "" {
 		target = req.NewTargetDirectory
@@ -166,7 +173,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
-	pathReservationKey, err := repository.TargetReservationKey(root.Path, root.ID, targetDirectory)
+	pathReservationKey, err := repository.TargetReservationKey(root.Path, rootSelection.reserveKey, targetDirectory)
 	if err != nil {
 		writeRepositoryError(w, r, err)
 		return
@@ -179,7 +186,8 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	identityReservationKey := fmt.Sprintf("repository-identity:%s:%s:%s", identity.Provider, identity.ProviderHost, identity.FullPath)
-	reservationOwner := CorrelationIDFromContext(r.Context())
+	jobID := jobs.NewJobID()
+	reservationOwner := jobID
 	heldReservations, err := h.store.ReserveOperationKeys(r.Context(), reservationOwner, 5*time.Minute, identityReservationKey, pathReservationKey)
 	if err != nil {
 		var conflict repository.ReservationConflictError
@@ -187,6 +195,15 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			code := "repository_operation_already_running"
 			if conflict.Key == pathReservationKey {
 				code = "repository_target_path_busy"
+			}
+			if active, activeCode, conflictRepositoryID, activeErr := h.activeCloneConflict(r, identity, rootSelection.reserveKey, root.Path, pathReservationKey); activeErr == nil {
+				writeErrorDetails(w, r, http.StatusConflict, activeCode, "repository clone conflict", map[string]any{
+					"repository_id":   conflictRepositoryID,
+					"lock_key":        active.LockKey,
+					"active_job_id":   active.ID,
+					"active_job_type": active.JobType,
+				})
+				return
 			}
 			writeErrorDetails(w, r, http.StatusConflict, code, "repository clone conflict", map[string]any{
 				"lock_key": conflict.Key,
@@ -196,8 +213,13 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
-	defer h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
-	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, root.ID, root.Path, pathReservationKey); err == nil {
+	releaseReservations := true
+	defer func() {
+		if releaseReservations {
+			_ = h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
+		}
+	}()
+	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, rootSelection.reserveKey, root.Path, pathReservationKey); err == nil {
 		writeErrorDetails(w, r, http.StatusConflict, conflictCode, "repository clone conflict", map[string]any{
 			"repository_id":   conflictRepositoryID,
 			"lock_key":        active.LockKey,
@@ -208,6 +230,18 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	} else if !errors.Is(err, jobs.ErrNotFound) {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
+	}
+	if !rootSelection.existing {
+		root, err = h.createCloneRoot(r, root.Path)
+		if err != nil {
+			writeRepositoryError(w, r, err)
+			return
+		}
+		targetDirectory, localPath, err = repository.NormalizeTarget(root.Path, targetDirectory)
+		if err != nil {
+			writeRepositoryError(w, r, err)
+			return
+		}
 	}
 	if existing, err := h.store.ExistingRepositoryForClone(r.Context(), identity, root.ID, localPath); err == nil {
 		lockKey := "repository:" + existing.ID
@@ -222,7 +256,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
-	repo, err := h.store.UpsertRepository(r.Context(), identity, root, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID)
+	repo, repositoryCreated, err := h.store.UpsertRepositoryForClone(r.Context(), identity, root, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID)
 	if err != nil {
 		writeRepositoryError(w, r, err)
 		return
@@ -242,6 +276,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		RootPathID:         root.ID,
 		TargetDirectory:    targetDirectory,
 		LocalPath:          localPath,
+		RepositoryCreated:  repositoryCreated,
 	})
 	if replay, replayErr := h.jobStore.IdempotentReplay(r.Context(), jobs.EnqueueRequest{JobType: "repo_clone", Actor: "api", IdempotencyKey: r.Header.Get(idempotencyKeyHeader), Payload: payload}); replayErr == nil {
 		writeJSON(w, http.StatusAccepted, replay)
@@ -258,6 +293,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, err := h.jobStore.Enqueue(r.Context(), jobs.EnqueueRequest{
+		ID:             jobID,
 		JobType:        "repo_clone",
 		Actor:          "api",
 		CorrelationID:  CorrelationIDFromContext(r.Context()),
@@ -268,6 +304,9 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeEnqueueError(w, r, err)
 		return
+	}
+	if ref.JobID == jobID {
+		releaseReservations = false
 	}
 	writeJSON(w, http.StatusAccepted, ref)
 }
@@ -301,7 +340,7 @@ func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repo
 	return jobs.JobRef{JobID: job.ID, Status: job.Status, SchemaVersion: jobs.JobRefSchemaVersion}, nil
 }
 
-func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootPathID, rootPath, pathReservationKey string) (jobs.Job, string, string, error) {
+func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootReserveKey, rootPath, pathReservationKey string) (jobs.Job, string, string, error) {
 	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
 		active, err := h.jobStore.List(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status})
 		if err != nil {
@@ -318,8 +357,16 @@ func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity reposi
 			if payload.Provider == identity.Provider && payload.ProviderHost == identity.ProviderHost && payload.FullPath == identity.FullPath {
 				return job, "repository_operation_already_running", payload.RepositoryID, nil
 			}
-			if payload.RootPathID == rootPathID {
-				payloadPathKey, err := repository.TargetReservationKey(rootPath, rootPathID, payload.TargetDirectory)
+			if payload.RootPathID != "" {
+				payloadRoot, err := h.scannerStore.GetRootPath(r.Context(), payload.RootPathID)
+				if err != nil {
+					continue
+				}
+				payloadRootKey := payload.RootPathID
+				if payloadRoot.Path == rootPath {
+					payloadRootKey = rootReserveKey
+				}
+				payloadPathKey, err := repository.TargetReservationKey(payloadRoot.Path, payloadRootKey, payload.TargetDirectory)
 				if err == nil && payloadPathKey == pathReservationKey {
 					return job, "repository_target_path_busy", payload.RepositoryID, nil
 				}
@@ -398,15 +445,36 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 	writeJSON(w, http.StatusAccepted, ref)
 }
 
-func (h *RepositoryHandler) cloneRoot(r *http.Request, req repository.CloneRequest) (scanner.RootPath, error) {
+func (h *RepositoryHandler) cloneRootPreview(r *http.Request, req repository.CloneRequest) (cloneRootSelection, error) {
 	if req.RootPathID != "" {
-		return h.scannerStore.GetRootPath(r.Context(), req.RootPathID)
+		root, err := h.scannerStore.GetRootPath(r.Context(), req.RootPathID)
+		if err != nil {
+			return cloneRootSelection{}, err
+		}
+		return cloneRootSelection{root: root, existing: true, reserveKey: root.ID}, nil
 	}
 	if req.NewRootPath == "" {
-		return scanner.RootPath{}, repository.ValidationError{Code: "invalid_repository_path", Message: "root_path_id or new_root_path is required"}
+		return cloneRootSelection{}, repository.ValidationError{Code: "invalid_repository_path", Message: "root_path_id or new_root_path is required"}
 	}
+	normalized, err := repository.NormalizeRootPath(req.NewRootPath)
+	if err != nil {
+		return cloneRootSelection{}, err
+	}
+	if root, err := h.scannerStore.RootPathByPath(r.Context(), normalized); err == nil {
+		return cloneRootSelection{root: root, existing: true, reserveKey: root.ID}, nil
+	} else if !errors.Is(err, scanner.ErrNotFound) {
+		return cloneRootSelection{}, err
+	}
+	return cloneRootSelection{
+		root:       scanner.RootPath{Path: normalized},
+		existing:   false,
+		reserveKey: "root-path:" + normalized,
+	}, nil
+}
+
+func (h *RepositoryHandler) createCloneRoot(r *http.Request, path string) (scanner.RootPath, error) {
 	enabled := true
-	items, err := h.scannerStore.UpsertRootPaths(r.Context(), []scanner.RootPathInput{{Path: req.NewRootPath, Enabled: &enabled, Source: scanner.RootPathSourceAPI}})
+	items, err := h.scannerStore.UpsertRootPaths(r.Context(), []scanner.RootPathInput{{Path: path, Enabled: &enabled, Source: scanner.RootPathSourceAPI}})
 	if err != nil {
 		return scanner.RootPath{}, err
 	}

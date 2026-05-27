@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -179,6 +180,50 @@ func TestStage05CloneRejectsBusyTargetPathForDifferentRepository(t *testing.T) {
 	}
 	if apiErr.Error.Code != "repository_target_path_busy" {
 		t.Fatalf("busy target code = %q", apiErr.Error.Code)
+	}
+}
+
+func TestStage05CloneConflictDoesNotCreateNewRootPath(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	firstBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(firstBody)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	newRootPath := filepath.Join(t.TempDir(), "new-root")
+	conflictBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"new_root_path":    newRootPath,
+		"target_directory": "repo",
+	})
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(conflictBody)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("conflicting clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if _, err := scannerStore.RootPathByPath(ctx, newRootPath); !errors.Is(err, scanner.ErrNotFound) {
+		t.Fatalf("new root path side effect error = %v, want not found", err)
 	}
 }
 

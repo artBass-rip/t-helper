@@ -33,10 +33,14 @@ func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle}
 }
 
+func NewJobID() string {
+	return newID("job")
+}
+
 func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	now := time.Now().UTC()
 	if req.ID == "" {
-		req.ID = newID("job")
+		req.ID = NewJobID()
 	}
 	if strings.TrimSpace(req.Actor) == "" {
 		req.Actor = "system"

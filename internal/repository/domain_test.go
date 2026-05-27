@@ -103,6 +103,25 @@ func TestNormalizeIdentityGenericDefaultsToLocalHost(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityGenericLocalCloneURLs(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	for _, raw := range []string{source, "file://" + source} {
+		identity, err := NormalizeIdentity(CloneRequest{
+			Provider:   ProviderGeneric,
+			Protocol:   ProtocolHTTPS,
+			CloneURL:   raw,
+			CloneScope: "single_repository",
+		}, nil)
+		if err != nil {
+			t.Fatalf("normalize %q: %v", raw, err)
+		}
+		if identity.ProviderHost != "local" || identity.CloneURL != source || identity.FullPath == "" || identity.FullPath[0] == '/' {
+			t.Fatalf("unexpected generic local identity for %q: %+v", raw, identity)
+		}
+	}
+}
+
 func TestNormalizeIdentityAcceptsBareHostPath(t *testing.T) {
 	identity, err := NormalizeIdentity(CloneRequest{
 		Provider:   ProviderGitHub,
