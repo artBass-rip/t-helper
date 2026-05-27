@@ -152,7 +152,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if instance != nil && req.CredentialID != "" {
-		if err := h.store.ValidateCredential(r.Context(), req.CredentialID, instance.ID, repository.UsageGitTransport); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(r.Context(), req.CredentialID, instance.ID, repository.UsageGitTransport, identity.Protocol); err != nil {
 			writeRepositoryError(w, r, err)
 			return
 		}
@@ -408,7 +408,7 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 			writeError(w, r, http.StatusBadRequest, "credential_provider_instance_required", "repository provider_instance_id is required for credential validation")
 			return
 		}
-		if err := h.store.ValidateCredential(r.Context(), credentialID, repo.ProviderInstanceID, repository.UsageGitTransport); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(r.Context(), credentialID, repo.ProviderInstanceID, repository.UsageGitTransport, repo.AuthType); err != nil {
 			writeRepositoryError(w, r, err)
 			return
 		}

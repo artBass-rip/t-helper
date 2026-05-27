@@ -20,6 +20,8 @@ type Store struct {
 	handle *storage.Handle
 }
 
+const operationReservationRetention = 24 * time.Hour
+
 type sqlExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
@@ -167,6 +169,18 @@ func (s *Store) expireOperationReservations(ctx context.Context, now time.Time) 
 	args := []any{formatTime(now)}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE repository_operation_reservations SET status = 'expired' WHERE status = 'held' AND expires_at <= $1`
+	}
+	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	return s.pruneOperationReservations(ctx, now.Add(-operationReservationRetention))
+}
+
+func (s *Store) pruneOperationReservations(ctx context.Context, olderThan time.Time) error {
+	query := `DELETE FROM repository_operation_reservations WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < ?`
+	args := []any{formatTime(olderThan)}
+	if s.handle.Provider == "postgres" {
+		query = `DELETE FROM repository_operation_reservations WHERE status IN ('released', 'expired') AND COALESCE(released_at, expires_at, created_at) < $1`
 	}
 	_, err := s.handle.DB.ExecContext(ctx, query, args...)
 	return err
@@ -506,6 +520,32 @@ func (s *Store) ValidateCredential(ctx context.Context, id, providerInstanceID, 
 		return validationError("credential_usage_not_allowed", fmt.Sprintf("credential does not allow %s", usage))
 	}
 	return nil
+}
+
+func (s *Store) ValidateCredentialForProtocol(ctx context.Context, id, providerInstanceID, usage, protocol string) error {
+	if err := s.ValidateCredential(ctx, id, providerInstanceID, usage); err != nil {
+		return err
+	}
+	if strings.TrimSpace(id) == "" {
+		return nil
+	}
+	cred, err := s.GetCredential(ctx, id)
+	if err != nil {
+		return err
+	}
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	switch protocol {
+	case ProtocolHTTPS:
+		switch cred.AuthType {
+		case AuthTypeHTTPSToken, AuthTypeHTTPSBasic, AuthTypeOAuthToken, AuthTypeAppPassword:
+			return nil
+		}
+	case ProtocolSSH:
+		if cred.AuthType == AuthTypeSSHKey {
+			return nil
+		}
+	}
+	return validationError("credential_auth_type_protocol_mismatch", fmt.Sprintf("credential auth_type %q is not compatible with %s transport", cred.AuthType, protocol))
 }
 
 func (s *Store) findCredential(ctx context.Context, id, providerInstanceID, name string) (Credential, error) {

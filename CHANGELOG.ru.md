@@ -15,6 +15,9 @@
   проверка credential usages, worker-side разрешение `secretref://env/...`,
   clone idempotent replay до pre-create reservations и worker-side проверка
   статуса/пути repository.
+- Добавлен hardening Stage 05: проверка совместимости credential protocol,
+  non-interactive Git execution, redaction ошибок repository operations и
+  cleanup operation reservations.
 - Уточнен `docs/api.md`: теперь он явно разделяет executable API baseline и
   future-stage endpoint contracts.
 - Обновлены карты документации в README: API-документ описан как executable

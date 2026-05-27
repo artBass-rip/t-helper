@@ -4,6 +4,15 @@
 
 Добавить управляемые repository operations поверх registry, не нарушая инварианты путей, идемпотентности и сериализации конкурентных действий.
 
+## Implementation status
+
+Stage 05 is implemented as the current repository manager MVP baseline. The
+remaining repository work is split into later stages:
+
+- Stage 05A: additional managed providers and recursive GitLab group clone;
+- Stage 05B: polling-based sync and scheduler integration;
+- Stage 14: webhook-based sync.
+
 ## Inputs
 
 - `docs/requirements.md`
@@ -28,20 +37,20 @@ Stage 05 starts from a completed Stage 04 scanner/registry baseline:
 - `GET /api/repos` and `GET /api/repos/{id}` are read-only Stage 04 routes;
 - the job system already accepts `repo_clone`, `repo_pull` and `repo_sync`
   payload schemas and maps them to `repository_operation` workflow status;
-- worker runtime and `job_locks` exist, but repository-manager handlers are not
-  registered yet;
-- the module registry contains `repository-manager` as unavailable until this
-  stage enables it.
+- worker runtime and `job_locks` exist;
+- the module registry contains `repository-manager`.
 
-Current gaps that must be closed inside Stage 05:
+Closed Stage 05 gaps in the implementation:
 
 - `POST /api/repos/clone`, `POST /api/repos/pull` and `POST /api/repos/sync`
-  are not executable routes yet;
-- `repository_provider_instances` and `repository_credentials` do not exist yet;
-- provider URL parsing and path normalization are not implemented as
-  repository-manager domain services yet;
-- the existing generic active-lock helper is scoped by `job_type + lock_key` and
-  is not sufficient for the Stage 05 cross-operation conflict policy by itself.
+  are executable routes;
+- `repository_provider_instances`, `repository_credentials` and
+  `repository_operation_reservations` exist for provider profiles, credentials
+  and clone pre-create identity/path reservations;
+- provider URL parsing and path normalization are implemented as
+  repository-manager domain services;
+- repository operation conflict lookup is cross-operation for `repo_clone`,
+  `repo_pull` and `repo_sync`, with clone pre-create identity/path checks.
 
 ## Scope
 
@@ -93,7 +102,9 @@ Current gaps that must be closed inside Stage 05:
 - one provider can have multiple configured hosts/provider instances;
 - one provider instance can have multiple credentials with different usages/permissions;
 - repository operation jobs carry `credential_id`, not raw secret refs or resolved secrets;
-- selected credentials are validated for provider instance ownership and required usage;
+- selected credentials are validated for provider instance ownership, required usage and transport protocol compatibility;
+- Git operations run non-interactively and repository operation failure messages are redacted before being persisted on repository cards;
+- released/expired clone pre-create reservations are pruned after the retention window;
 - provider URL parsing follows ADR 0016 and equivalent HTTPS/SSH/scp-like URLs resolve to the same repository identity;
 - `local_path` всегда внутри выбранного `root_path`;
 - path traversal отклоняется на API и domain layer;

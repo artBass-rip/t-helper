@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -58,7 +59,7 @@ func (h operationHandler) recordRepositoryFailure(ctx context.Context, job jobs.
 	if errors.As(err, &handlerErr) && handlerErr.Code != "" {
 		message = handlerErr.Code + ": " + handlerErr.Message
 	}
-	_ = h.store.MarkRepositoryError(ctx, repositoryID, message)
+	_ = h.store.MarkRepositoryError(ctx, repositoryID, redactRepositoryMessage(message))
 	return err
 }
 
@@ -87,7 +88,7 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 		return nil, err
 	}
 	if payload.CredentialID != "" {
-		if err := h.store.ValidateCredential(ctx, payload.CredentialID, payload.ProviderInstanceID, UsageGitTransport); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(ctx, payload.CredentialID, payload.ProviderInstanceID, UsageGitTransport, payload.Protocol); err != nil {
 			return nil, jobs.HandlerError{Code: ValidationCode(err), Message: err.Error(), Retryable: false}
 		}
 	}
@@ -143,9 +144,9 @@ func (h operationHandler) handleClone(ctx context.Context, job jobs.Job) (json.R
 		return nil, jobs.HandlerError{Code: "repository_target_unavailable", Message: err.Error(), Retryable: true}
 	}
 	cmd := exec.CommandContext(ctx, "git", "clone", payload.CloneURL, localPath)
-	cmd.Env = append(os.Environ(), gitEnv...)
+	cmd.Env = gitCommandEnv(gitEnv)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, jobs.HandlerError{Code: "git_clone_failed", Message: string(out), Retryable: true}
+		return nil, jobs.HandlerError{Code: "git_clone_failed", Message: redactRepositoryMessage(string(out)), Retryable: true}
 	}
 	defaultBranch := gitDefaultBranch(ctx, localPath)
 	if err := h.store.TouchRepositoryPulledWithBranch(ctx, payload.RepositoryID, defaultBranch); err != nil {
@@ -213,7 +214,7 @@ func (h operationHandler) handlePull(ctx context.Context, job jobs.Job) (json.Ra
 		return nil, err
 	}
 	if payload.CredentialID != "" {
-		if err := h.store.ValidateCredential(ctx, payload.CredentialID, repo.ProviderInstanceID, UsageGitTransport); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(ctx, payload.CredentialID, repo.ProviderInstanceID, UsageGitTransport, repo.AuthType); err != nil {
 			return nil, jobs.HandlerError{Code: ValidationCode(err), Message: err.Error(), Retryable: false}
 		}
 	}
@@ -234,7 +235,7 @@ func (h operationHandler) handlePull(ctx context.Context, job jobs.Job) (json.Ra
 		credentialID = repo.DefaultCredentialID
 	}
 	if credentialID != "" {
-		if err := h.store.ValidateCredential(ctx, credentialID, repo.ProviderInstanceID, UsageGitTransport); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(ctx, credentialID, repo.ProviderInstanceID, UsageGitTransport, repo.AuthType); err != nil {
 			return nil, jobs.HandlerError{Code: ValidationCode(err), Message: err.Error(), Retryable: false}
 		}
 	}
@@ -279,9 +280,9 @@ func (h operationHandler) runGit(ctx context.Context, repo scanner.Repository, c
 	beforeRevision, _ := gitRevision(ctx, dir)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), extraEnv...)
+	cmd.Env = gitCommandEnv(extraEnv)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, jobs.HandlerError{Code: "git_operation_failed", Message: string(out), Retryable: true}
+		return nil, jobs.HandlerError{Code: "git_operation_failed", Message: redactRepositoryMessage(string(out)), Retryable: true}
 	}
 	defaultBranch := gitDefaultBranch(ctx, dir)
 	if err := h.store.TouchRepositoryPulledWithBranch(ctx, repo.ID, defaultBranch); err != nil {
@@ -308,6 +309,33 @@ func (h operationHandler) runGit(ctx context.Context, repo scanner.Repository, c
 		Changed:            beforeRevision != afterRevision,
 		ExitCode:           0,
 	})
+}
+
+func gitCommandEnv(extra []string) []string {
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=Never")
+	return append(env, extra...)
+}
+
+var repositorySecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(authorization|bearer|token|password|passwd|pwd|secret|private[_ -]?key)\s*[:=]\s*[^,\s]+`),
+	regexp.MustCompile(`(?i)https?://[^/\s:@]+:[^/\s@]+@`),
+	regexp.MustCompile(`(?i)secretref://[^\s,]+`),
+}
+
+func redactRepositoryMessage(value string) string {
+	for _, pattern := range repositorySecretPatterns {
+		value = pattern.ReplaceAllStringFunc(value, func(match string) string {
+			if strings.Contains(match, "://") && strings.Contains(match, "@") {
+				parts := strings.SplitN(match, "://", 2)
+				return parts[0] + "://[redacted]@"
+			}
+			if idx := strings.IndexAny(match, ":="); idx >= 0 {
+				return strings.TrimSpace(match[:idx]) + match[idx:idx+1] + "[redacted]"
+			}
+			return "[redacted]"
+		})
+	}
+	return strings.TrimSpace(value)
 }
 
 func gitRevision(ctx context.Context, dir string) (string, error) {

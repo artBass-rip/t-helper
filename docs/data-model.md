@@ -255,7 +255,7 @@ roots are preserved.
 - MVP accepts only `secretref://env/...` secret refs;
 - API responses mask secret refs and never return resolved secrets;
 - one provider instance may have multiple credentials with different usages, scope hints and permissions;
-- repository operations must validate that selected `credential_id` belongs to the same provider instance and supports the required usage.
+- repository operations must validate that selected `credential_id` belongs to the same provider instance, supports the required usage and has an `auth_type` compatible with the selected transport protocol.
 
 ### `ignore_rules`
 

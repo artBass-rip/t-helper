@@ -336,6 +336,66 @@ func TestStage05CredentialsAPIMasksSecretRefs(t *testing.T) {
 	}
 }
 
+func TestStage05CloneRejectsCredentialProtocolMismatch(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	enabled := true
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := repoStore.UpsertCredentials(ctx, []repositorydomain.CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "ssh",
+		AuthType:           repositorydomain.AuthTypeSSHKey,
+		SecretRef:          "secretref://env/GITHUB_SSH_KEY",
+		Usages:             []string{repositorydomain.UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"provider_instance_id": instances[0].ID,
+		"credential_id":        credentials[0].ID,
+		"provider":             "github",
+		"protocol":             "https",
+		"clone_url":            "https://github.com/example/repo.git",
+		"root_path_id":         root.ID,
+		"target_directory":     "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("protocol mismatch status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode protocol mismatch error: %v", err)
+	}
+	if apiErr.Error.Code != "credential_auth_type_protocol_mismatch" {
+		t.Fatalf("protocol mismatch code = %q", apiErr.Error.Code)
+	}
+}
+
 func TestStage05CloneRejectsUnsupportedCloneScope(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

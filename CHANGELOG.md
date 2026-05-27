@@ -15,6 +15,9 @@ grouped by completed roadmap stages and merge commits.
   checks, worker-side `secretref://env/...` credential resolution, clone
   idempotent replay before pre-create reservations and worker-side
   repository/path status validation.
+- Added Stage 05 hardening for credential protocol compatibility, non-interactive
+  Git execution, repository operation error redaction and operation reservation
+  cleanup.
 - Clarified `docs/api.md` as the current Stage 05 executable API baseline plus
   future-stage endpoint contracts.
 - Updated README documentation maps to describe the API document as both the

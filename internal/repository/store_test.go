@@ -231,6 +231,28 @@ func TestTransferOperationReservationsAllowsSameJobRefresh(t *testing.T) {
 	}
 }
 
+func TestReserveOperationKeysPrunesOldReleasedReservations(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	store := NewStore(handle)
+	old := time.Now().UTC().Add(-2 * operationReservationRetention)
+	_, err := handle.DB.ExecContext(ctx, `INSERT INTO repository_operation_reservations (id, reservation_key, owner, status, created_at, expires_at, released_at) VALUES (?, ?, ?, 'released', ?, ?, ?)`,
+		"rres_old", "repository-path:root:old", "owner-old", formatTime(old), formatTime(old), formatTime(old))
+	if err != nil {
+		t.Fatalf("insert old reservation: %v", err)
+	}
+	if _, err := store.ReserveOperationKeys(ctx, "owner-new", time.Minute, "repository-path:root:new"); err != nil {
+		t.Fatalf("reserve new key: %v", err)
+	}
+	var count int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM repository_operation_reservations WHERE id = ?`, "rres_old").Scan(&count); err != nil {
+		t.Fatalf("count old reservation: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("old released reservation count = %d, want 0", count)
+	}
+}
+
 func TestProviderInstanceListUsesCursorPagination(t *testing.T) {
 	ctx := context.Background()
 	store := NewStore(openRepositorySQLite(t))
@@ -365,6 +387,41 @@ func TestCredentialValidationUsesADRAuthTypesAndUsages(t *testing.T) {
 	}
 }
 
+func TestCredentialValidationRejectsProtocolMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "ssh",
+		AuthType:           AuthTypeSSHKey,
+		SecretRef:          "secretref://env/GITHUB_SSH_KEY",
+		Usages:             []string{UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	if err := store.ValidateCredentialForProtocol(ctx, credentials[0].ID, instances[0].ID, UsageGitTransport, ProtocolSSH); err != nil {
+		t.Fatalf("ssh credential should be valid for ssh protocol: %v", err)
+	}
+	err = store.ValidateCredentialForProtocol(ctx, credentials[0].ID, instances[0].ID, UsageGitTransport, ProtocolHTTPS)
+	if err == nil {
+		t.Fatal("expected ssh credential to reject https protocol")
+	}
+	if code := ValidationCode(err); code != "credential_auth_type_protocol_mismatch" {
+		t.Fatalf("validation code = %q", code)
+	}
+}
+
 func TestProviderInstanceNormalizesDefaultHTTPSPort(t *testing.T) {
 	ctx := context.Background()
 	store := NewStore(openRepositorySQLite(t))
@@ -413,6 +470,32 @@ func TestGitCredentialEnvResolvesSecretRef(t *testing.T) {
 	}
 	if len(env) != 3 || env[0] != "GIT_CONFIG_COUNT=1" || env[1] != "GIT_CONFIG_KEY_0=http.extraHeader" {
 		t.Fatalf("unexpected credential env: %+v", env)
+	}
+}
+
+func TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted(t *testing.T) {
+	env := gitCommandEnv(nil)
+	hasPromptOff := false
+	hasCredentialManagerOff := false
+	for _, item := range env {
+		switch item {
+		case "GIT_TERMINAL_PROMPT=0":
+			hasPromptOff = true
+		case "GCM_INTERACTIVE=Never":
+			hasCredentialManagerOff = true
+		}
+	}
+	if !hasPromptOff || !hasCredentialManagerOff {
+		t.Fatalf("git env missing non-interactive settings: prompt=%v credential_manager=%v", hasPromptOff, hasCredentialManagerOff)
+	}
+	message := redactRepositoryMessage("failed token=abc123 https://user:pass@example.test/repo.git secretref://env/API_TOKEN")
+	for _, leaked := range []string{"abc123", "user:pass", "API_TOKEN"} {
+		if strings.Contains(message, leaked) {
+			t.Fatalf("redacted message leaked %q: %s", leaked, message)
+		}
+	}
+	if !strings.Contains(message, "[redacted]") {
+		t.Fatalf("expected redaction marker in %q", message)
 	}
 }
 
