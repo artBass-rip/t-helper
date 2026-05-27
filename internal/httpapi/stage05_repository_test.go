@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -277,6 +279,54 @@ func TestStage05CloneWithNewRootPathCreatesRootPath(t *testing.T) {
 	}
 	if payload.RootPathID != root.ID || payload.TargetDirectory != "repo" {
 		t.Fatalf("unexpected clone payload root/target: %+v", payload)
+	}
+}
+
+func TestStage05CloneNewRootPathReleasesTemporaryReservationAfterWorker(t *testing.T) {
+	requireHTTPRepositoryGit(t)
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	source := createHTTPGitFixtureRepository(t)
+	newRootPath := filepath.Join(t.TempDir(), "new-root")
+	body, _ := json.Marshal(map[string]any{
+		"provider":         "generic",
+		"protocol":         "https",
+		"clone_url":        source,
+		"new_root_path":    newRootPath,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("clone with new root status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var ref jobs.JobRef
+	if err := json.NewDecoder(rec.Body).Decode(&ref); err != nil {
+		t.Fatalf("decode job ref: %v", err)
+	}
+	job, err := jobStore.Get(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("get clone job: %v", err)
+	}
+	repoHandlers := repositorydomain.JobHandlers(repoStore, scannerStore)
+	if _, err := repoHandlers["repo_clone"].Handle(ctx, jobs.HandlerEnv{}, job); err != nil {
+		t.Fatalf("handle clone job: %v", err)
+	}
+	var held int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM repository_operation_reservations WHERE status = 'held'`).Scan(&held); err != nil {
+		t.Fatalf("count held operation reservations: %v", err)
+	}
+	if held != 0 {
+		t.Fatalf("held operation reservations after clone = %d, want 0", held)
 	}
 }
 
@@ -644,4 +694,34 @@ func upsertHTTPRepositoryRoot(t *testing.T, ctx context.Context, store *scanner.
 		t.Fatalf("upsert root path: %v", err)
 	}
 	return items[0]
+}
+
+func requireHTTPRepositoryGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skipf("git unavailable: %v", err)
+	}
+}
+
+func createHTTPGitFixtureRepository(t *testing.T) string {
+	t.Helper()
+	source := filepath.Join(t.TempDir(), "source")
+	runHTTPGitCommand(t, "", "init", source)
+	if err := os.WriteFile(filepath.Join(source, "README.md"), []byte("fixture\n"), 0o644); err != nil {
+		t.Fatalf("write README.md: %v", err)
+	}
+	runHTTPGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "add", "README.md")
+	runHTTPGitCommand(t, source, "-c", "user.name=Test User", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")
+	return source
+}
+
+func runHTTPGitCommand(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+	}
 }

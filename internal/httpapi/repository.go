@@ -241,6 +241,32 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			writeRepositoryError(w, r, err)
 			return
 		}
+		finalPathReservationKey, err := repository.TargetReservationKey(root.Path, root.ID, targetDirectory)
+		if err != nil {
+			writeRepositoryError(w, r, err)
+			return
+		}
+		if finalPathReservationKey != pathReservationKey {
+			finalHeld, err := h.store.ReserveOperationKeys(r.Context(), reservationOwner, 5*time.Minute, finalPathReservationKey)
+			if err != nil {
+				var conflict repository.ReservationConflictError
+				if errors.As(err, &conflict) {
+					writeErrorDetails(w, r, http.StatusConflict, "repository_target_path_busy", "repository clone conflict", map[string]any{
+						"lock_key": conflict.Key,
+					})
+					return
+				}
+				writeRepositoryError(w, r, err)
+				return
+			}
+			heldReservations = append(heldReservations, finalHeld...)
+			if err := h.store.ReleaseOperationReservations(r.Context(), reservationOwner, pathReservationKey); err != nil {
+				writeRepositoryError(w, r, err)
+				return
+			}
+			heldReservations = removeString(heldReservations, pathReservationKey)
+			pathReservationKey = finalPathReservationKey
+		}
 	}
 	if existing, err := h.store.ExistingRepositoryForClone(r.Context(), identity, root.ID, localPath); err == nil {
 		lockKey := "repository:" + existing.ID
@@ -308,6 +334,16 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		releaseReservations = false
 	}
 	writeJSON(w, http.StatusAccepted, ref)
+}
+
+func removeString(values []string, target string) []string {
+	out := values[:0]
+	for _, value := range values {
+		if value != target {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repository.Identity, rootPathID, targetDirectory, localPath, providerInstanceID, credentialID string) (jobs.JobRef, error) {
