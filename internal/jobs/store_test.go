@@ -114,6 +114,38 @@ func TestConcurrentEnqueueWithSameIdempotencyKeyReplaysJobRef(t *testing.T) {
 	}
 }
 
+func TestActiveRepositoryOperationByIDReturnsOnlyActiveRepositoryJobs(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+
+	ref, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "repo_pull",
+		LockKey: "repository:repo_1",
+		Payload: json.RawMessage(`{"schema_version":"jobs.repo_pull.payload.v1","repository_id":"repo_1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue repo pull: %v", err)
+	}
+	active, err := store.ActiveRepositoryOperationByID(ctx, ref.JobID)
+	if err != nil {
+		t.Fatalf("active repository operation by id: %v", err)
+	}
+	if active.ID != ref.JobID || active.JobType != "repo_pull" {
+		t.Fatalf("active job = %+v, want repo_pull %q", active, ref.JobID)
+	}
+
+	configRef, err := store.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType: "config_reload",
+		Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue config reload: %v", err)
+	}
+	if _, err := store.ActiveRepositoryOperationByID(ctx, configRef.JobID); !errors.Is(err, jobs.ErrNotFound) {
+		t.Fatalf("config job lookup error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestClaimHeartbeatCompleteAndStatus(t *testing.T) {
 	ctx := context.Background()
 	store := openStore(t)

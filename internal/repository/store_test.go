@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -202,14 +203,52 @@ func TestReserveOperationKeysReportsConflict(t *testing.T) {
 		t.Fatalf("held reservations = %d, want 1", len(held))
 	}
 	_, err = store.ReserveOperationKeys(ctx, "owner-two", time.Minute, "repository-path:root:repo")
-	if !errors.Is(err, ErrReservationConflict) {
+	var conflict ReservationConflictError
+	if !errors.As(err, &conflict) {
 		t.Fatalf("reserve second error = %v, want reservation conflict", err)
+	}
+	if conflict.Key != "repository-path:root:repo" || conflict.Owner != "owner-one" {
+		t.Fatalf("reservation conflict = %+v, want key and owning reservation", conflict)
 	}
 	if err := store.ReleaseOperationReservations(ctx, "owner-one", held...); err != nil {
 		t.Fatalf("release first: %v", err)
 	}
 	if _, err := store.ReserveOperationKeys(ctx, "owner-two", time.Minute, "repository-path:root:repo"); err != nil {
 		t.Fatalf("reserve after release: %v", err)
+	}
+}
+
+func TestReserveOperationKeysAllowsOnlyOneConcurrentOwner(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	const workers = 8
+	var wg sync.WaitGroup
+	results := make(chan error, workers)
+	for idx := 0; idx < workers; idx++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := store.ReserveOperationKeys(ctx, "owner-concurrent-"+string(rune('a'+idx)), time.Minute, "repository-identity:github:github.com:example/repo")
+			results <- err
+		}(idx)
+	}
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	conflicts := 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrReservationConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected reservation error: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != workers-1 {
+		t.Fatalf("reservation results: successes=%d conflicts=%d, want one winner", successes, conflicts)
 	}
 }
 
@@ -456,6 +495,9 @@ func TestProviderInstanceValidatesProfileURLs(t *testing.T) {
 	for _, tc := range []ProviderInstanceInput{
 		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "http://github.com/api/v3"},
 		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "https://token@github.com/api/v3"},
+		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "https://github.com/api/v3?token=secret"},
+		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "https://github.com/api/v3#fragment"},
+		{Provider: ProviderGitHub, ProviderHost: "github.com", APIBaseURL: "https://github.com/api/\x01"},
 		{Provider: ProviderGitHub, ProviderHost: "github.com", WebBaseURL: "https://ghe.example.internal/"},
 	} {
 		if _, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{tc}); err == nil {
@@ -523,6 +565,42 @@ func TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted(t *testin
 	}
 	if !strings.Contains(message, "[redacted]") {
 		t.Fatalf("expected redaction marker in %q", message)
+	}
+}
+
+func TestGitCredentialEnvUsesNonInteractiveSSHCommand(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	store := NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "ssh",
+		AuthType:           AuthTypeSSHKey,
+		SecretRef:          "secretref://env/REPOSITORY_SSH_KEY",
+		Usages:             []string{UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	t.Setenv("REPOSITORY_SSH_KEY", "test-private-key")
+	env, cleanup, err := (operationHandler{store: store, scannerStore: scannerStore}).gitCredentialEnv(ctx, credentials[0].ID)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("credential env: %v", err)
+	}
+	if len(env) != 1 || !strings.Contains(env[0], "GIT_SSH_COMMAND=ssh ") || !strings.Contains(env[0], "-o BatchMode=yes") || !strings.Contains(env[0], "-o IdentitiesOnly=yes") {
+		t.Fatalf("unexpected ssh credential env: %+v", env)
 	}
 }
 

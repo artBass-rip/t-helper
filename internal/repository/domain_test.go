@@ -78,6 +78,24 @@ func TestNormalizeIdentityPreservesProviderHostPort(t *testing.T) {
 	}
 }
 
+func TestNormalizeIdentityUsesSSHURLFormForNonDefaultPort(t *testing.T) {
+	identity, err := NormalizeIdentity(CloneRequest{
+		Provider:   ProviderGitHub,
+		Protocol:   ProtocolSSH,
+		CloneURL:   "ssh://git@ghe.example.internal:2222/example/repo.git",
+		CloneScope: "single_repository",
+	}, nil)
+	if err != nil {
+		t.Fatalf("normalize identity: %v", err)
+	}
+	if identity.ProviderHost != "ghe.example.internal:2222" {
+		t.Fatalf("provider_host = %q, want host:port", identity.ProviderHost)
+	}
+	if identity.CloneURL != "ssh://git@ghe.example.internal:2222/example/repo.git" {
+		t.Fatalf("clone_url = %q, want ssh URL with port", identity.CloneURL)
+	}
+}
+
 func TestNormalizeIdentityDropsDefaultPorts(t *testing.T) {
 	for _, tc := range []struct {
 		protocol string
@@ -163,6 +181,21 @@ func TestNormalizeIdentityRejectsExplicitURLMismatch(t *testing.T) {
 	}, nil)
 	if err == nil {
 		t.Fatal("expected provider host mismatch validation error")
+	}
+}
+
+func TestNormalizeIdentityRejectsUnsupportedProviderFromRegistry(t *testing.T) {
+	_, err := NormalizeIdentity(CloneRequest{
+		Provider:   "gitlab",
+		Protocol:   ProtocolHTTPS,
+		FullPath:   "group/repo",
+		CloneScope: "single_repository",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected unsupported provider validation error")
+	}
+	if code := ValidationCode(err); code != "unsupported_provider" {
+		t.Fatalf("validation code = %q, want unsupported_provider", code)
 	}
 }
 

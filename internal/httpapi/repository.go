@@ -196,8 +196,8 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			if conflict.Key == pathReservationKey {
 				code = "repository_target_path_busy"
 			}
-			if active, activeCode, conflictRepositoryID, activeErr := h.activeCloneConflict(r, identity, rootSelection.reserveKey, root.Path, pathReservationKey); activeErr == nil {
-				writeErrorDetails(w, r, http.StatusConflict, activeCode, "repository clone conflict", map[string]any{
+			if active, conflictRepositoryID, activeErr := h.activeReservationConflict(r, conflict.Owner); activeErr == nil {
+				writeErrorDetails(w, r, http.StatusConflict, code, "repository clone conflict", map[string]any{
 					"repository_id":   conflictRepositoryID,
 					"lock_key":        active.LockKey,
 					"active_job_id":   active.ID,
@@ -206,7 +206,8 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			writeErrorDetails(w, r, http.StatusConflict, code, "repository clone conflict", map[string]any{
-				"lock_key": conflict.Key,
+				"lock_key":          conflict.Key,
+				"reservation_owner": conflict.Owner,
 			})
 			return
 		}
@@ -219,18 +220,6 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			_ = h.store.ReleaseOperationReservations(r.Context(), reservationOwner, heldReservations...)
 		}
 	}()
-	if active, conflictCode, conflictRepositoryID, err := h.activeCloneConflict(r, identity, rootSelection.reserveKey, root.Path, pathReservationKey); err == nil {
-		writeErrorDetails(w, r, http.StatusConflict, conflictCode, "repository clone conflict", map[string]any{
-			"repository_id":   conflictRepositoryID,
-			"lock_key":        active.LockKey,
-			"active_job_id":   active.ID,
-			"active_job_type": active.JobType,
-		})
-		return
-	} else if !errors.Is(err, jobs.ErrNotFound) {
-		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
-		return
-	}
 	if !rootSelection.existing {
 		root, err = h.createCloneRoot(r, root.Path)
 		if err != nil {
@@ -252,8 +241,18 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				var conflict repository.ReservationConflictError
 				if errors.As(err, &conflict) {
+					if active, conflictRepositoryID, activeErr := h.activeReservationConflict(r, conflict.Owner); activeErr == nil {
+						writeErrorDetails(w, r, http.StatusConflict, "repository_target_path_busy", "repository clone conflict", map[string]any{
+							"repository_id":   conflictRepositoryID,
+							"lock_key":        active.LockKey,
+							"active_job_id":   active.ID,
+							"active_job_type": active.JobType,
+						})
+						return
+					}
 					writeErrorDetails(w, r, http.StatusConflict, "repository_target_path_busy", "repository clone conflict", map[string]any{
-						"lock_key": conflict.Key,
+						"lock_key":          conflict.Key,
+						"reservation_owner": conflict.Owner,
 					})
 					return
 				}
@@ -389,40 +388,16 @@ func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repo
 	return jobs.JobRef{JobID: job.ID, Status: job.Status, SchemaVersion: jobs.JobRefSchemaVersion}, nil
 }
 
-func (h *RepositoryHandler) activeCloneConflict(r *http.Request, identity repository.Identity, rootReserveKey, rootPath, pathReservationKey string) (jobs.Job, string, string, error) {
-	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
-		active, err := h.jobStore.List(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status})
-		if err != nil {
-			return jobs.Job{}, "", "", err
-		}
-		for _, job := range active {
-			if key := r.Header.Get(idempotencyKeyHeader); key != "" && job.IdempotencyKey == key {
-				continue
-			}
-			var payload repository.RepoClonePayload
-			if err := json.Unmarshal(job.Payload, &payload); err != nil {
-				continue
-			}
-			if payload.Provider == identity.Provider && payload.ProviderHost == identity.ProviderHost && payload.FullPath == identity.FullPath {
-				return job, "repository_operation_already_running", payload.RepositoryID, nil
-			}
-			if payload.RootPathID != "" {
-				payloadRoot, err := h.scannerStore.GetRootPath(r.Context(), payload.RootPathID)
-				if err != nil {
-					continue
-				}
-				payloadRootKey := payload.RootPathID
-				if payloadRoot.Path == rootPath {
-					payloadRootKey = rootReserveKey
-				}
-				payloadPathKey, err := repository.TargetReservationKey(payloadRoot.Path, payloadRootKey, payload.TargetDirectory)
-				if err == nil && payloadPathKey == pathReservationKey {
-					return job, "repository_target_path_busy", payload.RepositoryID, nil
-				}
-			}
-		}
+func (h *RepositoryHandler) activeReservationConflict(r *http.Request, owner string) (jobs.Job, string, error) {
+	active, err := h.jobStore.ActiveRepositoryOperationByID(r.Context(), owner)
+	if err != nil {
+		return jobs.Job{}, "", err
 	}
-	return jobs.Job{}, "", "", jobs.ErrNotFound
+	var payload struct {
+		RepositoryID string `json:"repository_id"`
+	}
+	_ = json.Unmarshal(active.Payload, &payload)
+	return active, payload.RepositoryID, nil
 }
 
 func (h *RepositoryHandler) Pull(w http.ResponseWriter, r *http.Request) {

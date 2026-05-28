@@ -137,6 +137,22 @@ func (s *Store) ActiveRepositoryOperation(ctx context.Context, lockKey string) (
 	return s.findActiveRepositoryOperation(ctx, lockKey)
 }
 
+func (s *Store) ActiveRepositoryOperationByID(ctx context.Context, id string) (Job, error) {
+	job, err := s.Get(ctx, id)
+	if err != nil {
+		return Job{}, err
+	}
+	if job.Status != StatusQueued && job.Status != StatusRunning {
+		return Job{}, ErrNotFound
+	}
+	switch job.JobType {
+	case "repo_clone", "repo_pull", "repo_sync":
+		return job, nil
+	default:
+		return Job{}, ErrNotFound
+	}
+}
+
 func (s *Store) IdempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return JobRef{}, ErrNotFound

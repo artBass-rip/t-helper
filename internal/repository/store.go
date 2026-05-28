@@ -28,7 +28,8 @@ type sqlExecutor interface {
 }
 
 type ReservationConflictError struct {
-	Key string
+	Key   string
+	Owner string
 }
 
 func (e ReservationConflictError) Error() string {
@@ -77,7 +78,7 @@ func (s *Store) ReserveOperationKeys(ctx context.Context, owner string, ttl time
 					continue
 				}
 				_ = s.ReleaseOperationReservations(ctx, owner, held...)
-				return nil, ReservationConflictError{Key: key}
+				return nil, ReservationConflictError{Key: key, Owner: existingOwner}
 			}
 			_ = s.ReleaseOperationReservations(ctx, owner, held...)
 			return nil, err
@@ -201,8 +202,9 @@ func (s *Store) UpsertProviderInstances(ctx context.Context, inputs []ProviderIn
 
 func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstanceInput) (ProviderInstance, error) {
 	provider := strings.ToLower(strings.TrimSpace(input.Provider))
-	if provider != ProviderGeneric && provider != ProviderGitHub {
-		return ProviderInstance{}, validationErrorf("unsupported provider %q", provider)
+	adapter, err := adapterForProvider(provider)
+	if err != nil {
+		return ProviderInstance{}, err
 	}
 	hostProtocol := ""
 	if provider == ProviderGitHub {
@@ -213,11 +215,7 @@ func (s *Store) upsertProviderInstance(ctx context.Context, input ProviderInstan
 		return ProviderInstance{}, err
 	}
 	if host == "" {
-		if provider == ProviderGitHub {
-			host = "github.com"
-		} else {
-			host = "local"
-		}
+		host = adapter.defaultHost
 	}
 	apiBaseURL, err := normalizeProviderProfileURL(input.APIBaseURL, host)
 	if err != nil {
@@ -279,12 +277,18 @@ func normalizeProviderProfileURL(value, providerHost string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
+	if hasControl(value) {
+		return "", validationError("invalid_provider_profile_url", "provider profile URL is invalid")
+	}
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", validationError("invalid_provider_profile_url", "provider profile URL is invalid")
 	}
 	if parsed.Scheme != ProtocolHTTPS {
 		return "", validationError("invalid_provider_profile_url", "provider profile URL must use https")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", validationError("invalid_provider_profile_url", "provider profile URL must not include query or fragment")
 	}
 	if parsed.User != nil {
 		return "", validationError("credential_userinfo_not_allowed", "credential userinfo is not allowed")

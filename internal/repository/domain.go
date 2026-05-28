@@ -45,14 +45,42 @@ type Identity struct {
 	Protocol     string
 }
 
+type providerAdapter struct {
+	provider    string
+	defaultHost string
+}
+
+var providerAdapters = map[string]providerAdapter{
+	ProviderGeneric: {provider: ProviderGeneric, defaultHost: "local"},
+	ProviderGitHub:  {provider: ProviderGitHub, defaultHost: "github.com"},
+}
+
+func adapterForProvider(provider string) (providerAdapter, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	adapter, ok := providerAdapters[provider]
+	if !ok {
+		return providerAdapter{}, validationError("unsupported_provider", fmt.Sprintf("unsupported provider %q", provider))
+	}
+	return adapter, nil
+}
+
+func defaultProviderHost(provider string) string {
+	if adapter, ok := providerAdapters[provider]; ok {
+		return adapter.defaultHost
+	}
+	return ""
+}
+
 func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, error) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if provider == "" && instance != nil {
 		provider = instance.Provider
 	}
-	if provider != ProviderGeneric && provider != ProviderGitHub {
-		return Identity{}, validationError("unsupported_provider", fmt.Sprintf("unsupported provider %q", provider))
+	adapter, err := adapterForProvider(provider)
+	if err != nil {
+		return Identity{}, err
 	}
+	provider = adapter.provider
 	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
 	if protocol != ProtocolHTTPS && protocol != ProtocolSSH {
 		return Identity{}, validationError("unsupported_url_protocol", fmt.Sprintf("unsupported protocol %q", protocol))
@@ -96,11 +124,8 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 			cloneURL = parsed.CloneURL
 		}
 	}
-	if provider == ProviderGeneric && host == "" {
-		host = "local"
-	}
-	if provider == ProviderGitHub && host == "" {
-		host = "github.com"
+	if host == "" {
+		host = adapter.defaultHost
 	}
 	if host == "" {
 		return Identity{}, validationError("provider_host_required", "provider_host is required")
@@ -116,6 +141,11 @@ func NormalizeIdentity(req CloneRequest, instance *ProviderInstance) (Identity, 
 }
 
 func ParseCloneURL(provider, raw string) (Identity, error) {
+	adapter, err := adapterForProvider(provider)
+	if err != nil {
+		return Identity{}, err
+	}
+	provider = adapter.provider
 	raw = strings.TrimSpace(raw)
 	if raw == "" || hasControl(raw) {
 		return Identity{}, validationError("unsupported_provider_url", "unsupported provider URL")
@@ -241,6 +271,11 @@ func splitHostPortLenient(value string) (string, string, error) {
 }
 
 func NormalizeFullPath(provider, value string) (string, error) {
+	adapter, err := adapterForProvider(provider)
+	if err != nil {
+		return "", err
+	}
+	provider = adapter.provider
 	value = norm.NFC.String(strings.TrimSpace(value))
 	if value == "" || hasControl(value) || strings.Contains(value, "\\") {
 		return "", validationError("invalid_repository_path", "invalid repository path")
@@ -262,6 +297,9 @@ func NormalizeFullPath(provider, value string) (string, error) {
 
 func TransportURL(provider, host, fullPath, protocol string) string {
 	if protocol == ProtocolSSH {
+		if strings.Contains(host, ":") {
+			return "ssh://git@" + host + "/" + fullPath + ".git"
+		}
 		return "git@" + host + ":" + fullPath + ".git"
 	}
 	if provider == ProviderGeneric && host == "local" {
