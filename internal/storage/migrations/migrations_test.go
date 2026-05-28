@@ -111,6 +111,7 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 		},
 		"repository_credentials": {
 			"repository_credentials_provider_instance_idx",
+			"repository_credentials_provider_instance_auth_type_idx",
 		},
 	} {
 		got := sqliteIndexes(t, db, table)
@@ -118,6 +119,30 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 			if !got[name] {
 				t.Fatalf("missing index %s on %s; got indexes %#v", name, table, got)
 			}
+		}
+	}
+}
+
+func TestStage05RepositoryForeignKeysExistForSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := Apply(context.Background(), db, "sqlite"); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	got := sqliteForeignKeys(t, db, "repositories")
+	for _, want := range []string{
+		"provider_instance_id->repository_provider_instances(id)",
+		"default_credential_id->repository_credentials(id)",
+		"superseded_by_repository_id->repositories(id)",
+		"root_path_id->root_paths(id)",
+	} {
+		if !got[want] {
+			t.Fatalf("missing repository foreign key %s; got %#v", want, got)
 		}
 	}
 }
@@ -145,6 +170,28 @@ func sqliteIndexes(t *testing.T, db *sql.DB, table string) map[string]bool {
 		t.Fatalf("iterate indexes for %s: %v", table, err)
 	}
 	return indexes
+}
+
+func sqliteForeignKeys(t *testing.T, db *sql.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.Query("PRAGMA foreign_key_list(" + table + ")")
+	if err != nil {
+		t.Fatalf("list foreign keys for %s: %v", table, err)
+	}
+	defer rows.Close()
+	keys := map[string]bool{}
+	for rows.Next() {
+		var id, seq int
+		var refTable, from, to, onUpdate, onDelete, match string
+		if err := rows.Scan(&id, &seq, &refTable, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+			t.Fatalf("scan foreign key for %s: %v", table, err)
+		}
+		keys[from+"->"+refTable+"("+to+")"] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate foreign keys for %s: %v", table, err)
+	}
+	return keys
 }
 
 func migrationVersions(t *testing.T, dialect string) []string {

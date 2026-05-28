@@ -88,6 +88,10 @@ func (s *Store) ReserveOperationKeys(ctx context.Context, owner string, ttl time
 	return held, nil
 }
 
+func (s *Store) CleanupOperationReservations(ctx context.Context) error {
+	return s.expireOperationReservations(ctx, time.Now().UTC())
+}
+
 func (s *Store) TransferOperationReservations(ctx context.Context, fromOwner, toOwner string, ttl time.Duration, keys ...string) error {
 	fromOwner = strings.TrimSpace(fromOwner)
 	toOwner = strings.TrimSpace(toOwner)
@@ -614,6 +618,9 @@ func (s *Store) UpsertRepository(ctx context.Context, identity Identity, root sc
 }
 
 func (s *Store) UpsertRepositoryForClone(ctx context.Context, identity Identity, root scanner.RootPath, targetDirectory, localPath, providerInstanceID, credentialID string) (scanner.Repository, bool, error) {
+	if err := s.validateRepositoryOperationReferences(ctx, identity, providerInstanceID, credentialID); err != nil {
+		return scanner.Repository{}, false, err
+	}
 	now := time.Now().UTC()
 	name := filepath.Base(identity.FullPath)
 	existing, err := s.findRepository(ctx, identity.Provider, identity.ProviderHost, identity.FullPath)
@@ -682,6 +689,33 @@ func (s *Store) UpsertRepositoryForClone(ctx context.Context, identity Identity,
 	}
 	repo, err := scanner.NewStore(s.handle).GetRepository(ctx, id)
 	return repo, true, err
+}
+
+func (s *Store) validateRepositoryOperationReferences(ctx context.Context, identity Identity, providerInstanceID, credentialID string) error {
+	providerInstanceID = strings.TrimSpace(providerInstanceID)
+	credentialID = strings.TrimSpace(credentialID)
+	if providerInstanceID == "" {
+		if credentialID != "" {
+			return validationError("credential_provider_instance_required", "provider_instance_id is required when credential_id is set")
+		}
+		return nil
+	}
+	instance, err := s.GetProviderInstance(ctx, providerInstanceID)
+	if err != nil {
+		return err
+	}
+	if !instance.Enabled {
+		return validationError("provider_instance_disabled", "provider instance is disabled")
+	}
+	if instance.Provider != identity.Provider || instance.ProviderHost != identity.ProviderHost {
+		return validationError("provider_instance_mismatch", "provider_instance_id does not match repository identity")
+	}
+	if credentialID != "" {
+		if err := s.ValidateCredentialForProtocol(ctx, credentialID, providerInstanceID, UsageGitTransport, identity.Protocol); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) ExistingRepositoryForClone(ctx context.Context, identity Identity, rootPathID, localPath string) (scanner.Repository, error) {

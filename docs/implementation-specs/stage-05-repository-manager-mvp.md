@@ -47,10 +47,15 @@ Closed Stage 05 gaps in the implementation:
 - `repository_provider_instances`, `repository_credentials` and
   `repository_operation_reservations` exist for provider profiles, credentials
   and clone pre-create identity/path reservations;
+- Stage 05 hardening migration adds repository/provider and
+  repository/default credential FK parity plus credential lookup indexes across
+  SQLite and Postgres;
 - provider URL parsing and path normalization are implemented as
   repository-manager domain services;
 - repository operation conflict lookup is cross-operation for `repo_clone`,
   `repo_pull` and `repo_sync`, with clone pre-create identity/path checks.
+- repository operation reservation cleanup is available as an explicit storage
+  primitive and still runs opportunistically before new reservations.
 
 ## Scope
 
@@ -307,11 +312,13 @@ following checklist:
 | HTTP clone rejects credentials embedded in URLs and exact `Idempotency-Key` replay returns the existing `job_ref`. | `internal/httpapi/repository.go` clone normalization and `cloneIdempotentReplay`. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`. |
 | Active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are cross-operation for `repository:<id>`. | `internal/jobs/store.go` `ActiveRepositoryOperation` and `EnqueueRepositoryOperation`; `jobs_active_repository_operation_lock_uidx`; repository operation enqueue paths. | `TestEnqueueRepositoryOperationRejectsActiveCrossOperationLock`, `TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes`, `TestStage05ConcurrentPullRequestsCreateSingleActiveRepositoryJob`, `TestStage05CloneConflictWithActivePullDoesNotMutateRepository`. |
 | Clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects. | `repository_operation_reservations`, `IdentityReservationKey`, `TargetReservationKey`, clone API reservation flow. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`, `TestStage05CloneRejectsBusyTargetPathForDifferentRepository`, `TestStage05CloneConflictDoesNotCreateNewRootPath`. |
+| Released/expired clone pre-create reservations can be explicitly cleaned after retention. | `internal/repository/store.go` `CleanupOperationReservations`; migration cleanup indexes. | `TestCleanupOperationReservationsPrunesWithoutNewReservation`, `TestReserveOperationKeysPrunesOldReleasedReservations`. |
 | Worker repeats target containment checks and rejects symlink escapes that appear after enqueue. | `internal/repository/handlers.go` `handleClone`; `internal/repository/domain.go` `NormalizeTarget`. | `TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue`, `TestNormalizeTargetRejectsSymlinkEscapeInExistingParent`. |
 | Existing empty target directories are accepted, non-empty non-Git directories are rejected, matching Git remotes degrade clone to pull, and mismatched remotes are rejected. | `internal/repository/handlers.go` clone worker filesystem and remote checks. | `TestOperationHandlerCloneUsesExistingEmptyTargetDirectory`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`, `TestOperationHandlerCloneExistingExpectedRemoteRunsPull`, `TestOperationHandlerCloneExistingDifferentRemoteRejects`. |
 | Provider-aware enrichment keeps generic repository IDs or relinks/supersedes generic rows when a canonical card exists, without merging project rows. | `internal/repository/store.go` `UpsertRepositoryForClone`, `supersedeGenericRepository`. | `TestUpsertRepositoryEnrichesGenericRepositoryInPlace`, `TestUpsertRepositoryRelinksAndSupersedesGenericRepository`. |
 | Repository operation job payloads contain `credential_id` only and never raw `secretref` values or resolved secrets. | `internal/httpapi/repository.go` repo operation payload construction; worker resolves secrets only at execution time. | `TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs`. |
 | Existing repository operations validate explicit and default credentials before enqueue. | `internal/httpapi/repository.go` existing operation enqueue validation. | `TestStage05PullValidatesDefaultCredentialBeforeEnqueue`. |
+| Store-level repository upsert validates provider instance and credential ownership/protocol invariants. | `internal/repository/store.go` `validateRepositoryOperationReferences`. | `TestUpsertRepositoryValidatesProviderInstanceIdentity`, `TestUpsertRepositoryValidatesCredentialOwnershipAndProtocol`. |
 | Repository operation failure messages are redacted before persistence. | `internal/repository/handlers.go` `recordRepositoryFailure`, `redactRepositoryMessage`. | `TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`. |
 | Clone target selection is unambiguous and path traversal is rejected at API/domain boundaries. | `internal/httpapi/repository.go` `cloneTargetDirectory`; `internal/repository/domain.go` `NormalizeTarget`, `NormalizeFullPath`. | `TestStage05CloneRejectsAmbiguousTargetDirectoryFields`, `TestNormalizeTargetRejectsTraversal`, `TestNormalizeFullPathRejectsUnsafeSegmentsBeforeCleaning`. |
 | Superseded repositories reject provider-aware operations with controlled validation errors. | `internal/httpapi/repository.go` existing operation enqueue validation; `internal/repository/handlers.go` worker validation. | `TestStage05PullRejectsSupersededRepository`. |

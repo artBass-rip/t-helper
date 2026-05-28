@@ -538,6 +538,9 @@ Initial module registry seed:
 - одновременно может существовать только один lock со статусом `held` для одного `lock_key`;
 - для repository operations final `lock_key` строится как `repository:<repository_id>`, чтобы сериализовать `clone`, `pull` и `sync` между собой;
 - clone additionally uses pre-create lock keys `repository-identity:<provider>:<provider_host>:<full_path>` and `repository-path:<root_path_id>:<normalized_target_path>` before a stable `repository_id` exists;
+- released/expired repository-operation reservations are removed by an explicit
+  cleanup storage primitive and may also be pruned opportunistically before new
+  reservations are created;
 - истёкшие locks не должны блокировать новые операции, но должны сохраняться для audit/debug.
 
 ### `project_scans`

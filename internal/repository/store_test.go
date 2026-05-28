@@ -292,6 +292,27 @@ func TestReserveOperationKeysPrunesOldReleasedReservations(t *testing.T) {
 	}
 }
 
+func TestCleanupOperationReservationsPrunesWithoutNewReservation(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	store := NewStore(handle)
+	old := time.Now().UTC().Add(-2 * operationReservationRetention)
+	if _, err := handle.DB.ExecContext(ctx, `INSERT INTO repository_operation_reservations (id, reservation_key, owner, status, created_at, expires_at, released_at) VALUES (?, ?, ?, 'released', ?, ?, ?)`,
+		"rres_old_cleanup", "repository-path:root:cleanup", "owner-old", formatTime(old), formatTime(old), formatTime(old)); err != nil {
+		t.Fatalf("insert old reservation: %v", err)
+	}
+	if err := store.CleanupOperationReservations(ctx); err != nil {
+		t.Fatalf("cleanup reservations: %v", err)
+	}
+	var count int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM repository_operation_reservations WHERE id = ?`, "rres_old_cleanup").Scan(&count); err != nil {
+		t.Fatalf("count old reservation: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("old released reservation count = %d, want 0", count)
+	}
+}
+
 func TestProviderInstanceListUsesCursorPagination(t *testing.T) {
 	ctx := context.Background()
 	store := NewStore(openRepositorySQLite(t))
@@ -458,6 +479,74 @@ func TestCredentialValidationRejectsProtocolMismatch(t *testing.T) {
 	}
 	if code := ValidationCode(err); code != "credential_auth_type_protocol_mismatch" {
 		t.Fatalf("validation code = %q", code)
+	}
+}
+
+func TestUpsertRepositoryValidatesProviderInstanceIdentity(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	store := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "ghe.example.internal",
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	_, err = store.UpsertRepository(ctx, Identity{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/repo",
+		CloneURL:     "https://github.com/example/repo.git",
+		Protocol:     ProtocolHTTPS,
+	}, root, "repo", filepath.Join(root.Path, "repo"), instances[0].ID, "")
+	if err == nil {
+		t.Fatal("expected provider instance mismatch validation error")
+	}
+	if code := ValidationCode(err); code != "provider_instance_mismatch" {
+		t.Fatalf("validation code = %q, want provider_instance_mismatch", code)
+	}
+}
+
+func TestUpsertRepositoryValidatesCredentialOwnershipAndProtocol(t *testing.T) {
+	ctx := context.Background()
+	handle := openRepositorySQLite(t)
+	scannerStore := scanner.NewStore(handle)
+	store := NewStore(handle)
+	root := upsertRepositoryRoot(t, ctx, scannerStore)
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{
+		{Provider: ProviderGitHub, ProviderHost: "github.com", Enabled: &enabled},
+		{Provider: ProviderGitHub, ProviderHost: "ghe.example.internal", Enabled: &enabled},
+	})
+	if err != nil {
+		t.Fatalf("upsert provider instances: %v", err)
+	}
+	credentials, err := store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[1].ID,
+		Name:               "ssh",
+		AuthType:           AuthTypeSSHKey,
+		SecretRef:          "secretref://env/GITHUB_SSH_KEY",
+		Usages:             []string{UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	_, err = store.UpsertRepository(ctx, Identity{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/repo",
+		CloneURL:     "https://github.com/example/repo.git",
+		Protocol:     ProtocolHTTPS,
+	}, root, "repo", filepath.Join(root.Path, "repo"), instances[0].ID, credentials[0].ID)
+	if err == nil {
+		t.Fatal("expected credential validation error")
+	}
+	if code := ValidationCode(err); code != "credential_provider_instance_mismatch" {
+		t.Fatalf("validation code = %q, want credential_provider_instance_mismatch", code)
 	}
 }
 

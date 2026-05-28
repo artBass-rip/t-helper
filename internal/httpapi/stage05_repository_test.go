@@ -712,9 +712,12 @@ func TestStage05PullValidatesDefaultCredentialBeforeEnqueue(t *testing.T) {
 		FullPath:     "example/default-credential",
 		CloneURL:     "https://github.com/example/default-credential.git",
 		Protocol:     repositorydomain.ProtocolHTTPS,
-	}, root, "default-credential", filepath.Join(root.Path, "default-credential"), instances[0].ID, credentials[0].ID)
+	}, root, "default-credential", filepath.Join(root.Path, "default-credential"), instances[0].ID, "")
 	if err != nil {
 		t.Fatalf("upsert repository: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE repositories SET default_credential_id = ?, updated_at = ? WHERE id = ?`, credentials[0].ID, time.Now().UTC().Format(time.RFC3339Nano), repo.ID); err != nil {
+		t.Fatalf("set incompatible default credential: %v", err)
 	}
 
 	body, _ := json.Marshal(map[string]any{"repository_id": repo.ID})
