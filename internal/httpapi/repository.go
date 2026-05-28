@@ -317,7 +317,7 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	ref, err := h.jobStore.Enqueue(r.Context(), jobs.EnqueueRequest{
+	ref, err := h.jobStore.EnqueueRepositoryOperation(r.Context(), jobs.EnqueueRequest{
 		ID:             jobID,
 		JobType:        "repo_clone",
 		Actor:          "api",
@@ -327,6 +327,11 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		Payload:        payload,
 	})
 	if err != nil {
+		var activeErr jobs.ActiveRepositoryOperationError
+		if errors.As(err, &activeErr) {
+			writeRepositoryConflict(w, r, repo.ID, lockKey, activeErr.Active)
+			return
+		}
 		writeEnqueueError(w, r, err)
 		return
 	}
@@ -428,12 +433,16 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		writeError(w, r, http.StatusBadRequest, "repository_status_not_operable", "repository status "+repo.Status+" cannot be operated")
 		return
 	}
-	if credentialID != "" {
+	validationCredentialID := credentialID
+	if validationCredentialID == "" {
+		validationCredentialID = repo.DefaultCredentialID
+	}
+	if validationCredentialID != "" {
 		if repo.ProviderInstanceID == "" {
 			writeError(w, r, http.StatusBadRequest, "credential_provider_instance_required", "repository provider_instance_id is required for credential validation")
 			return
 		}
-		if err := h.store.ValidateCredentialForProtocol(r.Context(), credentialID, repo.ProviderInstanceID, repository.UsageGitTransport, repo.AuthType); err != nil {
+		if err := h.store.ValidateCredentialForProtocol(r.Context(), validationCredentialID, repo.ProviderInstanceID, repository.UsageGitTransport, repo.AuthType); err != nil {
 			writeRepositoryError(w, r, err)
 			return
 		}
@@ -454,7 +463,7 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
-	ref, err := h.jobStore.Enqueue(r.Context(), jobs.EnqueueRequest{
+	ref, err := h.jobStore.EnqueueRepositoryOperation(r.Context(), jobs.EnqueueRequest{
 		JobType:        jobType,
 		Actor:          "api",
 		CorrelationID:  CorrelationIDFromContext(r.Context()),
@@ -463,6 +472,11 @@ func (h *RepositoryHandler) enqueueExistingRepoOperation(w http.ResponseWriter, 
 		Payload:        payload,
 	})
 	if err != nil {
+		var activeErr jobs.ActiveRepositoryOperationError
+		if errors.As(err, &activeErr) {
+			writeRepositoryConflict(w, r, repo.ID, lockKey, activeErr.Active)
+			return
+		}
 		writeEnqueueError(w, r, err)
 		return
 	}

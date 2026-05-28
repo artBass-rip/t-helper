@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -672,6 +673,76 @@ func TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs(t *testing.T) {
 	assertJobPayloadCredentialOnly(t, ctx, jobStore, syncRef.JobID, credentials[0].ID)
 }
 
+func TestStage05PullValidatesDefaultCredentialBeforeEnqueue(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	enabled := true
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := repoStore.UpsertCredentials(ctx, []repositorydomain.CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "ssh-key",
+		AuthType:           repositorydomain.AuthTypeSSHKey,
+		SecretRef:          "secretref://env/GITHUB_SSH_KEY",
+		Usages:             []string{repositorydomain.UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/default-credential",
+		CloneURL:     "https://github.com/example/default-credential.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "default-credential", filepath.Join(root.Path, "default-credential"), instances[0].ID, credentials[0].ID)
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{"repository_id": repo.ID})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/pull", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("pull with incompatible default credential status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if apiErr.Error.Code != "credential_auth_type_protocol_mismatch" {
+		t.Fatalf("error code = %q", apiErr.Error.Code)
+	}
+	items, err := jobStore.List(ctx, jobs.ListFilters{LockKey: "repository:" + repo.ID})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("jobs created for invalid default credential = %+v", items)
+	}
+}
+
 func TestStage05CloneConflictWithActivePullDoesNotMutateRepository(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -883,6 +954,75 @@ func TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes(t *testing.T) 
 	}
 	if conflict.Error.Code != "repository_operation_already_running" || conflict.Error.Details["active_job_id"] != pullRef.JobID || conflict.Error.Details["active_job_type"] != "repo_pull" {
 		t.Fatalf("unexpected sync conflict: %+v", conflict.Error)
+	}
+}
+
+func TestStage05ConcurrentPullRequestsCreateSingleActiveRepositoryJob(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	repo, _, _, err := scannerStore.UpsertGenericRepository(ctx, root, filepath.Join(root.Path, "repo"))
+	if err != nil {
+		t.Fatalf("upsert generic repo: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{"repository_id": repo.ID})
+
+	const workers = 8
+	start := make(chan struct{})
+	results := make(chan int, workers)
+	bodies := make(chan string, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/pull", bytes.NewReader(body)))
+			results <- rec.Code
+			bodies <- rec.Body.String()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	close(bodies)
+
+	accepted := 0
+	conflicted := 0
+	for code := range results {
+		switch code {
+		case http.StatusAccepted:
+			accepted++
+		case http.StatusConflict:
+			conflicted++
+		default:
+			var body string
+			select {
+			case body = <-bodies:
+			default:
+			}
+			t.Fatalf("unexpected concurrent pull status = %d body = %s", code, body)
+		}
+	}
+	if accepted != 1 || conflicted != workers-1 {
+		t.Fatalf("accepted=%d conflicted=%d, want 1/%d", accepted, conflicted, workers-1)
+	}
+	jobsForRepo, err := jobStore.List(ctx, jobs.ListFilters{LockKey: "repository:" + repo.ID})
+	if err != nil {
+		t.Fatalf("list repository jobs: %v", err)
+	}
+	if len(jobsForRepo) != 1 || jobsForRepo[0].JobType != "repo_pull" {
+		t.Fatalf("repository jobs = %+v, want one repo_pull", jobsForRepo)
 	}
 }
 

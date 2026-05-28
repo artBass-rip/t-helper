@@ -604,6 +604,13 @@ func TestGitCredentialEnvUsesNonInteractiveSSHCommand(t *testing.T) {
 	}
 }
 
+func TestShellQuoteProtectsSSHKeyPath(t *testing.T) {
+	quoted := shellQuote("/tmp/key path/owner's key")
+	if quoted != "'/tmp/key path/owner'\\''s key'" {
+		t.Fatalf("quoted path = %q", quoted)
+	}
+}
+
 func TestOperationHandlerCloneRunsGitAndCreatesWorkingTree(t *testing.T) {
 	requireGit(t)
 	ctx := context.Background()

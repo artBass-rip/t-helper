@@ -146,6 +146,32 @@ func TestActiveRepositoryOperationByIDReturnsOnlyActiveRepositoryJobs(t *testing
 	}
 }
 
+func TestEnqueueRepositoryOperationRejectsActiveCrossOperationLock(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+
+	first, err := store.EnqueueRepositoryOperation(ctx, jobs.EnqueueRequest{
+		JobType: "repo_pull",
+		LockKey: "repository:repo_1",
+		Payload: json.RawMessage(`{"schema_version":"jobs.repo_pull.payload.v1","repository_id":"repo_1"}`),
+	})
+	if err != nil {
+		t.Fatalf("enqueue first repository operation: %v", err)
+	}
+	_, err = store.EnqueueRepositoryOperation(ctx, jobs.EnqueueRequest{
+		JobType: "repo_sync",
+		LockKey: "repository:repo_1",
+		Payload: json.RawMessage(`{"schema_version":"jobs.repo_sync.payload.v1","repository_id":"repo_1"}`),
+	})
+	var activeErr jobs.ActiveRepositoryOperationError
+	if !errors.As(err, &activeErr) {
+		t.Fatalf("second enqueue error = %v, want ActiveRepositoryOperationError", err)
+	}
+	if activeErr.Active.ID != first.JobID || activeErr.Active.JobType != "repo_pull" {
+		t.Fatalf("active repository operation = %+v, want repo_pull %q", activeErr.Active, first.JobID)
+	}
+}
+
 func TestClaimHeartbeatCompleteAndStatus(t *testing.T) {
 	ctx := context.Background()
 	store := openStore(t)

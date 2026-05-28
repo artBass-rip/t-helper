@@ -50,10 +50,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS repository_operation_reservations_held_key_uid
 CREATE INDEX IF NOT EXISTS repository_operation_reservations_cleanup_idx
   ON repository_operation_reservations (status, expires_at, released_at, created_at, id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_active_repository_operation_lock_uidx
+  ON jobs (lock_key)
+  WHERE lock_key IS NOT NULL
+    AND job_type IN ('repo_clone', 'repo_pull', 'repo_sync')
+    AND status IN ('queued', 'running');
+
 UPDATE system_metadata SET value = 'stage-05', updated_at = now()
   WHERE key = 'schema_version';
 
 -- +goose Down
+DROP INDEX IF EXISTS jobs_active_repository_operation_lock_uidx;
 DROP INDEX IF EXISTS repository_operation_reservations_cleanup_idx;
 DROP INDEX IF EXISTS repository_operation_reservations_held_key_uidx;
 DROP TABLE IF EXISTS repository_operation_reservations;

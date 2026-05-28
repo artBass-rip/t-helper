@@ -19,10 +19,26 @@ var (
 	ErrNotFound            = errors.New("job not found")
 	ErrIdempotencyConflict = errors.New("idempotency conflict")
 	ErrInvalidCursor       = errors.New("invalid cursor")
+	ErrActiveRepositoryOp  = errors.New("active repository operation exists")
 )
 
 type Store struct {
 	handle *storage.Handle
+}
+
+type ActiveRepositoryOperationError struct {
+	Active Job
+}
+
+func (e ActiveRepositoryOperationError) Error() string {
+	if e.Active.ID == "" {
+		return ErrActiveRepositoryOp.Error()
+	}
+	return ErrActiveRepositoryOp.Error() + ": " + e.Active.ID
+}
+
+func (e ActiveRepositoryOperationError) Unwrap() error {
+	return ErrActiveRepositoryOp
 }
 
 type sqlExecutor interface {
@@ -112,6 +128,27 @@ VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14
 	}
 	_ = s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID)
 	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+}
+
+func (s *Store) EnqueueRepositoryOperation(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	switch req.JobType {
+	case "repo_clone", "repo_pull", "repo_sync":
+	default:
+		return JobRef{}, fmt.Errorf("repository operation enqueue requires repo_clone, repo_pull or repo_sync")
+	}
+	if strings.TrimSpace(req.LockKey) == "" {
+		return JobRef{}, fmt.Errorf("repository operation enqueue requires lock_key")
+	}
+	ref, err := s.Enqueue(ctx, req)
+	if err == nil {
+		return ref, nil
+	}
+	if isUniqueConstraintError(err) {
+		if active, activeErr := s.ActiveRepositoryOperation(ctx, req.LockKey); activeErr == nil {
+			return JobRef{}, ActiveRepositoryOperationError{Active: active}
+		}
+	}
+	return JobRef{}, err
 }
 
 func (s *Store) EnqueueIfNoActive(ctx context.Context, req EnqueueRequest) (JobRef, bool, error) {

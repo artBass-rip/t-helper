@@ -416,10 +416,14 @@ func (h operationHandler) gitCredentialEnv(ctx context.Context, credentialID str
 			cleanup()
 			return nil, func() {}, jobs.HandlerError{Code: "credential_unavailable", Message: err.Error(), Retryable: true}
 		}
-		return []string{"GIT_SSH_COMMAND=ssh -i " + path + " -o IdentitiesOnly=yes -o BatchMode=yes"}, cleanup, nil
+		return []string{"GIT_SSH_COMMAND=ssh -i " + shellQuote(path) + " -o IdentitiesOnly=yes -o BatchMode=yes"}, cleanup, nil
 	default:
 		return nil, cleanup, jobs.HandlerError{Code: "unsupported_credential_auth_type", Message: "unsupported credential auth_type", Retryable: false}
 	}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func resolveEnvSecret(secretRef string) (string, error) {
