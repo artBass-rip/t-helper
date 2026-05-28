@@ -485,6 +485,193 @@ func TestStage05CloneRejectsUnsupportedCloneScope(t *testing.T) {
 	}
 }
 
+func TestStage05CloneRejectsAmbiguousTargetDirectoryFields(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	body, _ := json.Marshal(map[string]any{
+		"provider":             "github",
+		"protocol":             "https",
+		"clone_url":            "https://github.com/example/repo.git",
+		"root_path_id":         root.ID,
+		"target_directory":     "repo",
+		"new_target_directory": "other",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("ambiguous target status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode ambiguous target error: %v", err)
+	}
+	if apiErr.Error.Code != "invalid_repository_path" {
+		t.Fatalf("ambiguous target code = %q", apiErr.Error.Code)
+	}
+}
+
+func TestStage05ProviderProfileAPIValidatesSafeHTTPSURLs(t *testing.T) {
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	cases := []struct {
+		name string
+		body map[string]any
+		code string
+	}{
+		{
+			name: "non_https_api_url",
+			body: map[string]any{
+				"repository_provider_instances": []map[string]any{{
+					"provider":      "github",
+					"provider_host": "github.com",
+					"api_base_url":  "http://github.com/api",
+				}},
+			},
+			code: "invalid_provider_profile_url",
+		},
+		{
+			name: "userinfo_web_url",
+			body: map[string]any{
+				"repository_provider_instances": []map[string]any{{
+					"provider":      "github",
+					"provider_host": "github.com",
+					"web_base_url":  "https://user@github.com/",
+				}},
+			},
+			code: "credential_userinfo_not_allowed",
+		},
+		{
+			name: "host_mismatch",
+			body: map[string]any{
+				"repository_provider_instances": []map[string]any{{
+					"provider":      "github",
+					"provider_host": "github.com",
+					"api_base_url":  "https://example.com/api",
+				}},
+			},
+			code: "invalid_provider_profile_url",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.body)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/repo-provider-instances", bytes.NewReader(body)))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("provider profile status = %d body = %s", rec.Code, rec.Body.String())
+			}
+			var apiErr struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+				t.Fatalf("decode provider profile error: %v", err)
+			}
+			if apiErr.Error.Code != tc.code {
+				t.Fatalf("provider profile code = %q, want %q", apiErr.Error.Code, tc.code)
+			}
+		})
+	}
+}
+
+func TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	enabled := true
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := repoStore.UpsertCredentials(ctx, []repositorydomain.CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "token",
+		AuthType:           repositorydomain.AuthTypeHTTPSToken,
+		SecretRef:          "secretref://env/GITHUB_TOKEN",
+		Usages:             []string{repositorydomain.UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+
+	cloneBody, _ := json.Marshal(map[string]any{
+		"provider_instance_id": instances[0].ID,
+		"credential_id":        credentials[0].ID,
+		"provider":             "github",
+		"protocol":             "https",
+		"clone_url":            "https://github.com/example/clone-payload.git",
+		"root_path_id":         root.ID,
+		"target_directory":     "clone-payload",
+	})
+	cloneRef := postRepositoryOperation(t, handler, "/api/repos/clone", cloneBody)
+	assertJobPayloadCredentialOnly(t, ctx, jobStore, cloneRef.JobID, credentials[0].ID)
+
+	pullRepo, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/pull-payload",
+		CloneURL:     "https://github.com/example/pull-payload.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "pull-payload", filepath.Join(root.Path, "pull-payload"), instances[0].ID, credentials[0].ID)
+	if err != nil {
+		t.Fatalf("upsert pull repository: %v", err)
+	}
+	pullBody, _ := json.Marshal(map[string]any{"repository_id": pullRepo.ID, "credential_id": credentials[0].ID})
+	pullRef := postRepositoryOperation(t, handler, "/api/repos/pull", pullBody)
+	assertJobPayloadCredentialOnly(t, ctx, jobStore, pullRef.JobID, credentials[0].ID)
+
+	syncRepo, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/sync-payload",
+		CloneURL:     "https://github.com/example/sync-payload.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "sync-payload", filepath.Join(root.Path, "sync-payload"), instances[0].ID, credentials[0].ID)
+	if err != nil {
+		t.Fatalf("upsert sync repository: %v", err)
+	}
+	syncBody, _ := json.Marshal(map[string]any{"repository_id": syncRepo.ID, "credential_id": credentials[0].ID, "reason": "test"})
+	syncRef := postRepositoryOperation(t, handler, "/api/repos/sync", syncBody)
+	assertJobPayloadCredentialOnly(t, ctx, jobStore, syncRef.JobID, credentials[0].ID)
+}
+
 func TestStage05CloneConflictWithActivePullDoesNotMutateRepository(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -636,6 +823,19 @@ func TestStage05PullRejectsSupersededRepository(t *testing.T) {
 	if apiErr.Error.Code != "repository_status_not_operable" {
 		t.Fatalf("error code = %q", apiErr.Error.Code)
 	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/sync", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("sync superseded status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	apiErr.Error.Code = ""
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode sync error: %v", err)
+	}
+	if apiErr.Error.Code != "repository_status_not_operable" {
+		t.Fatalf("sync error code = %q", apiErr.Error.Code)
+	}
 }
 
 func TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes(t *testing.T) {
@@ -683,6 +883,34 @@ func TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes(t *testing.T) 
 	}
 	if conflict.Error.Code != "repository_operation_already_running" || conflict.Error.Details["active_job_id"] != pullRef.JobID || conflict.Error.Details["active_job_type"] != "repo_pull" {
 		t.Fatalf("unexpected sync conflict: %+v", conflict.Error)
+	}
+}
+
+func postRepositoryOperation(t *testing.T, handler http.Handler, path string, body []byte) jobs.JobRef {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("%s status = %d body = %s", path, rec.Code, rec.Body.String())
+	}
+	var ref jobs.JobRef
+	if err := json.NewDecoder(rec.Body).Decode(&ref); err != nil {
+		t.Fatalf("decode %s job ref: %v", path, err)
+	}
+	return ref
+}
+
+func assertJobPayloadCredentialOnly(t *testing.T, ctx context.Context, store *jobs.Store, jobID, credentialID string) {
+	t.Helper()
+	job, err := store.Get(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job %s: %v", jobID, err)
+	}
+	if !bytes.Contains(job.Payload, []byte(`"credential_id":"`+credentialID+`"`)) {
+		t.Fatalf("payload does not carry credential_id %q: %s", credentialID, string(job.Payload))
+	}
+	if bytes.Contains(job.Payload, []byte("secretref://")) || bytes.Contains(job.Payload, []byte("GITHUB_TOKEN")) || bytes.Contains(job.Payload, []byte("secret_ref")) {
+		t.Fatalf("payload leaked secret reference: %s", string(job.Payload))
 	}
 }
 

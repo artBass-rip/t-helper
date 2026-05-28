@@ -297,6 +297,23 @@ following checklist:
   `secretref` values or resolved secrets;
 - repository operation failure messages are redacted before persistence.
 
+## Acceptance matrix
+
+| Requirement | Implementation | Test coverage |
+| --- | --- | --- |
+| Provider profile APIs validate safe HTTPS `api_base_url`/`web_base_url` without userinfo and with matching `provider_host`. | `internal/repository/store.go` provider instance normalization; `internal/httpapi/repository.go` provider instance routes. | `TestProviderInstanceValidatesProfileURLs`, `TestStage05ProviderProfileAPIValidatesSafeHTTPSURLs`. |
+| Managed provider `clone_url` is used for identity extraction and mismatch validation; selected `protocol` controls persisted transport URL. | `internal/repository/domain.go` `NormalizeIdentity`, `ParseCloneURL`, `TransportURL`. | `TestNormalizeIdentityGitHubEquivalentURLs`, `TestNormalizeIdentityUsesSelectedProtocolForManagedTransport`, `TestNormalizeIdentityRejectsExplicitURLMismatch`. |
+| HTTP clone rejects credentials embedded in URLs and exact `Idempotency-Key` replay returns the existing `job_ref`. | `internal/httpapi/repository.go` clone normalization and `cloneIdempotentReplay`. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`. |
+| Active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are cross-operation for `repository:<id>`. | `internal/jobs/store.go` `ActiveRepositoryOperation`; repository operation enqueue paths. | `TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes`, `TestStage05CloneConflictWithActivePullDoesNotMutateRepository`. |
+| Clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects. | `repository_operation_reservations`, `IdentityReservationKey`, `TargetReservationKey`, clone API reservation flow. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`, `TestStage05CloneRejectsBusyTargetPathForDifferentRepository`, `TestStage05CloneConflictDoesNotCreateNewRootPath`. |
+| Worker repeats target containment checks and rejects symlink escapes that appear after enqueue. | `internal/repository/handlers.go` `handleClone`; `internal/repository/domain.go` `NormalizeTarget`. | `TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue`, `TestNormalizeTargetRejectsSymlinkEscapeInExistingParent`. |
+| Existing empty target directories are accepted, non-empty non-Git directories are rejected, matching Git remotes degrade clone to pull, and mismatched remotes are rejected. | `internal/repository/handlers.go` clone worker filesystem and remote checks. | `TestOperationHandlerCloneUsesExistingEmptyTargetDirectory`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`, `TestOperationHandlerCloneExistingExpectedRemoteRunsPull`, `TestOperationHandlerCloneExistingDifferentRemoteRejects`. |
+| Provider-aware enrichment keeps generic repository IDs or relinks/supersedes generic rows when a canonical card exists, without merging project rows. | `internal/repository/store.go` `UpsertRepositoryForClone`, `supersedeGenericRepository`. | `TestUpsertRepositoryEnrichesGenericRepositoryInPlace`, `TestUpsertRepositoryRelinksAndSupersedesGenericRepository`. |
+| Repository operation job payloads contain `credential_id` only and never raw `secretref` values or resolved secrets. | `internal/httpapi/repository.go` repo operation payload construction; worker resolves secrets only at execution time. | `TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs`. |
+| Repository operation failure messages are redacted before persistence. | `internal/repository/handlers.go` `recordRepositoryFailure`, `redactRepositoryMessage`. | `TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`. |
+| Clone target selection is unambiguous and path traversal is rejected at API/domain boundaries. | `internal/httpapi/repository.go` `cloneTargetDirectory`; `internal/repository/domain.go` `NormalizeTarget`, `NormalizeFullPath`. | `TestStage05CloneRejectsAmbiguousTargetDirectoryFields`, `TestNormalizeTargetRejectsTraversal`, `TestNormalizeFullPathRejectsUnsafeSegmentsBeforeCleaning`. |
+| Superseded repositories reject provider-aware operations with controlled validation errors. | `internal/httpapi/repository.go` existing operation enqueue validation; `internal/repository/handlers.go` worker validation. | `TestStage05PullRejectsSupersededRepository`. |
+
 ## Stage-local blockers
 
 - none for starting implementation.

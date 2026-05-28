@@ -163,9 +163,10 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root := rootSelection.root
-	target := req.TargetDirectory
-	if target == "" {
-		target = req.NewTargetDirectory
+	target, err := cloneTargetDirectory(req)
+	if err != nil {
+		writeRepositoryError(w, r, err)
+		return
 	}
 	targetDirectory, localPath, err := repository.NormalizeTarget(root.Path, target)
 	if err != nil {
@@ -344,6 +345,19 @@ func removeString(values []string, target string) []string {
 		}
 	}
 	return out
+}
+
+func cloneTargetDirectory(req repository.CloneRequest) (string, error) {
+	if req.TargetDirectory != "" && req.NewTargetDirectory != "" {
+		return "", repository.ValidationError{Code: "invalid_repository_path", Message: "target_directory and new_target_directory are mutually exclusive"}
+	}
+	if req.TargetDirectory != "" {
+		return req.TargetDirectory, nil
+	}
+	if req.NewTargetDirectory != "" {
+		return req.NewTargetDirectory, nil
+	}
+	return "", repository.ValidationError{Code: "invalid_repository_path", Message: "target_directory or new_target_directory is required"}
 }
 
 func (h *RepositoryHandler) cloneIdempotentReplay(r *http.Request, identity repository.Identity, rootPathID, targetDirectory, localPath, providerInstanceID, credentialID string) (jobs.JobRef, error) {
