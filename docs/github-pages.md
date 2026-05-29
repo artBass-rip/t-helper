@@ -15,6 +15,8 @@ implemented exclusively by AI.
 - `docs/en.html` - English landing page.
 - `docs/pages.css` - shared responsive styles.
 - `docs/pages.js` - shared reveal and hero interaction behavior.
+- `docs/build-pages.js` - static Markdown-to-HTML generator for published
+  documentation pages.
 - `docs/.nojekyll` - disables Jekyll processing for the Pages artifact.
 - `.github/workflows/pages.yml` - GitHub Actions deployment workflow.
 
@@ -25,10 +27,26 @@ The language switcher uses plain static links:
 
 This keeps the published site usable even when JavaScript is unavailable.
 
+Markdown documents under `docs/**/*.md` are the canonical sources. During
+publication, `docs/build-pages.js` generates sibling `*.html` pages for every
+Markdown file and rewrites internal Markdown links to the generated HTML pages.
+The published Pages site therefore shows documentation as complete styled
+pages with page navigation, while the raw `.md` sources remain available from
+each generated document page.
+
 ## Deployment
 
 The `github-pages` workflow publishes the `docs` directory to the `gh-pages`
 branch on pushes to `master` and on manual `workflow_dispatch` runs.
+
+Before copying files to the publish worktree, the workflow runs:
+
+```text
+node docs/build-pages.js --out "$publish_source"
+```
+
+The generator copies the static assets, renders all Markdown files to HTML and
+keeps the generated pages dependency-free.
 
 Repository settings must use:
 
@@ -53,5 +71,7 @@ The workflow permissions are intentionally limited to:
   both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target
   file is intentionally linked on GitHub.
+- Keep generated document pages buildable with the repository-local Node.js
+  script; do not require package installation for Pages publication.
 - Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI
   contracts remain in `docs/frontend-ui-contract.md`.
