@@ -25,6 +25,18 @@ The language switcher uses plain static links:
 
 This keeps the published site usable even when JavaScript is unavailable.
 
+<<<<<<< Updated upstream
+=======
+Markdown documents under `docs/**/*.md` are the canonical sources. During
+publication, `docs/build-pages.js` generates sibling `*.html` pages for every
+Markdown file, rewrites internal Markdown links to the generated HTML pages and
+links inline document references such as `docs/api.md` when the target exists.
+The published Pages site therefore shows documentation as complete styled
+pages with common navigation, local table of contents, related documents,
+backlinks and a full documentation catalog. The raw `.md` sources remain
+available from each generated document page.
+
+>>>>>>> Stashed changes
 ## Deployment
 
 The `github-pages` workflow publishes the `docs` directory to the `gh-pages`
@@ -53,5 +65,13 @@ The workflow permissions are intentionally limited to:
   both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target
   file is intentionally linked on GitHub.
+<<<<<<< Updated upstream
+=======
+- Keep generated document pages buildable with the repository-local Node.js
+  script; do not require package installation for Pages publication.
+- Keep cross-document references as relative Markdown links or inline
+  `docs/...md` references so the Pages generator can produce HTML links and
+  backlinks.
+>>>>>>> Stashed changes
 - Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI
   contracts remain in `docs/frontend-ui-contract.md`.
