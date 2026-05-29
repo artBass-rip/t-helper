@@ -146,6 +146,8 @@ Stage 05 предоставляет следующую runtime API surface:
   `workflow_statuses`.
 - Stage 04 schema: `root_paths`, `projects`, `project_links`, minimal
   `repositories`, `environments`, `workspaces`.
+- Stage 05 schema: provider instances, repository credentials, repository
+  operation reservations/indexes and repository manager hardening.
 - MySQL и MSSQL являются roadmap targets для Stage 10, а не текущими runtime
   adapters.
 
@@ -167,13 +169,14 @@ Stage 05 предоставляет следующую runtime API surface:
 Рекомендуемые проверки:
 
 ```text
-go test ./...
+make test
 go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
 docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 ```
 
 PostgreSQL contract tests запускаются, когда задан `THELPER_POSTGRES_DSN`.
 SQLite tests запускаются по умолчанию.
+Для ручных/nightly проверок с race detector используйте `make race`.
 
 ## Документация
 
@@ -189,6 +192,8 @@ SQLite tests запускаются по умолчанию.
   `.t-helper.ignore`, reloadability и validation.
 - [docs/development.md](docs/development.md) - local development и test
   contract.
+- [docs/code-optimization.md](docs/code-optimization.md) - выполненные
+  оптимизации, quality gate и дальнейший optimization backlog.
 - [docs/github-pages.md](docs/github-pages.md) - структура двуязычных GitHub
   Pages и deployment workflow.
 - [docs/local-dev-environment.md](docs/local-dev-environment.md) -

@@ -33,6 +33,11 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 - `GET /api/environments`, `GET /api/environments/{id}`;
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`.
 
+Executable route registration is type-safe: every handler implements
+`httpapi.RouteRegistrar`, and the current route surface is covered by
+`internal/httpapi/router_test.go`. API changes must update this document and
+the route smoke-test in the same change.
+
 The endpoint table below also includes accepted future-stage contracts. Rows
 whose Notes column identifies a later stage are specification targets, not
 current runtime routes, unless the Notes column explicitly says that the current

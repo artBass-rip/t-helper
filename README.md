@@ -146,6 +146,8 @@ Important behavior:
   `workflow_statuses`.
 - Stage 04 schema: `root_paths`, `projects`, `project_links`, minimal
   `repositories`, `environments`, `workspaces`.
+- Stage 05 schema: provider instances, repository credentials, repository
+  operation reservations/indexes and repository manager hardening.
 - MySQL and MSSQL are roadmap targets for Stage 10, not current runtime
   adapters.
 
@@ -167,13 +169,14 @@ Important behavior:
 Recommended checks:
 
 ```text
-go test ./...
+make test
 go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
 docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 ```
 
 PostgreSQL contract tests run when `THELPER_POSTGRES_DSN` is set. SQLite tests
 run by default.
+Use `make race` for manual or nightly race detector checks.
 
 ## Documentation
 
@@ -189,6 +192,8 @@ run by default.
   `.t-helper.ignore`, reloadability and validation.
 - [docs/development.md](docs/development.md) - local development and test
   contract.
+- [docs/code-optimization.md](docs/code-optimization.md) - completed
+  optimizations, quality gate and remaining optimization backlog.
 - [docs/github-pages.md](docs/github-pages.md) - bilingual GitHub Pages
   structure and deployment workflow.
 - [docs/local-dev-environment.md](docs/local-dev-environment.md) -

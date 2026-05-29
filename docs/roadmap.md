@@ -64,13 +64,15 @@ Status: completed.
 
 ### Stage 05. Repository manager MVP
 
-- полноценно реализовать модель `repositories`;
-- реализовать `clone`, `pull`, `sync` через jobs и `job_locks`;
-- обеспечить path safety: нормализация, запрет path traversal, `local_path` только внутри выбранного `root_path`;
-- зафиксировать repository identity как `provider + provider_host + full_path`;
-- реализовать GitKraken-like provider integration profiles: multi-host и multi-credential per host;
-- реализовать MVP adapters для `generic` Git и одного из managed providers: `gitlab` или `github`;
-- оставить `bitbucket`, `azure_devops`, recursive GitLab group clone, webhook sync и polling sync вне Stage 05 MVP.
+Status: completed.
+
+- реализована расширенная модель `repositories`;
+- реализованы `clone`, `pull`, `sync` через jobs и `job_locks`;
+- обеспечена path safety: нормализация, запрет path traversal, `local_path` только внутри выбранного `root_path`;
+- зафиксирована repository identity как `provider + provider_host + full_path`;
+- реализованы GitKraken-like provider integration profiles: multi-host и multi-credential per host;
+- реализованы MVP adapters для `generic` Git и GitHub;
+- `bitbucket`, `azure_devops`, recursive GitLab group clone, webhook sync и polling sync оставлены вне Stage 05 MVP.
 
 ### Stage 05A. Repository operations extensions
 
@@ -128,7 +130,7 @@ update/distribution policy remain release artifact exit decisions.
 
 - расширить observability и `status-monitor`;
 - усилить scheduler, worker shutdown/recovery и module runtime;
-- выполнить приоритизированный runtime/scanner optimization backlog из Stage 09 implementation spec;
+- выполнить приоритизированный runtime/scanner optimization backlog из Stage 09 implementation spec и [`code-optimization.md`](code-optimization.md);
 - реализовать full `.gitignore` semantics с `!pattern`;
 - реализовать optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;
 - формализовать degraded states, retention cleanup и operator diagnostics для jobs, locks, modules, workers and scans.
