@@ -96,6 +96,8 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 		"repositories": {
 			"repositories_provider_host_full_path_idx",
 			"repositories_local_path_idx",
+			"repositories_root_target_directory_idx",
+			"repositories_root_local_path_idx",
 			"repositories_status_idx",
 			"repositories_discovery_source_idx",
 		},

@@ -581,7 +581,7 @@ func (s *Store) ValidateCredentialForProtocol(ctx context.Context, id, providerI
 	if err != nil {
 		return err
 	}
-	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	protocol = normalizeTransportProtocol(protocol)
 	switch protocol {
 	case ProtocolHTTPS:
 		switch cred.AuthType {
@@ -594,6 +594,14 @@ func (s *Store) ValidateCredentialForProtocol(ctx context.Context, id, providerI
 		}
 	}
 	return validationError("credential_auth_type_protocol_mismatch", fmt.Sprintf("credential auth_type %q is not compatible with %s transport", cred.AuthType, protocol))
+}
+
+func normalizeTransportProtocol(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "token" {
+		return ProtocolHTTPS
+	}
+	return value
 }
 
 func (s *Store) findCredential(ctx context.Context, id, providerInstanceID, name string) (Credential, error) {
@@ -731,6 +739,19 @@ func (s *Store) ExistingRepositoryForClone(ctx context.Context, identity Identit
 		return generic, err
 	}
 	return scanner.Repository{}, ErrNotFound
+}
+
+func (s *Store) ActiveRepositoryByLocalTarget(ctx context.Context, rootPathID, targetDirectory, localPath string) (scanner.Repository, error) {
+	query := "SELECT " + repositoryColumns(s.handle.Provider) + " FROM repositories WHERE root_path_id = ? AND status = 'active' AND (target_directory = ? OR local_path = ?) ORDER BY updated_at DESC, id DESC LIMIT 1"
+	args := []any{rootPathID, targetDirectory, localPath}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + repositoryColumns(s.handle.Provider) + " FROM repositories WHERE root_path_id = $1 AND status = 'active' AND (target_directory = $2 OR local_path = $3) ORDER BY updated_at DESC, id DESC LIMIT 1"
+	}
+	repo, err := scanRepository(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return scanner.Repository{}, ErrNotFound
+	}
+	return repo, err
 }
 
 func (s *Store) findRepository(ctx context.Context, provider, host, fullPath string) (scanner.Repository, error) {

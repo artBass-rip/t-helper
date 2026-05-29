@@ -292,6 +292,18 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
 		return
 	}
+	if targetRepo, err := h.store.ActiveRepositoryByLocalTarget(r.Context(), root.ID, targetDirectory, localPath); err == nil {
+		if targetRepo.Provider != identity.Provider || targetRepo.ProviderHost != identity.ProviderHost || targetRepo.FullPath != identity.FullPath {
+			writeErrorDetails(w, r, http.StatusConflict, "repository_target_path_busy", "repository target path is already assigned to another repository", map[string]any{
+				"repository_id": targetRepo.ID,
+				"lock_key":      pathReservationKey,
+			})
+			return
+		}
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		writeRepositoryError(w, r, err)
+		return
+	}
 	repo, repositoryCreated, err := h.store.UpsertRepositoryForClone(r.Context(), identity, root, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID)
 	if err != nil {
 		writeRepositoryError(w, r, err)

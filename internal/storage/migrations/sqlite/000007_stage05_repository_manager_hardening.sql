@@ -81,6 +81,10 @@ CREATE INDEX IF NOT EXISTS repositories_provider_instance_full_path_idx
   ON repositories (provider_instance_id, full_path);
 CREATE INDEX IF NOT EXISTS repositories_local_path_idx
   ON repositories (local_path);
+CREATE INDEX IF NOT EXISTS repositories_root_target_directory_idx
+  ON repositories (root_path_id, target_directory);
+CREATE INDEX IF NOT EXISTS repositories_root_local_path_idx
+  ON repositories (root_path_id, local_path);
 CREATE INDEX IF NOT EXISTS repositories_status_idx
   ON repositories (status);
 CREATE INDEX IF NOT EXISTS repositories_discovery_source_idx
@@ -98,6 +102,8 @@ DROP INDEX IF EXISTS repository_credentials_provider_instance_auth_type_idx;
 DROP INDEX IF EXISTS repositories_superseded_by_idx;
 DROP INDEX IF EXISTS repositories_discovery_source_idx;
 DROP INDEX IF EXISTS repositories_status_idx;
+DROP INDEX IF EXISTS repositories_root_local_path_idx;
+DROP INDEX IF EXISTS repositories_root_target_directory_idx;
 DROP INDEX IF EXISTS repositories_local_path_idx;
 DROP INDEX IF EXISTS repositories_provider_instance_full_path_idx;
 DROP INDEX IF EXISTS repositories_provider_host_full_path_idx;
@@ -166,6 +172,10 @@ CREATE INDEX IF NOT EXISTS repositories_provider_instance_full_path_idx
   ON repositories (provider_instance_id, full_path);
 CREATE INDEX IF NOT EXISTS repositories_local_path_idx
   ON repositories (local_path);
+CREATE INDEX IF NOT EXISTS repositories_root_target_directory_idx
+  ON repositories (root_path_id, target_directory);
+CREATE INDEX IF NOT EXISTS repositories_root_local_path_idx
+  ON repositories (root_path_id, local_path);
 CREATE INDEX IF NOT EXISTS repositories_status_idx
   ON repositories (status);
 CREATE INDEX IF NOT EXISTS repositories_discovery_source_idx

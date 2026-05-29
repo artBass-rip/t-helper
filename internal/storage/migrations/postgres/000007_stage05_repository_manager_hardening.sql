@@ -35,8 +35,14 @@ ALTER TABLE repositories
 
 CREATE INDEX IF NOT EXISTS repository_credentials_provider_instance_auth_type_idx
   ON repository_credentials (provider_instance_id, auth_type);
+CREATE INDEX IF NOT EXISTS repositories_root_target_directory_idx
+  ON repositories (root_path_id, target_directory);
+CREATE INDEX IF NOT EXISTS repositories_root_local_path_idx
+  ON repositories (root_path_id, local_path);
 
 -- +goose Down
+DROP INDEX IF EXISTS repositories_root_local_path_idx;
+DROP INDEX IF EXISTS repositories_root_target_directory_idx;
 DROP INDEX IF EXISTS repository_credentials_provider_instance_auth_type_idx;
 ALTER TABLE repositories DROP CONSTRAINT IF EXISTS repositories_default_credential_id_fkey;
 ALTER TABLE repositories DROP CONSTRAINT IF EXISTS repositories_provider_instance_id_fkey;

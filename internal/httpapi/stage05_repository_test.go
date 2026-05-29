@@ -345,6 +345,71 @@ func TestStage05CloneWithNewRootPathCreatesRootPath(t *testing.T) {
 	}
 }
 
+func TestStage05CloneRejectsCompletedTargetPathForDifferentRepository(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	localPath := filepath.Join(root.Path, "repo")
+	existing, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/repo",
+		CloneURL:     "https://github.com/example/repo.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "repo", localPath, "", "")
+	if err != nil {
+		t.Fatalf("upsert existing repository: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/other.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(body)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("completed target conflict status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode completed target conflict: %v", err)
+	}
+	if apiErr.Error.Code != "repository_target_path_busy" || apiErr.Error.Details["repository_id"] != existing.ID {
+		t.Fatalf("unexpected completed target conflict: %+v", apiErr.Error)
+	}
+	var count int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM repositories WHERE provider = ? AND provider_host = ? AND full_path = ?`, "github", "github.com", "example/other").Scan(&count); err != nil {
+		t.Fatalf("count other repository: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("conflicting clone created repository rows = %d, want 0", count)
+	}
+	items, err := jobStore.List(ctx, jobs.ListFilters{JobType: "repo_clone"})
+	if err != nil {
+		t.Fatalf("list clone jobs: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("conflicting clone created jobs = %+v", items)
+	}
+}
+
 func TestStage05CloneNewRootPathReleasesTemporaryReservationAfterWorker(t *testing.T) {
 	requireHTTPRepositoryGit(t)
 	ctx := context.Background()
@@ -851,6 +916,61 @@ func TestStage05PullValidatesDefaultCredentialBeforeEnqueue(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("jobs created for invalid default credential = %+v", items)
+	}
+}
+
+func TestStage05PullTreatsLegacyTokenAuthTypeAsHTTPSTransport(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	enabled := true
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	credentials, err := repoStore.UpsertCredentials(ctx, []repositorydomain.CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "https-token",
+		AuthType:           repositorydomain.AuthTypeHTTPSToken,
+		SecretRef:          "secretref://env/GITHUB_TOKEN",
+		Usages:             []string{repositorydomain.UsageGitTransport},
+		Enabled:            &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert credential: %v", err)
+	}
+	repo, err := repoStore.UpsertRepository(ctx, repositorydomain.Identity{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+		FullPath:     "example/legacy-token",
+		CloneURL:     "https://github.com/example/legacy-token.git",
+		Protocol:     repositorydomain.ProtocolHTTPS,
+	}, root, "legacy-token", filepath.Join(root.Path, "legacy-token"), instances[0].ID, credentials[0].ID)
+	if err != nil {
+		t.Fatalf("upsert repository: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE repositories SET auth_type = ?, updated_at = ? WHERE id = ?`, "token", time.Now().UTC().Format(time.RFC3339Nano), repo.ID); err != nil {
+		t.Fatalf("set legacy token auth_type: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{"repository_id": repo.ID})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/pull", bytes.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("pull with legacy token auth_type status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
 
