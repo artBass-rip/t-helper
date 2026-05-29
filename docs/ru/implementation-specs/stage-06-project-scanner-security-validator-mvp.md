@@ -6,16 +6,16 @@
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0006-project-scan-workflow-and-status-aggregation.md`
-- `docs/adr/0017-security-finding-fingerprint.md`
-- `docs/adr/0018-external-toolchain-profiles.md`
-- `docs/implementation-specs/stage-06a-toolchain-profiles-foundation.md`
+- `docs/ru/requirements.md`
+- `docs/ru/architecture.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/adr/0006-project-scan-workflow-and-status-aggregation.md`
+- `docs/ru/adr/0017-security-finding-fingerprint.md`
+- `docs/ru/adr/0018-external-toolchain-profiles.md`
+- `docs/ru/implementation-specs/stage-06a-toolchain-profiles-foundation.md`
 
 ## Scope
 

@@ -1,25 +1,25 @@
 # Stage 10: Storage Adapter Expansion
 
-## Цель
+## Goal
 
-Расширить storage stack platform release до `MySQL`, `MSSQL` и других утверждённых SQL-compatible adapters без изменения logical data model и API contracts.
+Expand the platform release storage stack to `MySQL`, `MSSQL` and other approved SQL-compatible adapters without changing the logical data model or API contracts.
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/development.md`
-- `docs/architecture.md`
-- `docs/technology-stack.md`
-- `docs/data-model.md`
-- `docs/adr/0002-storage-and-migrations.md`
-- `docs/adr/0007-implementation-repository-layout-and-migrations.md`
+- `docs/en/roadmap.md`
+- `docs/en/test-plan.md`
+- `docs/en/development.md`
+- `docs/en/architecture.md`
+- `docs/en/technology-stack.md`
+- `docs/en/data-model.md`
+- `docs/en/adr/0002-storage-and-migrations.md`
+- `docs/en/adr/0007-implementation-repository-layout-and-migrations.md`
 
 ## Scope
 
 - `MySQL` adapter;
 - `MSSQL` adapter;
-- дополнительные SQL-compatible adapters, если утверждены для platform release;
+- additional SQL-compatible adapters if approved for the platform release;
 - dialect-specific migrations with synchronized logical migration versions;
 - storage provider registry extension;
 - shared storage contract suite for all target adapters;
@@ -56,9 +56,9 @@
 
 - Roadmap: Stage 10.
 - Acceptance: `ACC-PLATFORM-001`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/en/roadmap.md`.
 
-## Риски
+## Risks
 
 - SQL adapter behavior differences;
 - migration drift between dialect directories;

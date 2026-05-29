@@ -1,123 +1,123 @@
 # Code Optimization And Quality Baseline
 
-Дата актуализации: 2026-05-29.
+Last updated: 2026-05-29.
 
-Этот документ фиксирует уже выполненные оптимизации, текущий quality gate и
-оставшийся backlog, который должен внедряться итеративно без массовых
-механических рефакторингов.
+This document records completed optimizations, the current quality gate and the
+remaining backlog, which should be implemented iteratively without broad
+mechanical refactoring.
 
-## Текущий статус
+## Current Status
 
-Выполнено:
+Completed:
 
-- HTTP route composition переведён с `optionalHandlers ...any` и `type-switch`
-  на compile-time контракт `httpapi.RouteRegistrar`.
-- Регистрация маршрутов перенесена ближе к handlers через
+- HTTP route composition was moved from `optionalHandlers ...any` and
+  `type-switch` to the compile-time `httpapi.RouteRegistrar` contract.
+- Route registration was moved closer to handlers through
   `RegisterRoutes(chi.Router)`.
-- Добавлен smoke-test полного набора текущих HTTP routes:
+- A smoke test was added for the full set of current HTTP routes:
   `internal/httpapi/router_test.go`.
-- Добавлен транзакционный helper `storage.WithTx(ctx, db, opts, fn)` и
-  применён в изменяемых lifecycle paths `jobs.Store.Start`,
+- The transactional helper `storage.WithTx(ctx, db, opts, fn)` was added and
+  applied in mutable lifecycle paths `jobs.Store.Start`,
   `jobs.Store.Complete`, `jobs.Store.Requeue`.
-- Добавлены первые benchmarks для hot paths `jobs.Store.ClaimNext` и
+- Initial benchmarks were added for hot paths `jobs.Store.ClaimNext` and
   `jobs.Store.RefreshWorkflowStatus`.
-- Добавлен локальный quality gate `make test`, который выполняет:
+- A local quality gate `make test` was added; it runs:
   `gofmt` check, `go vet ./...`, `go test ./...`.
-- Добавлен `make race` для ручных/nightly проверок с race detector.
+- `make race` was added for manual/nightly checks with the race detector.
 
-Проверенный baseline после оптимизации:
+Verified baseline after optimization:
 
 ```text
 make test
 ```
 
-Примечание: часть тестов открывает локальный listener `127.0.0.1:0`, поэтому в
-sandboxed окружениях может потребоваться разрешение на bind.
+Note: some tests open a local listener on `127.0.0.1:0`, so sandboxed
+environments may require bind permission.
 
-## Принятые проектные решения
+## Accepted Design Decisions
 
-- Каноническое решение по HTTP route registration и транзакционному helper:
+- Canonical decision for HTTP route registration and the transactional helper:
   [`adr/0019-code-quality-and-route-registration.md`](adr/0019-code-quality-and-route-registration.md).
-- Stage 09 остаётся владельцем runtime/scanner performance hardening:
+- Stage 09 remains the owner of runtime/scanner performance hardening:
   [`implementation-specs/stage-09-runtime-observability-hardening.md`](implementation-specs/stage-09-runtime-observability-hardening.md).
 
 ## Backlog
 
 ### P1. SQL dialect helper
 
-Проблема: store-слой всё ещё содержит ветвления по `handle.Provider` для
-SQLite/PostgreSQL placeholders, casts и upsert shapes.
+Problem: the store layer still contains branches by `handle.Provider` for
+SQLite/PostgreSQL placeholders, casts and upsert shapes.
 
-Следующий шаг:
+Next step:
 
-- добавить небольшой helper в `internal/storage` или `internal/storage/sqlutil`;
-- централизовать placeholders, `IN (...)`, boolean/time/JSON casts и common
+- add a small helper in `internal/storage` or `internal/storage/sqlutil`;
+- centralize placeholders, `IN (...)`, boolean/time/JSON casts and common
   upsert fragments;
-- переводить store-файлы по одному, начиная с `jobs` или `scanner`.
+- migrate store files one by one, starting with `jobs` or `scanner`.
 
 ### P1. Workflow status refresh load
 
-Проблема: `RefreshWorkflowStatus` вызывается после многих job lifecycle
-событий и пересчитывает aggregate read model.
+Problem: `RefreshWorkflowStatus` is called after many job lifecycle events and
+recomputes the aggregate read model.
 
-Следующий шаг:
+Next step:
 
-- использовать добавленный benchmark как базовую точку;
-- добавить сценарий на 10k jobs;
-- после замеров выбрать debounce, dirty-workflow queue или status-monitor
+- use the added benchmark as the baseline;
+- add a 10k-job scenario;
+- after measurement, choose debounce, a dirty-workflow queue or a status-monitor
   reconciliation loop.
 
-### P1. Разделение крупных store-файлов
+### P1. Split Large Store Files
 
-Проблема: `scanner/store.go`, `config/store.go`, `jobs/store.go`,
-`repository/store.go` остаются файлами-накопителями.
+Problem: `scanner/store.go`, `config/store.go`, `jobs/store.go` and
+`repository/store.go` are still accumulation files.
 
-Следующий шаг:
+Next step:
 
-- разделять файлы по агрегатам только при изменении соответствующей области;
-- сохранять package-level API и тесты без изменения публичного поведения;
-- начать с `jobs` после введения SQL helper, чтобы не переносить дублирующийся
+- split files by aggregate only when changing the corresponding area;
+- keep the package-level API and tests without changing public behavior;
+- start with `jobs` after introducing the SQL helper, so duplicate
   dialect code.
 
 ### P2. Filesystem scan backpressure
 
-Проблема: крупные root paths могут создавать неровную нагрузку через частые
-progress/error events и поэлементные DB writes.
+Problem: large root paths may create uneven load through frequent
+progress/error events and per-item DB writes.
 
-Следующий шаг:
+Next step:
 
-- добавить coarse-grained progress interval;
-- проверить batch-upsert для projects;
-- ввести scan metrics: directories/sec, DB writes/sec, skipped/error counts.
+- add a coarse-grained progress interval;
+- evaluate batch upsert for projects;
+- introduce scan metrics: directories/sec, DB writes/sec, skipped/error counts.
 
 ### P2. Repository operations separation
 
-Проблема: repository handlers совмещают validation, reservation lifecycle,
-credential env, filesystem checks и запуск `git`.
+Problem: repository handlers combine validation, reservation lifecycle,
+credential env, filesystem checks and `git` execution.
 
-Следующий шаг:
+Next step:
 
-- вынести запуск `git` в `GitRunner`;
-- вынести reservation lifecycle в helper с cleanup;
-- покрыть fake `GitRunner` тестами для ошибок git/credential/reservation.
+- move `git` execution into `GitRunner`;
+- move reservation lifecycle into a helper with cleanup;
+- cover a fake `GitRunner` with tests for git/credential/reservation errors.
 
 ### P2. PostgreSQL connection pool settings
 
-Проблема: SQLite provider явно ограничивает pool, а PostgreSQL сейчас
-использует defaults `database/sql`.
+Problem: the SQLite provider explicitly limits the pool, while PostgreSQL
+currently uses `database/sql` defaults.
 
-Следующий шаг:
+Next step:
 
-- добавить storage config для max open/idle conns, lifetime и idle time;
-- задать безопасные defaults для server/worker;
-- логировать фактические pool settings при старте.
+- add storage config for max open/idle connections, lifetime and idle time;
+- set safe defaults for server/worker;
+- log effective pool settings on startup.
 
-### P3. Дополнительные benchmarks и разрез тестов
+### P3. Additional Benchmarks and Test Slicing
 
-Следующий шаг:
+Next step:
 
-- добавить benchmarks для `scanner.Store.ListProjects/ListRepositories`,
-  scanner traversal и repository reservation conflict path;
-- разделять крупные integration test files по endpoint/aggregate при
-  ближайших изменениях этих областей;
-- общие fixtures выносить в `*_test_helpers.go`.
+- add benchmarks for `scanner.Store.ListProjects/ListRepositories`,
+  scanner traversal and repository reservation conflict path;
+- split large integration test files by endpoint/aggregate during the next
+  changes in those areas;
+- move shared fixtures into `*_test_helpers.go`.

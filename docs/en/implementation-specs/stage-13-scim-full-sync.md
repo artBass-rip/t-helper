@@ -1,16 +1,16 @@
 # Stage 13: SCIM Full Sync
 
-## Цель
+## Goal
 
-Реализовать полноценный SCIM sync workflow поверх Stage 07 SCIM contract/stub без breaking API changes.
+Implement a full SCIM sync workflow on top of the Stage 07 SCIM contract/stub without breaking API changes.
 
 ## Inputs
 
-- `docs/access-control.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
+- `docs/en/access-control.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/test-plan.md`
 
 ## Scope
 
@@ -56,7 +56,7 @@
 - API: `GET /api/auth/scim/identities`, `POST /api/auth/scim/sync`.
 - Data model: `scim_identities`, auth/RBAC entities, `jobs`, `job_events`.
 
-## Риски
+## Risks
 
 - ambiguous conflict handling changes user access unexpectedly;
 - SCIM sync bypasses audit/RBAC invariants;

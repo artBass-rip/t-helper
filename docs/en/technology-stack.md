@@ -1,30 +1,31 @@
-# Технологический стек
+# Technology Stack
 
-Документ фиксирует базовый стек реализации `t-helper` для code scaffolding и последующих этапов roadmap.
+This document records the baseline implementation stack for `t-helper` code
+scaffolding and later roadmap stages.
 
 ## Backend
 
-Backend реализуется на `Go`.
+The backend is implemented in `Go`.
 
-Область применения:
+Scope:
 
 - runtime service `thelper`;
 - worker process `thelper-worker`;
 - administrative CLI `thelper-ctl`;
 - backend HTTP API;
-- module lifecycle и jobs framework;
-- status-monitor и aggregate status read models;
-- storage abstraction и adapters;
-- orchestration локальных toolchain-команд для scanning и repository operations.
+- module lifecycle and jobs framework;
+- status-monitor and aggregate status read models;
+- storage abstraction and adapters;
+- orchestration of local toolchain commands for scanning and repository operations.
 
-Требования к backend-реализации:
+Backend implementation requirements:
 
-- доменная логика не должна зависеть от конкретного storage backend;
+- domain logic must not depend on a specific storage backend;
 - provider-specific integrations must be isolated in pluggable modules/libraries behind internal interfaces;
-- API contracts должны соответствовать `docs/api.md`;
-- CLI contracts должны соответствовать `docs/interfaces.md`;
-- background jobs должны использовать documented payload schemas из `docs/payload-schemas.md`;
-- outbound calls для security stack не допускаются, кроме явно настроенных repository/provider integrations.
+- API contracts must match `docs/en/api.md`;
+- CLI contracts must match `docs/en/interfaces.md`;
+- background jobs must use documented payload schemas from `docs/en/payload-schemas.md`;
+- outbound calls for the security stack are not allowed, except for explicitly configured repository/provider integrations.
 
 ## Storage
 
@@ -46,40 +47,40 @@ Managed engine compatibility:
 - Aurora MySQL through the MySQL adapter;
 - Babelfish for Aurora PostgreSQL is not a substitute for the native MSSQL adapter.
 
-Требования:
+Requirements:
 
-- оба MVP storage backend используют SQL-like модель и поддерживают миграции;
-- логическая модель данных и storage interfaces едины для всех supported adapters;
-- SQL migrations используют dialect-specific SQL при синхронизированных logical migration versions;
-- `MySQL` и `MSSQL` добавляются на Stage 10 Storage Adapter Expansion как first-class SQL adapters.
+- both MVP storage backends use a SQL-like model and support migrations;
+- the logical data model and storage interfaces are the same for all supported adapters;
+- SQL migrations use dialect-specific SQL with synchronized logical migration versions;
+- `MySQL` and `MSSQL` are added in Stage 10 Storage Adapter Expansion as first-class SQL adapters.
 
 Database providers are implemented as pluggable storage adapter libraries selected by configuration. Provider-specific SQL, connection handling and health checks must not leak into domain services or HTTP handlers.
 
-## Jobs и Workers
+## Jobs and Workers
 
-Background jobs выполняются отдельными worker-процессами.
+Background jobs are executed by separate worker processes.
 
-Базовые компоненты:
+Base components:
 
-- `thelper` - API/runtime process, создаёт jobs, управляет конфигурацией, module states и HTTP API;
-- `thelper-worker` - отдельный worker process, atomically claims queued jobs through storage-level leases, выполняет job handlers и сохраняет result payload;
-- `thelper-ctl` - administrative CLI, создаёт lifecycle/config jobs или вызывает documented backend API.
+- `thelper` - API/runtime process; creates jobs and manages configuration, module states and HTTP API;
+- `thelper-worker` - separate worker process; atomically claims queued jobs through storage-level leases, executes job handlers and stores result payloads;
+- `thelper-ctl` - administrative CLI; creates lifecycle/config jobs or calls the documented backend API.
 
-Инварианты:
+Invariants:
 
-- API/CLI не выполняют long-running jobs inline;
-- jobs persisted в БД и имеют documented payload/result schemas;
-- job leases определяют ownership конкретного job worker-процессом;
-- `job_locks` сериализуют конфликтующие бизнес-операции между worker-процессами;
-- workers поддерживают heartbeat, lease expiry recovery и retry/backoff;
-- jobs публикуют status events/metrics, которые агрегирует `status-monitor`;
-- UI и внутренние сервисы читают aggregate status из status-monitor read models;
-- несколько worker-процессов могут работать параллельно, если их lock keys не конфликтуют;
-- distributed deployment расширяет эту модель, но не меняет storage contracts jobs.
+- API/CLI do not execute long-running jobs inline;
+- jobs are persisted in the database and have documented payload/result schemas;
+- job leases define ownership of a specific job by a worker process;
+- `job_locks` serialize conflicting business operations across worker processes;
+- workers support heartbeat, lease expiry recovery and retry/backoff;
+- jobs publish status events/metrics aggregated by `status-monitor`;
+- UI and internal services read aggregate status from status-monitor read models;
+- multiple worker processes can run in parallel when their lock keys do not conflict;
+- distributed deployment extends this model but does not change jobs storage contracts.
 
 ## Frontend
 
-Единый frontend-контур реализуется на:
+The unified frontend surface is implemented with:
 
 - `React`;
 - `TypeScript`;
@@ -90,44 +91,45 @@ Background jobs выполняются отдельными worker-процес�
 - `React Hook Form`;
 - `Ant Design`.
 
-Область применения:
+Scope:
 
 - `Web UI`;
-- shared UI codebase для локального `GUI`;
-- read/operate сценарии MVP;
+- shared UI codebase for the local `GUI`;
+- MVP read/operate scenarios;
 - full MVP administrative UI delivered in Stage 08, with Stage 12 reserved for admin hardening and platform-only administrative extensions.
 
-Требования к frontend-реализации:
+Frontend implementation requirements:
 
-- `Web UI` и `GUI` используют один documented backend API;
-- frontend не вводит и не требует frontend-only backend endpoints;
-- API DTO валидируются на границе клиента через typed schemas;
-- long-running operations отображаются через `jobs` и documented job references;
-- UI должен быть пригоден для плотных operational сценариев: таблицы, фильтры, формы, статусы, findings, RBAC и audit views.
+- `Web UI` and `GUI` use one documented backend API;
+- the frontend does not introduce or require frontend-only backend endpoints;
+- API DTOs are validated at the client boundary through typed schemas;
+- long-running operations are displayed through `jobs` and documented job references;
+- UI must be suitable for dense operational scenarios: tables, filters, forms, statuses, findings, RBAC and audit views.
 - route map, navigation model and operational density rules must follow [`frontend-ui-contract.md`](frontend-ui-contract.md).
 
 ## Desktop GUI
 
-Локальный desktop GUI реализуется на `Tauri` с использованием той же React/TypeScript codebase.
+The local desktop GUI is implemented with `Tauri` using the same
+React/TypeScript codebase.
 
-Требования к GUI:
+GUI requirements:
 
-- `GUI` работает только локально;
-- удалённый доступ к `GUI` не поддерживается;
-- взаимодействие с системой идёт через тот же backend API, что и `Web UI`;
-- GUI-specific поведение не должно менять backend contracts;
+- `GUI` works only locally;
+- remote access to `GUI` is unsupported;
+- system interaction goes through the same backend API as `Web UI`;
+- GUI-specific behavior must not change backend contracts;
 - Tauri packaging/signing and local runtime discovery policy must follow [`frontend-ui-contract.md`](frontend-ui-contract.md).
 
 ## Singleton Runtime Policy
 
-В одной локальной установке может быть запущен только один экземпляр `t-helper` runtime.
+Only one `t-helper` runtime instance may run in a single local installation.
 
-Правила:
+Rules:
 
-- если `thelper` уже запущен для `Web UI`, Tauri GUI подключается к существующему local runtime;
-- если `thelper` ещё не запущен, Tauri GUI запускает local `thelper`, после чего `Web UI` подключается к этому же runtime;
-- повторный запуск `thelper` должен обнаруживать существующий runtime через lock/health mechanism и завершаться без создания второго активного процесса;
-- `Web UI` и `GUI` всегда работают с одним backend API и одной runtime БД.
+- if `thelper` is already running for the `Web UI`, the Tauri GUI connects to the existing local runtime;
+- if `thelper` is not running yet, the Tauri GUI starts a local `thelper`, after which the `Web UI` connects to the same runtime;
+- a repeated `thelper` start must discover the existing runtime through the lock/health mechanism and exit without creating a second active process;
+- `Web UI` and `GUI` always work with one backend API and one runtime database.
 
 ## Stack Invariants
 

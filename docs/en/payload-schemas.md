@@ -1,19 +1,19 @@
 # Payload schemas
 
-Документ фиксирует минимальные JSON payload/result contracts для `jobs.payload`, `jobs.result_payload`, `project_scans.result_payload`, `module_states.details` и audit/config-related structured fields.
+This document defines the minimum JSON payload/result contracts for `jobs.payload`, `jobs.result_payload`, `project_scans.result_payload`, `module_states.details` and audit/config-related structured fields.
 
-## Общие правила
+## General Rules
 
-- Каждый structured payload должен содержать `schema_version`.
-- `schema_version` именуется как `<domain>.<operation>.v<major>`, например `jobs.global_scan.payload.v1`.
-- Backward-compatible additions допускаются в рамках того же major version.
-- Breaking changes требуют нового major version и миграции reader'ов.
-- Payload не должен содержать секреты, tokens, приватные ключи или raw Terraform source.
-- Payload не должен содержать raw passwords, password hashes, password reset tokens или reset token hashes.
-- Поля `actor`, `correlation_id`, `idempotency_key` хранятся на уровне `jobs`, но могут дублироваться в payload только если это нужно для межмодульного сообщения.
-- Worker execution metadata хранится на уровне `jobs` (`leased_by`, `attempt_count`, `lease_expires_at`, `heartbeat_at`, `run_after`) и может дублироваться в `result_payload` только для диагностики без секретов.
-- Result payload для failed jobs должен использовать `jobs.failure.result.v1`, если job-specific failed result schema явно не описана.
-- Jobs должны публиковать status events/metrics в `job_events`; aggregate workflow status хранится в `workflow_statuses`.
+- Every structured payload must contain `schema_version`.
+- `schema_version` is named as `<domain>.<operation>.v<major>`, for example `jobs.global_scan.payload.v1`.
+- Backward-compatible additions are allowed within the same major version.
+- Breaking changes require a new major version and reader migrations.
+- Payload must not contain secrets, tokens, private keys or raw Terraform source.
+- Payload must not contain raw passwords, password hashes, password reset tokens or reset token hashes.
+- The `actor`, `correlation_id` and `idempotency_key` fields are stored at the `jobs` level, but may be duplicated in payload only when needed for an inter-module message.
+- Worker execution metadata is stored at the `jobs` level (`leased_by`, `attempt_count`, `lease_expires_at`, `heartbeat_at`, `run_after`) and may be duplicated in `result_payload` only for diagnostics without secrets.
+- Result payloads for failed jobs must use `jobs.failure.result.v1` unless a job-specific failed result schema is explicitly documented.
+- Jobs must publish status events/metrics to `job_events`; aggregate workflow status is stored in `workflow_statuses`.
   Runtime heartbeat freshness is stored on `jobs.heartbeat_at`; heartbeat
   events are bounded diagnostics and are not required for every heartbeat tick.
 

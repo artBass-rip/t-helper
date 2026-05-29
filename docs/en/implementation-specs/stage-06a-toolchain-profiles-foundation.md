@@ -1,17 +1,17 @@
 # Stage 06A: Toolchain Profiles Foundation
 
-## Цель
+## Goal
 
-Полностью реализовать ADR 0018 external toolchain profile runtime до scanner/security orchestration, чтобы Stage 06B не парсил CLI output напрямую и не зависел от hard-coded форматов Terraform, TFLint или Trivy.
+Fully implement the ADR 0018 external toolchain profile runtime before scanner/security orchestration, so Stage 06B does not parse CLI output directly and does not depend on hard-coded Terraform, TFLint or Trivy formats.
 
 ## Inputs
 
-- `docs/adr/0018-external-toolchain-profiles.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/configuration.md`
-- `docs/test-plan.md`
+- `docs/en/adr/0018-external-toolchain-profiles.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/configuration.md`
+- `docs/en/test-plan.md`
 
 ## Scope
 
@@ -96,7 +96,7 @@ Initial bundled validation fixtures must cover at least:
 - Data model: `tool_profiles`, `tool_profile_validation_results`.
 - ADR: `0018`.
 
-## Риски
+## Risks
 
 - overly flexible profile language may become an execution sandbox risk;
 - generated profiles may drift fingerprint semantics if accepted without fixture validation;

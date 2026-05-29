@@ -1,23 +1,23 @@
 # Stage 11: Security Tooling and Policy Packs
 
-## Цель
+## Goal
 
-Расширить локальный security stack за пределы Stage 06B MVP scanner, сохраняя local-only execution, ADR 0018 tool profiles и ADR 0017 finding fingerprint semantics.
+Expand the local security stack beyond the Stage 06B MVP scanner while preserving local-only execution, ADR 0018 tool profiles and ADR 0017 finding fingerprint semantics.
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/api.md`
-- `docs/adr/0017-security-finding-fingerprint.md`
-- `docs/adr/0018-external-toolchain-profiles.md`
+- `docs/en/roadmap.md`
+- `docs/en/test-plan.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/api.md`
+- `docs/en/adr/0017-security-finding-fingerprint.md`
+- `docs/en/adr/0018-external-toolchain-profiles.md`
 
 ## Scope
 
 - `Gitleaks`;
-- `Checkov` как дополнительный scanner после обязательного Stage 06B `Trivy`;
+- `Checkov` as an additional scanner after the mandatory Stage 06B `Trivy`;
 - `OPA`;
 - `Conftest`;
 - baseline local rule sets;
@@ -59,7 +59,7 @@
 - Data model: `security_rule_sets`, `security_findings`, `tool_profiles`, `tool_profile_validation_results`.
 - ADR: `0017`, `0018`.
 
-## Риски
+## Risks
 
 - scanner output drift changes normalized findings;
 - policy packs grow without ownership/versioning;

@@ -15,15 +15,15 @@ remaining repository work is split into later stages:
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0013-repository-identity.md`
-- `docs/adr/0015-repository-provider-integration-profiles.md`
-- `docs/adr/0016-repository-provider-url-parsing.md`
+- `docs/ru/requirements.md`
+- `docs/ru/architecture.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/adr/0013-repository-identity.md`
+- `docs/ru/adr/0015-repository-provider-integration-profiles.md`
+- `docs/ru/adr/0016-repository-provider-url-parsing.md`
 
 ## Entry baseline
 

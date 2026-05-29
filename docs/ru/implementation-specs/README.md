@@ -1,6 +1,6 @@
 # Пакет ТЗ по stage внедрения
 
-Этот каталог содержит primary implementation specs для актуального roadmap из `docs/roadmap.md`.
+Этот каталог содержит primary implementation specs для актуального roadmap из `docs/ru/roadmap.md`.
 
 Каждый `stage-*` файл является самостоятельным delivery package с единым набором секций:
 
@@ -11,7 +11,7 @@
 - `Traceability`
 - `Non-goals`
 
-Implementation-level решения, обязательные для этих ТЗ, зафиксированы в `docs/adr/`.
+Implementation-level решения, обязательные для этих ТЗ, зафиксированы в `docs/ru/adr/`.
 
 Stage 00 является каноническим владельцем классов решений. `Remaining MVP
 blockers: none` означает, что Stage 01 и MVP scaffolding sequence могут
@@ -42,14 +42,14 @@ stage-local или platform decisions для последующих этапов
 
 Accepted Stage 00 entry/exit summary, Stage 01 scaffolding checklist and
 Stage 01-03 backlog are consolidated in
-`docs/stage-00-delivery-contract.md`.
+`docs/ru/stage-00-delivery-contract.md`.
 
-Repository identity для Stage 05 и последующих этапов зафиксирован в `docs/adr/0013-repository-identity.md`: `provider + provider_host + full_path`.
+Repository identity для Stage 05 и последующих этапов зафиксирован в `docs/ru/adr/0013-repository-identity.md`: `provider + provider_host + full_path`.
 
-Repository provider integration UX для Stage 05/08 зафиксирован в `docs/adr/0015-repository-provider-integration-profiles.md`: multi-host provider profiles и multi-credential per host.
+Repository provider integration UX для Stage 05/08 зафиксирован в `docs/ru/adr/0015-repository-provider-integration-profiles.md`: multi-host provider profiles и multi-credential per host.
 
-Repository provider URL parsing для Stage 05 зафиксирован в `docs/adr/0016-repository-provider-url-parsing.md`.
+Repository provider URL parsing для Stage 05 зафиксирован в `docs/ru/adr/0016-repository-provider-url-parsing.md`.
 
-Security finding fingerprint для Stage 06 зафиксирован в `docs/adr/0017-security-finding-fingerprint.md`.
+Security finding fingerprint для Stage 06 зафиксирован в `docs/ru/adr/0017-security-finding-fingerprint.md`.
 
-External toolchain compatibility поставляется отдельным Stage 06A и зафиксирована в `docs/adr/0018-external-toolchain-profiles.md`: versioned tool profiles, certified compatibility, profile validation and optional profile analyzer. Stage 06B project/security scanning depends on Stage 06A and must not parse external CLI output directly.
+External toolchain compatibility поставляется отдельным Stage 06A и зафиксирована в `docs/ru/adr/0018-external-toolchain-profiles.md`: versioned tool profiles, certified compatibility, profile validation and optional profile analyzer. Stage 06B project/security scanning depends on Stage 06A and must not parse external CLI output directly.

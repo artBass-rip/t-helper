@@ -1,15 +1,17 @@
-# Roadmap и приёмка
+# Roadmap and Acceptance
 
-## Оптимизированные stage реализации
+## Optimized Implementation Stages
 
-Декомпозиция уменьшает размер foundation-части и делает каждый stage проверяемым отдельно. Детальные implementation specs находятся в `docs/implementation-specs/`.
+The decomposition reduces the size of the foundation portion and makes each
+stage independently verifiable. Detailed implementation specs are in
+`docs/en/implementation-specs/`.
 
 ### Stage 00. Delivery contract
 
-- зафиксировать Definition of Done для MVP и platform release;
-- присвоить открытым продуктовым решениям статус `accepted`, `deferred` или `out-of-scope` в Stage 00 decision register;
-- зафиксировать структуру будущего code repository, style guides, CI/scaffolding checklist и правила обновления трассировки как документационный contract;
-- нормализовать референсные примеры конфигурации и секретов.
+- fix the Definition of Done for the MVP and platform release;
+- assign open product decisions the status `accepted`, `deferred` or `out-of-scope` in the Stage 00 decision register;
+- fix the future code repository structure, style guides, CI/scaffolding checklist and traceability update rules as a documentation contract;
+- normalize reference examples for configuration and secrets.
 
 Executable scaffolding, actual CI files, Go modules and storage test harnesses
 are Stage 01 implementation deliverables. Stage 00 is considered complete when
@@ -19,82 +21,82 @@ the delivery decisions and documentation contracts are accepted.
 
 Status: completed.
 
-- создан Go module and executable entrypoints `thelper`, `thelper-worker`, `thelper-ctl`;
-- реализован HTTP adapter skeleton на `net/http`/`chi`;
-- реализованы storage abstraction, provider registry и миграционный каркас;
-- поддержаны `SQLite` и `PostgreSQL` для stage-owned системных таблиц Stage 01;
-- добавлены базовое логирование, correlation IDs и `GET /api/health`;
-- добавлены SQLite/PostgreSQL storage contract tests and GitHub Actions CI gate.
+- created the Go module and executable entrypoints `thelper`, `thelper-worker`, `thelper-ctl`;
+- implemented the HTTP adapter skeleton on `net/http`/`chi`;
+- implemented storage abstraction, provider registry and migration framework;
+- supported `SQLite` and `PostgreSQL` for Stage 01-owned system tables;
+- added baseline logging, correlation IDs and `GET /api/health`;
+- added SQLite/PostgreSQL storage contract tests and GitHub Actions CI gate.
 
 ### Stage 02. Config, modules and runtime lifecycle
 
 Status: completed.
 
-- реализованы `config_entries`, `storage_profiles`,
-  `storage_provider_settings`, `module_states` и imported system
+- implemented `config_entries`, `storage_profiles`,
+  `storage_provider_settings`, `module_states` and imported system
   `ignore_rules`;
-- реализован import через `thelper-ctl -reconfigure`;
-- реализованы reloadability matrix и synchronous `thelper-ctl -reload` без
-  Stage 03 `jobs` dependency;
-- реализован module registry с lifecycle `start`, `stop`, `reload`, `health`;
-- реализованы `thelper-ctl -restart <module>` и Stage 02 sync result DTOs;
-- зафиксирован singleton runtime lock/health mechanism для локального режима.
+- implemented import through `thelper-ctl -reconfigure`;
+- implemented the reloadability matrix and synchronous `thelper-ctl -reload`
+  without a Stage 03 `jobs` dependency;
+- implemented module registry with lifecycle `start`, `stop`, `reload`, `health`;
+- implemented `thelper-ctl -restart <module>` and Stage 02 sync result DTOs;
+- fixed the singleton runtime lock/health mechanism for local mode.
 
 ### Stage 03. Jobs, workers and status foundation
 
 Status: completed.
 
-- реализованы `jobs`, `job_locks`, `job_events`, `workflow_statuses`;
-- реализованы atomic job claim, leases, heartbeat, expired lease recovery и retry/backoff;
-- выполнение background jobs вынесено в `thelper-worker`;
-- реализованы worker handlers для `config_reload` и `module_restart`;
-- поднят базовый `status-monitor` для jobs/workers/modules.
+- implemented `jobs`, `job_locks`, `job_events`, `workflow_statuses`;
+- implemented atomic job claim, leases, heartbeat, expired lease recovery and retry/backoff;
+- moved background job execution into `thelper-worker`;
+- implemented worker handlers for `config_reload` and `module_restart`;
+- started the baseline `status-monitor` for jobs/workers/modules.
 
 ### Stage 04. Scanner and registry MVP
 
 Status: completed.
 
-- реализованы `root_paths`, `ignore_rules`, `projects`, `environments`, `workspaces` и минимальный `repositories` registry;
-- реализован exclude-only ignore matcher с сохранением `!pattern`;
-- реализован discovery Terraform-проектов по `*.tf` без чтения исходников;
-- реализованы coalesced фоновые `project_discovery` jobs для определения Git-связей проекта без блокировки глобального scan;
-- реализовано обнаружение Git markers внутри `project_discovery` и прекращение обхода ниже найденного Terraform-проекта в global scan;
-- реализованы `project_links` для связи отдельных project records, относящихся к одному Git repository, без merge project rows;
-- закрыт API для scan roots, ignore rules, scans, projects, environments и workspaces.
+- implemented `root_paths`, `ignore_rules`, `projects`, `environments`, `workspaces` and a minimal `repositories` registry;
+- implemented an exclude-only ignore matcher with preservation of `!pattern`;
+- implemented Terraform project discovery by `*.tf` without reading source contents;
+- implemented coalesced background `project_discovery` jobs for determining project Git relationships without blocking the global scan;
+- implemented Git marker discovery inside `project_discovery` and stopping traversal below a discovered Terraform project in global scan;
+- implemented `project_links` for relating separate project records that belong to one Git repository without merging project rows;
+- closed the API for scan roots, ignore rules, scans, projects, environments and workspaces.
 
 ### Stage 05. Repository manager MVP
 
 Status: completed.
 
-- реализована расширенная модель `repositories`;
-- реализованы `clone`, `pull`, `sync` через jobs и `job_locks`;
-- обеспечена path safety: нормализация, запрет path traversal, `local_path` только внутри выбранного `root_path`;
-- зафиксирована repository identity как `provider + provider_host + full_path`;
-- реализованы GitKraken-like provider integration profiles: multi-host и multi-credential per host;
-- реализованы MVP adapters для `generic` Git и GitHub;
-- `bitbucket`, `azure_devops`, recursive GitLab group clone, webhook sync и polling sync оставлены вне Stage 05 MVP.
+- implemented the expanded `repositories` model;
+- implemented `clone`, `pull`, `sync` through jobs and `job_locks`;
+- ensured path safety: normalization, path traversal rejection, `local_path` only inside the selected `root_path`;
+- fixed repository identity as `provider + provider_host + full_path`;
+- implemented GitKraken-like provider integration profiles: multi-host and multi-credential per host;
+- implemented MVP adapters for `generic` Git and GitHub;
+- left `bitbucket`, `azure_devops`, recursive GitLab group clone, webhook sync and polling sync outside the Stage 05 MVP.
 
 ### Stage 05A. Repository operations extensions
 
-- добавить второй managed provider из пары `gitlab`/`github`, если он не был включён в Stage 05;
-- реализовать recursive clone GitLab group/subgroups после стабилизации single-repository clone;
-- добавить provider adapters для `bitbucket` и `azure_devops`;
-- сохранить тот же repository identity, credential и path safety contract, что и Stage 05.
+- add the second managed provider from the `gitlab`/`github` pair if it was not included in Stage 05;
+- implement recursive clone of GitLab group/subgroups after single-repository clone stabilizes;
+- add provider adapters for `bitbucket` and `azure_devops`;
+- preserve the same repository identity, credential and path safety contract as Stage 05.
 
 ### Stage 05B. Repository polling sync
 
-- реализовать polling-based sync как отдельный repository workflow;
-- добавить scheduler integration для polling;
-- проверить, что polling не обходит `job_locks`, credential usage validation и status-monitor aggregation.
+- implement polling-based sync as a separate repository workflow;
+- add scheduler integration for polling;
+- verify that polling does not bypass `job_locks`, credential usage validation or status-monitor aggregation.
 
 ### Stage 06. Project scanner and security validator MVP
 
-- реализовать `project_scan_settings`, `project_security_scan_settings`, `project_scans`;
-- реализовать parent-child workflow `project_scan` -> `security_validation_scan` через `job_group_id`;
-- подключить `terraform validate` и `TFLint` для `project-scanner`;
-- подключить `Trivy` как обязательный security scanner для MVP;
-- оставить `Gitleaks`, `Checkov`, `OPA` и `Conftest` как adapter extension points без обязательной MVP-приёмки;
-- сохранять `security_rule_sets`, `security_findings` и aggregate status через `status-monitor`.
+- implement `project_scan_settings`, `project_security_scan_settings`, `project_scans`;
+- implement parent-child workflow `project_scan` -> `security_validation_scan` through `job_group_id`;
+- connect `terraform validate` and `TFLint` for `project-scanner`;
+- connect `Trivy` as the mandatory security scanner for the MVP;
+- leave `Gitleaks`, `Checkov`, `OPA` and `Conftest` as adapter extension points without mandatory MVP acceptance;
+- store `security_rule_sets`, `security_findings` and aggregate status through `status-monitor`.
 
 Stage 06 intentionally split into two delivery packages:
 
@@ -103,23 +105,23 @@ Stage 06 intentionally split into two delivery packages:
 
 ### Stage 07. Auth, RBAC, SCIM and audit
 
-- реализовать локальную аутентификацию и каркас external auth providers;
-- реализовать local credentials storage с Argon2id PHC password hashes по ADR 0014;
-- реализовать first-run bootstrap admin user flow;
-- реализовать users, groups, memberships, roles, permissions и role bindings;
-- включить API authorization enforcement по matrix из `access-control.md`;
-- реализовать SCIM contract/stub без полноценного sync workflow в MVP;
-- писать audit security-события.
+- implement local authentication and the external auth providers framework;
+- implement local credentials storage with Argon2id PHC password hashes according to ADR 0014;
+- implement the first-run bootstrap admin user flow;
+- implement users, groups, memberships, roles, permissions and role bindings;
+- enable API authorization enforcement according to the matrix in `access-control.md`;
+- implement SCIM contract/stub without a full sync workflow in the MVP;
+- write audit security events.
 
 ### Stage 08. Frontend MVP and local GUI
 
-- реализовать единый React/TypeScript frontend для `Web UI` и `GUI`;
-- использовать Vite, TanStack Router, TanStack Query, Zod, React Hook Form и Ant Design;
-- покрыть основные read/operate сценарии: projects, roots, ignore rules, scans, repos, findings, jobs, modules, audit, config;
-- реализовать полноценные administrative screens для auth/RBAC/configuration/security rule sets, так как соответствующие backend APIs входят в целевой MVP release scope;
-- реализовать Tauri GUI только для локального режима;
-- проверить, что `GUI` и `Web UI` используют только documented backend API;
-- обеспечить feature parity для MVP read/operate и MVP administrative scenarios;
+- implement a unified React/TypeScript frontend for `Web UI` and `GUI`;
+- use Vite, TanStack Router, TanStack Query, Zod, React Hook Form and Ant Design;
+- cover the main read/operate scenarios: projects, roots, ignore rules, scans, repos, findings, jobs, modules, audit, config;
+- implement full administrative screens for auth/RBAC/configuration/security rule sets because the corresponding backend APIs are in the target MVP release scope;
+- implement the Tauri GUI only for local mode;
+- verify that `GUI` and `Web UI` use only the documented backend API;
+- provide feature parity for MVP read/operate and MVP administrative scenarios;
 
 Stage 08 entry contract for route map, navigation, operational density and
 Tauri local runtime discovery/start policy is accepted in
@@ -128,104 +130,108 @@ update/distribution policy remain release artifact exit decisions.
 
 ### Stage 09. Runtime and observability hardening
 
-- расширить observability и `status-monitor`;
-- усилить scheduler, worker shutdown/recovery и module runtime;
-- выполнить приоритизированный runtime/scanner optimization backlog из Stage 09 implementation spec и [`code-optimization.md`](code-optimization.md);
-- реализовать full `.gitignore` semantics с `!pattern`;
-- реализовать optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;
-- формализовать degraded states, retention cleanup и operator diagnostics для jobs, locks, modules, workers and scans.
+- expand observability and `status-monitor`;
+- strengthen scheduler, worker shutdown/recovery and module runtime;
+- complete the prioritized runtime/scanner optimization backlog from the Stage 09 implementation spec and [`code-optimization.md`](code-optimization.md);
+- implement full `.gitignore` semantics with `!pattern`;
+- implement optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards if this mode is approved;
+- formalize degraded states, retention cleanup and operator diagnostics for jobs, locks, modules, workers and scans.
 
 ### Stage 10. Storage adapter expansion
 
-- добавить `MySQL`, `MSSQL` и другие утверждённые SQL-compatible adapters;
-- поставить dialect-specific migrations with synchronized logical migration versions;
-- расширить shared storage contract suite на все target adapters;
-- задокументировать dialect-specific behavior differences и application-level validation fallback.
+- add `MySQL`, `MSSQL` and other approved SQL-compatible adapters;
+- deliver dialect-specific migrations with synchronized logical migration versions;
+- expand the shared storage contract suite to all target adapters;
+- document dialect-specific behavior differences and application-level validation fallback.
 
 ### Stage 11. Security tooling and policy packs
 
-- определить и поставить baseline локальных rule sets и enterprise-policy packs;
-- подключить дополнительные security adapters: `Gitleaks`, `Checkov`, `OPA` и `Conftest`;
-- использовать ADR 0018 tool profiles для дополнительных tools;
-- проверить локальность security stack и стабильность ADR 0017 findings fingerprints.
+- define and deliver baseline local rule sets and enterprise-policy packs;
+- connect additional security adapters: `Gitleaks`, `Checkov`, `OPA` and `Conftest`;
+- use ADR 0018 tool profiles for additional tools;
+- verify locality of the security stack and stability of ADR 0017 findings fingerprints.
 
 ### Stage 12. Admin UI hardening
 
 - hardened extensions for administrative UI beyond the Stage 08 full MVP admin screens;
-- добавить UI для advanced tool profile administration, SCIM sync management and platform-only administrative workflows where in release scope;
-- добавить SCIM visibility and sync operation surfaces where backend APIs are available;
-- сохранить `Web UI`/`GUI` parity по `docs/frontend-ui-contract.md`.
+- add UI for advanced tool profile administration, SCIM sync management and platform-only administrative workflows where in release scope;
+- add SCIM visibility and sync operation surfaces where backend APIs are available;
+- preserve `Web UI`/`GUI` parity according to `docs/en/frontend-ui-contract.md`.
 
 ### Stage 13. SCIM full sync
 
-- реализовать полноценный SCIM sync workflow поверх Stage 07 contract/stub;
-- зафиксировать conflict policy, mapping rules, audit events and partial failure behavior;
-- подключить scheduled/manual sync через jobs, worker leases and status-monitor.
+- implement a full SCIM sync workflow over the Stage 07 contract/stub;
+- fix conflict policy, mapping rules, audit events and partial failure behavior;
+- connect scheduled/manual sync through jobs, worker leases and status-monitor.
 
 ### Stage 14. Repository webhook sync
 
-- реализовать webhook-based repository sync;
-- добавить provider-specific webhook payload validation and secret verification;
+- implement webhook-based repository sync;
+- add provider-specific webhook payload validation and secret verification;
 - enqueue repository sync jobs without bypassing `job_locks`;
-- обеспечить audit/status integration for webhook events.
+- provide audit/status integration for webhook events.
 
 ### Stage 15. Distributed deployment
 
-- вынести `global-scanner`, `project-scanner`, `repository-manager`, `security-validator`, `auth` и `status-monitor` в совместимые runtime modes;
-- формализовать межмодульные retry, timeout, idempotency и auth contracts;
-- подготовить service discovery, health model, worker groups и HA topology;
-- проверить, что distributed mode не вводит второй source of truth и не ломает API/storage contracts.
+- move `global-scanner`, `project-scanner`, `repository-manager`, `security-validator`, `auth` and `status-monitor` into compatible runtime modes;
+- formalize inter-module retry, timeout, idempotency and auth contracts;
+- prepare service discovery, health model, worker groups and HA topology;
+- verify that distributed mode does not introduce a second source of truth and does not break API/storage contracts.
 
-## Критерии приёмки
+## Acceptance Criteria
 
 ### MVP acceptance
 
 | ID | Criterion |
 | --- | --- |
-| `ACC-MVP-001` | Terraform-проект обнаруживается по наличию `*.tf`. |
-| `ACC-MVP-002` | Глобальное сканирование определяет Terraform-проекты, а фоновый `project_discovery` определяет Git-связи проектов. |
-| `ACC-MVP-003` | После обнаружения проекта вложенные директории не сканируются как отдельные working directories. |
-| `ACC-MVP-004` | Ignore rules корректно исключают файлы и директории; `!pattern` сохраняется без потери данных и применяется после реализации full `.gitignore` semantics. |
-| `ACC-MVP-005` | Проекты сохраняются отдельными записями, а Git-связи проектов сохраняются без merge project records. |
-| `ACC-MVP-006` | Project-level scan определяет providers, required auth, syntax issues, deprecations и quality issues через `terraform validate` и `TFLint`, а security/validation scan сохраняет findings через `Trivy` как обязательный локальный scanner. |
-| `ACC-MVP-007` | Runtime-конфигурация хранится в БД. |
-| `ACC-MVP-008` | `thelper-ctl -reconfigure` импортирует конфигурацию и ignore rules в БД. |
-| `ACC-MVP-009` | `thelper-ctl -reload` применяет reloadable-конфигурацию. |
-| `ACC-MVP-010` | `thelper-ctl -restart <module>` работает для любого отдельного модуля. |
-| `ACC-MVP-011` | `GUI` и `Web UI` используют единый backend API и покрывают MVP read/operate сценарии. |
-| `ACC-MVP-012` | `GUI` работает только локально. |
-| `ACC-MVP-013` | `PostgreSQL` и `SQLite` поддерживаются через storage abstraction. |
-| `ACC-MVP-014` | `clone`, `pull`, `sync` не приводят к неконсистентному состоянию и сериализуются через `job_locks`. |
-| `ACC-MVP-015` | Поддерживаются `environments` и `workspaces`. |
-| `ACC-MVP-016` | `auth` реализован как отдельный модуль. |
-| `ACC-MVP-017` | Local auth и `RBAC` реализованы на backend/API уровне; SCIM endpoints могут быть contract/stub без полноценного sync workflow. |
-| `ACC-MVP-018` | Security stack работает локально и не передаёт код наружу. |
-| `ACC-MVP-019` | Security findings и rule sets хранятся внутри системы. |
-| `ACC-MVP-020` | Один project scan API создаёт `project_scans` и parent-child jobs workflow без отдельной сущности `security_scans`; security findings читаются через scoped или security endpoints. |
-| `ACC-MVP-021` | Backend API покрывает scan roots, repositories, jobs, environments, workspaces и module states для Frontend MVP. |
-| `ACC-MVP-022` | Clone workflow поддерживает `generic` Git и один managed provider из `gitlab` или `github`, выбор `https|ssh`, выбор root path и target directory, multi-host/multi-credential provider profiles, path safety и `job_locks`. |
+| `ACC-MVP-001` | A Terraform project is discovered by the presence of `*.tf`. |
+| `ACC-MVP-002` | Global scanning identifies Terraform projects, and background `project_discovery` identifies project Git relationships. |
+| `ACC-MVP-003` | After a project is discovered, nested directories are not scanned as separate working directories. |
+| `ACC-MVP-004` | Ignore rules correctly exclude files and directories; `!pattern` is preserved without data loss and applied after full `.gitignore` semantics are implemented. |
+| `ACC-MVP-005` | Projects are stored as separate records, and project Git relationships are stored without merging project records. |
+| `ACC-MVP-006` | Project-level scan identifies providers, required auth, syntax issues, deprecations and quality issues through `terraform validate` and `TFLint`, while security/validation scan stores findings through `Trivy` as the mandatory local scanner. |
+| `ACC-MVP-007` | Runtime configuration is stored in the database. |
+| `ACC-MVP-008` | `thelper-ctl -reconfigure` imports configuration and ignore rules into the database. |
+| `ACC-MVP-009` | `thelper-ctl -reload` applies reloadable configuration. |
+| `ACC-MVP-010` | `thelper-ctl -restart <module>` works for any individual module. |
+| `ACC-MVP-011` | `GUI` and `Web UI` use a unified backend API and cover MVP read/operate scenarios. |
+| `ACC-MVP-012` | `GUI` works only locally. |
+| `ACC-MVP-013` | `PostgreSQL` and `SQLite` are supported through storage abstraction. |
+| `ACC-MVP-014` | `clone`, `pull`, `sync` do not lead to inconsistent state and are serialized through `job_locks`. |
+| `ACC-MVP-015` | `environments` and `workspaces` are supported. |
+| `ACC-MVP-016` | `auth` is implemented as a separate module. |
+| `ACC-MVP-017` | Local auth and `RBAC` are implemented at backend/API level; SCIM endpoints may be contract/stub without a full sync workflow. |
+| `ACC-MVP-018` | The security stack works locally and does not send code outside. |
+| `ACC-MVP-019` | Security findings and rule sets are stored inside the system. |
+| `ACC-MVP-020` | One project scan API creates `project_scans` and a parent-child jobs workflow without a separate `security_scans` entity; security findings are read through scoped or security endpoints. |
+| `ACC-MVP-021` | Backend API covers scan roots, repositories, jobs, environments, workspaces and module states for the Frontend MVP. |
+| `ACC-MVP-022` | Clone workflow supports `generic` Git and one managed provider from `gitlab` or `github`, `https|ssh` selection, root path and target directory selection, multi-host/multi-credential provider profiles, path safety and `job_locks`. |
 
 ### Platform acceptance
 
 | ID | Criterion |
 | --- | --- |
-| `ACC-PLATFORM-001` | Поддерживаются все целевые SQL/SQL-like БД по roadmap: `PostgreSQL`, `SQLite`, `MySQL`, `MSSQL` и дополнительные SQL-compatible adapters, если они утверждены для platform release. |
-| `ACC-PLATFORM-002` | Реализован полный administrative UI для auth, RBAC и `SCIM`. |
-| `ACC-PLATFORM-003` | Реализован UI для редактирования configuration и security rule sets. |
-| `ACC-PLATFORM-004` | Реализована full `.gitignore` semantics с отрицательными правилами `!pattern`. |
-| `ACC-PLATFORM-005` | Подготовлен distributed deployment для `global-scanner`, `project-scanner`, `security-validator`, `repository-manager`, `auth`, `web`, `nginx` и БД. |
-| `ACC-PLATFORM-006` | Repository integrations расширены до `gitlab`, `github`, `bitbucket`, `azure_devops`, recursive GitLab group clone, polling sync и webhook sync. |
-| `ACC-PLATFORM-007` | Security adapters расширены до `Trivy`, `Gitleaks`, `Checkov`, `OPA` и `Conftest` с baseline локальными rule sets/policy packs. |
-| `ACC-PLATFORM-008` | Полноценный SCIM sync workflow реализован поверх Stage 07 SCIM contract/stub. |
+| `ACC-PLATFORM-001` | All target SQL/SQL-like databases on the roadmap are supported: `PostgreSQL`, `SQLite`, `MySQL`, `MSSQL` and additional SQL-compatible adapters if approved for the platform release. |
+| `ACC-PLATFORM-002` | Full administrative UI is implemented for auth, RBAC and `SCIM`. |
+| `ACC-PLATFORM-003` | UI for editing configuration and security rule sets is implemented. |
+| `ACC-PLATFORM-004` | Full `.gitignore` semantics with negative `!pattern` rules are implemented. |
+| `ACC-PLATFORM-005` | Distributed deployment is prepared for `global-scanner`, `project-scanner`, `security-validator`, `repository-manager`, `auth`, `web`, `nginx` and the database. |
+| `ACC-PLATFORM-006` | Repository integrations are expanded to `gitlab`, `github`, `bitbucket`, `azure_devops`, recursive GitLab group clone, polling sync and webhook sync. |
+| `ACC-PLATFORM-007` | Security adapters are expanded to `Trivy`, `Gitleaks`, `Checkov`, `OPA` and `Conftest` with baseline local rule sets/policy packs. |
+| `ACC-PLATFORM-008` | A full SCIM sync workflow is implemented over the Stage 07 SCIM contract/stub. |
 
-## Статус открытых решений
+## Open Decision Status
 
-Канонический статус решений фиксируется в `docs/implementation-specs/stage-00-delivery-contract.md` в разделе `Decision register`. Если roadmap и Stage 00 расходятся, для управления внедрением используется Stage 00 decision register как более точный delivery contract.
+The canonical decision status is recorded in
+`docs/en/implementation-specs/stage-00-delivery-contract.md` in the `Decision
+register` section. If the roadmap and Stage 00 diverge, the Stage 00 decision
+register is used as the more precise delivery contract for implementation
+management.
 
-- MVP breadth: accepted, MVP остаётся broad platform slice through Stage 08 и управляется stage ownership/test gates;
-- bootstrap admin recovery model: accepted, строгая first-run recovery policy сохраняется без unauthenticated persistent recovery path;
-- `terragrunt.hcl` support: deferred, не входит в MVP;
-- baseline local security rules and policy packs: deferred до Stage 11 unless approved earlier;
-- minimal external auth providers: deferred, Stage 07 поставляет local auth и provider interface;
-- `project` / `environment` / `workspace` lifecycle: accepted for MVP в conservative mode;
-- full `.gitignore` semantics: deferred до Stage 09, MVP matcher exclude-only с сохранением `!pattern`.
+- MVP breadth: accepted, the MVP remains a broad platform slice through Stage 08 and is governed by stage ownership/test gates;
+- bootstrap admin recovery model: accepted, strict first-run recovery policy remains without an unauthenticated persistent recovery path;
+- `terragrunt.hcl` support: deferred, not included in the MVP;
+- baseline local security rules and policy packs: deferred until Stage 11 unless approved earlier;
+- minimal external auth providers: deferred, Stage 07 delivers local auth and provider interface;
+- `project` / `environment` / `workspace` lifecycle: accepted for MVP in conservative mode;
+- full `.gitignore` semantics: deferred until Stage 09, MVP matcher is exclude-only with preservation of `!pattern`.

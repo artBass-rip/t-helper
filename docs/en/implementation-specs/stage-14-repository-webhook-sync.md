@@ -1,19 +1,19 @@
 # Stage 14: Repository Webhook Sync
 
-## Цель
+## Goal
 
-Добавить webhook-based repository sync without bypassing Stage 05 repository identity, credential usage, job locking and status-monitor contracts.
+Add webhook-based repository sync without bypassing Stage 05 repository identity, credential usage, job locking and status-monitor contracts.
 
 ## Inputs
 
-- `docs/architecture.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/access-control.md`
-- `docs/test-plan.md`
-- `docs/adr/0015-repository-provider-integration-profiles.md`
-- `docs/adr/0016-repository-provider-url-parsing.md`
+- `docs/en/architecture.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/access-control.md`
+- `docs/en/test-plan.md`
+- `docs/en/adr/0015-repository-provider-integration-profiles.md`
+- `docs/en/adr/0016-repository-provider-url-parsing.md`
 
 ## Scope
 
@@ -61,7 +61,7 @@
 - Data model: `repositories`, `repository_credentials`, `jobs`, `job_locks`, `audit_log`.
 - ADR: `0015`, `0016`.
 
-## Риски
+## Risks
 
 - webhook handlers bypass repository locks;
 - provider-specific payload parsing leaks into domain services;

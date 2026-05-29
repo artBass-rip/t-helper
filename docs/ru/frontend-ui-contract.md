@@ -94,8 +94,8 @@ Stage 08 entry decisions accepted by Stage 00:
 - Tauri local runtime discovery/start policy for supported local OS targets.
 
 Changes to these decisions require updating this document together with
-`docs/implementation-specs/stage-00-delivery-contract.md`, `docs/roadmap.md` and
-`docs/traceability.md` where affected.
+`docs/ru/implementation-specs/stage-00-delivery-contract.md`, `docs/ru/roadmap.md` and
+`docs/ru/traceability.md` where affected.
 
 ## Stage 08 Exit Decisions
 

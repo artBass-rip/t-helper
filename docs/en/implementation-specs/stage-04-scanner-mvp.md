@@ -1,54 +1,54 @@
 # Stage 04: Scanner and Registry MVP
 
-## Цель
+## Goal
 
-Реализовать discovery-слой, который обнаруживает Terraform-проекты в `root_path`, применяет ignore rules, регистрирует каждый локально обнаруженный проект отдельной записью в БД и ставит фоновые project discovery jobs для последующего определения Git-связей.
+Implement a discovery layer that finds Terraform projects under `root_path`, applies ignore rules, registers each locally discovered project as a separate DB record and enqueues background project discovery jobs for later Git relationship detection.
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/interfaces.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
+- `docs/en/requirements.md`
+- `docs/en/interfaces.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/test-plan.md`
 
 ## Scope
 
-- модуль `global-scanner`;
+- `global-scanner` module;
 - `root_paths`, `ignore_rules`, `projects`;
-- минимальный registry-mode `repositories` через фоновые project discovery jobs, а не напрямую из global filesystem traversal;
-- `project_links` для связи отдельных локальных project records, относящихся к одному Git repository;
-- `environments` и `workspaces` backend read models/API для Frontend MVP;
-- conservative MVP lifecycle для `project` / `environment` / `workspace`: scanner создаёт и обновляет `projects`, а связи с `environment` и `workspace` сохраняются только если они уже известны или заданы явно;
-- bounded worker pool обхода; SQLite runtime uses an effective traversal
+- minimal registry-mode `repositories` through background project discovery jobs, not directly from global filesystem traversal;
+- `project_links` for linking separate local project records that belong to one Git repository;
+- `environments` and `workspaces` backend read models/API for the Frontend MVP;
+- conservative MVP lifecycle for `project` / `environment` / `workspace`: scanner creates and updates `projects`, while links to `environment` and `workspace` are preserved only if already known or explicitly set;
+- bounded worker pool for traversal; SQLite runtime uses an effective traversal
   concurrency of 1 to avoid local database writer contention, while other
   storage providers use bounded parallel traversal;
-- exclude-only matcher с сохранением `!pattern`;
-- обнаружение Terraform-проектов по `*.tf`;
-- enqueue фонового `project_discovery` job для каждого созданного или обновлённого проекта;
-- определение Git-связей проекта только в `project_discovery` job по MVP Git marker allowlist: `.git/` directory или `.git` file с первой непустой строкой `gitdir:`;
-- negative handling для `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` внутри `project_discovery`;
-- API для scan/root paths/ignore rules/projects/environments/workspaces.
+- exclude-only matcher with preservation of `!pattern`;
+- Terraform project detection by `*.tf`;
+- enqueue a background `project_discovery` job for each created or updated project;
+- determine project Git relationships only in the `project_discovery` job using the MVP Git marker allowlist: `.git/` directory or `.git` file whose first non-empty line is `gitdir:`;
+- negative handling for `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` inside `project_discovery`;
+- API for scan/root paths/ignore rules/projects/environments/workspaces.
 
 ## Non-goals
 
 - provider-aware repository operations;
 - provider-aware URL parsing, remote enrichment and clone/pull/sync behavior from Stage 05;
-- чтение `.git/config` или shell-out в `git` из `global-scanner`;
-- project-level checks и security findings;
+- reading `.git/config` or shelling out to `git` from `global-scanner`;
+- project-level checks and security findings;
 - auth enforcement beyond documented permission contracts;
-- automatic linking rules для `project` / `environment` / `workspace` на основе naming conventions или Terraform source parsing;
+- automatic linking rules for `project` / `environment` / `workspace` based on naming conventions or Terraform source parsing;
 - full `.gitignore` semantics.
 - `follow_symlinks = true`; MVP supports only `follow_symlinks = false`, extended symlink traversal is deferred to Stage 09 runtime hardening.
 
 ## Deliverables
 
-- модуль `global-scanner`;
+- `global-scanner` module;
 - `project_discovery` worker handler for local project metadata discovery;
-- migrations/read models для `root_paths`, `ignore_rules`, `projects`, `project_links`, `environments`, `workspaces`;
-- registry API для root paths, scans, projects, environments, workspaces и ignore rules;
-- scan fixtures и acceptance tests;
+- migrations/read models for `root_paths`, `ignore_rules`, `projects`, `project_links`, `environments`, `workspaces`;
+- registry API for root paths, scans, projects, environments, workspaces and ignore rules;
+- scan fixtures and acceptance tests;
 - discovery algorithm notes.
 
 ## Implementation contract
@@ -165,39 +165,39 @@
 
 ## Definition of Done
 
-- scan обнаруживает Terraform working directory по `*.tf`;
+- scan detects Terraform working directories by `*.tf`;
 - global scan creates/updates only project records and enqueues `project_discovery` jobs;
-- `project_discovery` обнаруживает только разрешённые Git markers: `.git/` directory и `.git` file с `gitdir:`;
-- похожие файлы/директории `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` не создают repository link/card;
-- scanner не выполняет shell-out в `git` во время discovery;
-- scanner не читает Terraform source и не читает `.git/config` на Stage 04;
-- filesystem-only Git repositories без provider identity регистрируются project discovery job'ом как `provider = generic`, `provider_host = local`;
-- разные Terraform projects внутри одного Git repository остаются отдельными `projects` rows and are linked through `project_links`;
+- `project_discovery` detects only allowed Git markers: `.git/` directory and `.git` file with `gitdir:`;
+- similar files/directories `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` do not create a repository link/card;
+- scanner does not shell out to `git` during discovery;
+- scanner does not read Terraform source and does not read `.git/config` in Stage 04;
+- filesystem-only Git repositories without provider identity are registered by the project discovery job as `provider = generic`, `provider_host = local`;
+- different Terraform projects inside one Git repository remain separate `projects` rows and are linked through `project_links`;
 - symlinked directories skipped by default when `follow_symlinks = false`;
-- nested Terraform directories под найденным project не регистрируются отдельно;
-- повторный scan не создаёт дубли;
+- nested Terraform directories under a found project are not registered separately;
+- repeated scan does not create duplicates;
 - concurrent `project_discovery` jobs for one Git repository do not create
   duplicate generic repository cards and do not fail on repository identity
   conflicts;
-- ранее найденные, но отсутствующие в новом scan projects не удаляются и получают `status = missing`;
-- `!pattern` сохраняется без применения в exclude-only matcher;
-- scanner не создаёт implicit `environment` или `workspace` без явного входного правила/данных;
-- если связь проекта с `environment` или `workspace` уже известна, повторный scan сохраняет её;
-- environments/workspaces read endpoints работают и имеют FK/read tests;
+- projects found earlier but absent from a new scan are not deleted and receive `status = missing`;
+- `!pattern` is preserved without being applied in the exclude-only matcher;
+- scanner does not create an implicit `environment` or `workspace` without an explicit input rule/data;
+- if a project's link to `environment` or `workspace` is already known, repeated scan preserves it;
+- environments/workspaces read endpoints work and have FK/read tests;
 - `root_paths.source` ownership is enforced: API cannot claim config-owned
   source values through request payloads;
 - stale project discovery for missing/disabled projects does not mutate
   repository registry state;
-- results пишутся в `jobs.global_scan.result.v1`.
+- results are written to `jobs.global_scan.result.v1`.
 
 ## Remaining MVP blockers
 
-- нет Stage 04 blockers по Git marker allowlist; MVP allowlist закрыт этим spec.
+- no Stage 04 blockers remain for the Git marker allowlist; the MVP allowlist is closed by this spec.
 
 ## Deferred decisions
 
-- automatic linking rules для `project` / `environment` / `workspace`;
-- default seed/import behavior для environments/workspaces сверх минимальных read models и FK constraints.
+- automatic linking rules for `project` / `environment` / `workspace`;
+- default seed/import behavior for environments/workspaces beyond minimal read models and FK constraints.
 
 ## Traceability
 
@@ -206,8 +206,8 @@
 - API: root paths, scans, projects, environments, workspaces, ignore rules.
 - Data model: `root_paths`, `ignore_rules`, `projects`, `project_links`, `repositories`, `environments`, `workspaces`.
 
-## Риски
+## Risks
 
-- ошибочная нормализация путей и дубли карточек проектов;
-- чрезмерное число `stat/open` операций при большом дереве;
-- неправильная обработка `.git` file для worktree/submodule.
+- incorrect path normalization and duplicate project cards;
+- excessive number of `stat/open` operations in a large tree;
+- incorrect handling of `.git` file for worktree/submodule.

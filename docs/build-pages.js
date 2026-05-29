@@ -11,6 +11,7 @@ const outRoot =
     ? path.resolve(process.cwd(), args[outIndex + 1])
     : docsRoot;
 
+const sourceLang = "ru";
 const markdownFiles = [];
 let renderContext = {
   currentDir: "",
@@ -85,7 +86,7 @@ const languages = {
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".git" || (dir === docsRoot && entry.name === "en")) {
+    if (entry.name === ".git") {
       continue;
     }
 
@@ -198,24 +199,30 @@ function normalizeDocRef(value, currentDir = "") {
     return "";
   }
 
-  if (cleanValue.startsWith("docs/")) {
-    return path.posix.normalize(cleanValue.slice("docs/".length));
+  let normalizedValue = cleanValue;
+
+  if (normalizedValue.startsWith("docs/")) {
+    normalizedValue = normalizedValue.slice("docs/".length);
   }
 
-  if (cleanValue.startsWith("./") || cleanValue.startsWith("../")) {
-    return path.posix.normalize(path.posix.join(currentDir || ".", cleanValue));
+  if (normalizedValue.startsWith("ru/") || normalizedValue.startsWith("en/")) {
+    normalizedValue = normalizedValue.slice(3);
   }
 
-  if (renderContext.docsByRel.has(cleanValue)) {
-    return cleanValue;
+  if (normalizedValue.startsWith("./") || normalizedValue.startsWith("../")) {
+    return path.posix.normalize(path.posix.join(currentDir || ".", normalizedValue));
   }
 
-  const relativeCandidate = path.posix.normalize(path.posix.join(currentDir || ".", cleanValue));
+  if (renderContext.docsByRel.has(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  const relativeCandidate = path.posix.normalize(path.posix.join(currentDir || ".", normalizedValue));
   if (renderContext.docsByRel.has(relativeCandidate)) {
     return relativeCandidate;
   }
 
-  return cleanValue;
+  return normalizedValue;
 }
 
 function relativeHtmlHref(fromMdPath, toMdPath) {
@@ -551,7 +558,7 @@ function extractReferencedDocs(markdown, relativeMdPath, docsByRel) {
   const patterns = [
     /\[[^\]]+]\(([^)\s]+\.md(?:#[^)]+)?)\)/g,
     /`([^`]+\.md(?:#[^`]*)?)`/g,
-    /\b((?:docs\/)?(?:adr\/|implementation-specs\/)?[A-Za-z0-9][A-Za-z0-9._/-]*\.md(?:#[A-Za-z0-9._-]+)?)\b/g,
+    /\b((?:docs\/)?(?:(?:ru|en)\/)?(?:adr\/|implementation-specs\/)?[A-Za-z0-9][A-Za-z0-9._/-]*\.md(?:#[A-Za-z0-9._-]+)?)\b/g,
   ];
   const previousContext = renderContext;
 
@@ -632,7 +639,7 @@ function relationLinks(title, docs, currentMdPath, lang = "ru") {
 function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, incomingDocs, lang }) {
   const locale = languages[lang];
   const prefix = assetPrefix(relativeMdPath, lang);
-  const sourceRelativeMdPath = `${lang === "en" ? "en/" : ""}${relativeMdPath}`;
+  const sourceRelativeMdPath = `${lang}/${relativeMdPath}`;
   const sourceHref = `https://github.com/artBass-rip/t-helper/blob/master/docs/${sourceRelativeMdPath
     .split(path.sep)
     .join("/")}`;
@@ -739,15 +746,16 @@ function rewritePublishedHtmlLinks() {
   for (const htmlPath of findFiles(outRoot, ".html")) {
     const source = fs.readFileSync(htmlPath, "utf8");
     const relativeHtmlPath = toPosix(path.relative(outRoot, htmlPath));
-    const isEnglishLanding = relativeHtmlPath === "en.html";
+    const landingLang =
+      relativeHtmlPath === "en.html" ? "en" : relativeHtmlPath === "index.html" ? "ru" : "";
     const rewritten = source.replace(
       /(href=["'])([^"']+\.md(?:#[^"']*)?)(["'])/g,
       (_, start, href, end) => {
         const { base, suffix } = splitLink(href);
         const normalizedDoc = normalizeDocRef(base);
 
-        if (isEnglishLanding && renderContext.docsByRel.has(normalizedDoc)) {
-          return `${start}${escapeHtml(htmlPathForDoc(normalizedDoc, "en"))}${suffix}${end}`;
+        if (landingLang && renderContext.docsByRel.has(normalizedDoc)) {
+          return `${start}${escapeHtml(htmlPathForDoc(normalizedDoc, landingLang))}${suffix}${end}`;
         }
 
         return `${start}${markdownHrefToHtml(href)}${end}`;
@@ -780,28 +788,24 @@ function findFiles(dir, extension) {
 }
 
 function localizedMarkdown(relativeMdPath, lang, fallback) {
-  if (lang !== "en") {
+  const localizedPath = path.join(docsRoot, lang, relativeMdPath);
+
+  if (!fs.existsSync(localizedPath)) {
     return fallback;
   }
 
-  const englishPath = path.join(docsRoot, "en", relativeMdPath);
-
-  if (!fs.existsSync(englishPath)) {
-    return fallback;
-  }
-
-  return fs.readFileSync(englishPath, "utf8");
+  return fs.readFileSync(localizedPath, "utf8");
 }
 
 if (outRoot !== docsRoot) {
   copyTree(docsRoot, outRoot);
 }
 
-walk(docsRoot);
+walk(path.join(docsRoot, sourceLang));
 
 const docs = markdownFiles
   .map((mdPath) => {
-    const relativeMdPath = toPosix(path.relative(docsRoot, mdPath));
+    const relativeMdPath = toPosix(path.relative(path.join(docsRoot, sourceLang), mdPath));
     const markdown = fs.readFileSync(mdPath, "utf8");
     const markdownByLang = {
       ru: markdown,

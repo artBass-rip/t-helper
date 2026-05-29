@@ -2,7 +2,7 @@
 
 ## Оптимизированные stage реализации
 
-Декомпозиция уменьшает размер foundation-части и делает каждый stage проверяемым отдельно. Детальные implementation specs находятся в `docs/implementation-specs/`.
+Декомпозиция уменьшает размер foundation-части и делает каждый stage проверяемым отдельно. Детальные implementation specs находятся в `docs/ru/implementation-specs/`.
 
 ### Stage 00. Delivery contract
 
@@ -154,7 +154,7 @@ update/distribution policy remain release artifact exit decisions.
 - hardened extensions for administrative UI beyond the Stage 08 full MVP admin screens;
 - добавить UI для advanced tool profile administration, SCIM sync management and platform-only administrative workflows where in release scope;
 - добавить SCIM visibility and sync operation surfaces where backend APIs are available;
-- сохранить `Web UI`/`GUI` parity по `docs/frontend-ui-contract.md`.
+- сохранить `Web UI`/`GUI` parity по `docs/ru/frontend-ui-contract.md`.
 
 ### Stage 13. SCIM full sync
 
@@ -220,7 +220,7 @@ update/distribution policy remain release artifact exit decisions.
 
 ## Статус открытых решений
 
-Канонический статус решений фиксируется в `docs/implementation-specs/stage-00-delivery-contract.md` в разделе `Decision register`. Если roadmap и Stage 00 расходятся, для управления внедрением используется Stage 00 decision register как более точный delivery contract.
+Канонический статус решений фиксируется в `docs/ru/implementation-specs/stage-00-delivery-contract.md` в разделе `Decision register`. Если roadmap и Stage 00 расходятся, для управления внедрением используется Stage 00 decision register как более точный delivery contract.
 
 - MVP breadth: accepted, MVP остаётся broad platform slice through Stage 08 и управляется stage ownership/test gates;
 - bootstrap admin recovery model: accepted, строгая first-run recovery policy сохраняется без unauthenticated persistent recovery path;

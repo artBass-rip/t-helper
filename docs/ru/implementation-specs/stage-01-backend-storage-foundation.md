@@ -17,14 +17,14 @@ GitHub Actions checks passed for `ci / go` on both `push` and `pull_request`.
 
 ## Inputs
 
-- `docs/adr/0001-go-backend-http-stack.md`
-- `docs/adr/0002-storage-and-migrations.md`
-- `docs/adr/0007-implementation-repository-layout-and-migrations.md`
-- `docs/development.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/technology-stack.md`
-- `docs/configuration.md`
+- `docs/ru/adr/0001-go-backend-http-stack.md`
+- `docs/ru/adr/0002-storage-and-migrations.md`
+- `docs/ru/adr/0007-implementation-repository-layout-and-migrations.md`
+- `docs/ru/development.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/technology-stack.md`
+- `docs/ru/configuration.md`
 
 ## Scope
 
@@ -65,7 +65,7 @@ GitHub Actions checks passed for `ci / go` on both `push` and `pull_request`.
 - storage abstraction не протекает в HTTP handlers - implemented via app wiring and storage provider registry;
 - SQLite/PostgreSQL реализованы как подключаемые storage adapter libraries за общим interface - delivered;
 - unknown storage provider отклоняется controlled validation error - covered by tests;
-- `GET /api/health` доступен и возвращает final `health_status.v1` DTO from `docs/api.md` and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;
+- `GET /api/health` доступен и возвращает final `health_status.v1` DTO from `docs/ru/api.md` and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;
 - Stage 01 health response includes `instance_id`, `mode`, `database_fingerprint`, `started_at`, `readiness` and `schema_version` - covered by tests;
 - Stage 01 health endpoint is unauthenticated and safe: it must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details - implemented with safe `database_fingerprint`;
 - storage tests проходят на обоих MVP adapters - verified by local tests and Docker `offline` profile with PostgreSQL.
@@ -100,7 +100,7 @@ Covered Stage 01 checks:
 
 ## Remaining MVP blockers
 
-- нет Stage 01 blockers после ADR 0007 и `docs/development.md`;
+- нет Stage 01 blockers после ADR 0007 и `docs/ru/development.md`;
 - конкретный migration framework остаётся recommendation из ADR 0002 (`goose`) и может быть заменён только отдельным ADR.
 
 ## Traceability

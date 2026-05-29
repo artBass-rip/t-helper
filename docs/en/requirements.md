@@ -1,75 +1,75 @@
-# Требования
+# Requirements
 
-## Функциональные требования
+## Functional Requirements
 
-### Глобальное сканирование
+### Global Scanning
 
-Система должна:
+The system must:
 
-- выполнять scan относительно одного или нескольких `root_path` из `scanning.global_scan`;
-- находить Terraform-проекты по наличию `*.tf`;
-- не читать содержимое Terraform-файлов, если для обнаружения достаточно имён;
-- прекращать углубление после обнаружения Terraform working directory;
-- создавать или обновлять отдельную запись `projects` для каждого локально обнаруженного Terraform working directory;
-- ставить фоновый `project_discovery` job для каждого созданного или обновлённого проекта и продолжать filesystem scan без ожидания этого job;
-- использовать `follow_symlinks = false` как единственный поддерживаемый MVP-режим обхода; расширенный symlink traversal переносится на Stage 09 runtime hardening;
-- поддерживать ручной запуск, запуск по расписанию и запуск по внутреннему событию;
-- выполняться отдельным модулем `global-scanner`.
+- run scans against one or more `root_path` entries from `scanning.global_scan`;
+- find Terraform projects by the presence of `*.tf`;
+- avoid reading Terraform file contents when names are sufficient for discovery;
+- stop descending after a Terraform working directory is discovered;
+- create or update a separate `projects` record for every locally discovered Terraform working directory;
+- enqueue a background `project_discovery` job for every created or updated project and continue the filesystem scan without waiting for that job;
+- use `follow_symlinks = false` as the only supported MVP traversal mode; extended symlink traversal is deferred to Stage 09 runtime hardening;
+- support manual runs, scheduled runs and internal-event runs;
+- run as a separate `global-scanner` module.
 
-### Project discovery и Git-связи
+### Project Discovery and Git Relationships
 
-Система должна:
+The system must:
 
-- выполнять фоновый `project_discovery` job для отдельного проекта;
-- определять, является ли проект частью Git working tree, только в `project_discovery`, а не в blocking path глобального scan;
-- находить Git-репозитории только по MVP Git marker allowlist: `.git/` directory или `.git` regular file для worktree/submodule;
-- для `.git` file читать только Git metadata file и считать marker валидным, если первая непустая строка начинается с `gitdir:`;
-- не считать Git marker'ами `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` и другие похожие файлы/директории;
-- не merge'ить разные project records, даже если они относятся к одному Git repository;
-- помечать проекты из одного Git repository как связанные через `project_links.link_type = same_repository` и общий `repository_id`, если repository уже известен.
+- run a background `project_discovery` job for an individual project;
+- determine whether a project is part of a Git working tree only in `project_discovery`, not in the blocking path of the global scan;
+- find Git repositories only by the MVP Git marker allowlist: `.git/` directory or `.git` regular file for worktrees/submodules;
+- for a `.git` file, read only the Git metadata file and treat the marker as valid when the first non-empty line starts with `gitdir:`;
+- not treat `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitlab-ci.yml`, `.github/`, `.gitkeep` or similar files/directories as Git markers;
+- not merge different project records even when they belong to one Git repository;
+- mark projects from one Git repository as related through `project_links.link_type = same_repository` and a shared `repository_id` when the repository is already known.
 
-### Исключения при сканировании
+### Scan Exclusions
 
-Система должна:
+The system must:
 
-- поддерживать `.gitignore`-подобный формат правил;
-- применять правила относительно `root_path`;
-- поддерживать glob-маски для файлов и директорий;
-- импортировать правила из `.t-helper.ignore`;
-- хранить и редактировать правила через БД и frontend;
-- сохранять отрицательные правила `!pattern` без потери данных и применять их после реализации full `.gitignore` semantics.
+- support a `.gitignore`-like rule format;
+- apply rules relative to `root_path`;
+- support glob masks for files and directories;
+- import rules from `.t-helper.ignore`;
+- store and edit rules through the database and frontend;
+- preserve negative `!pattern` rules without data loss and apply them after full `.gitignore` semantics are implemented.
 
-### Регистрация объектов
+### Object Registration
 
-После обнаружения система должна:
+After discovery, the system must:
 
-- создавать или обновлять карточку Terraform-проекта;
-- заполнять карточку проекта постепенно: неизвестные на момент global scan поля остаются nullable/default и обновляются последующими discovery/scanning/management stages;
-- создавать или обновлять карточку Git-репозитория только в рамках фонового project discovery или repository-manager workflows;
-- фиксировать время первого и последнего обнаружения;
-- не удалять project records при исчезновении пути; если проект не найден повторным completed scan, переводить его в `status = missing`;
-- автоматически возвращать project record в `status = active`, если тот же `root_path_id + relative_path` найден снова;
-- сохранять связи с `repository`, `environment` и `workspace`, если они известны.
+- create or update a Terraform project card;
+- populate the project card progressively: fields unknown during the global scan remain nullable/default and are updated by later discovery/scanning/management stages;
+- create or update a Git repository card only within background project discovery or repository-manager workflows;
+- record first and last discovery time;
+- not delete project records when a path disappears; when a project is absent from a repeated completed scan, move it to `status = missing`;
+- automatically return the project record to `status = active` when the same `root_path_id + relative_path` is found again;
+- preserve relationships with `repository`, `environment` and `workspace` when known.
 
-### Lifecycle без hard delete в MVP
+### Lifecycle Without Hard Delete in the MVP
 
-MVP не предоставляет public hard delete endpoints. Удаление из пользовательских
-сценариев выражается через явные non-destructive состояния:
+The MVP does not provide public hard delete endpoints. Deletion in user
+scenarios is represented through explicit non-destructive states:
 
 - root paths and provider/configuration records disable/deactivate through
-  `enabled = false` или эквивалентное active-state field;
-- projects use `status = missing` для отсутствующих путей и `status = disabled`
-  для административного отключения;
-- repositories use `status = disabled`, `missing` или `superseded`;
+  `enabled = false` or an equivalent active-state field;
+- projects use `status = missing` for missing paths and `status = disabled`
+  for administrative disablement;
+- repositories use `status = disabled`, `missing` or `superseded`;
 - users use `active = false`;
 - omitted records in bulk `PUT` requests are never deleted.
 
-Будущие hard delete/archive endpoints требуют отдельного API contract,
+Future hard delete/archive endpoints require a separate API contract,
 permissions, migration behavior and tests.
 
-### Работа с репозиториями
+### Repository Operations
 
-Система должна поддерживать в roadmap:
+The system must support on the roadmap:
 
 - `clone`
 - `pull`
@@ -77,57 +77,63 @@ permissions, migration behavior and tests.
 - webhook-based sync
 - polling-based sync
 
-MVP repository-manager поддерживает `clone`, `pull`, `sync` для `generic` Git и одного managed provider из `gitlab` или `github`. Polling sync, recursive GitLab group clone, `bitbucket` и `azure_devops` adapters переносятся в repository extension stages, а webhook sync - в Stage 14.
+The MVP repository-manager supports `clone`, `pull` and `sync` for `generic`
+Git and one managed provider from `gitlab` or `github`. Polling sync, recursive
+GitLab group clone, `bitbucket` and `azure_devops` adapters are deferred to
+repository extension stages, and webhook sync is deferred to Stage 14.
 
-Ограничения:
+Constraints:
 
-- clone и scan должны использовать один и тот же materialized список `root_paths`;
-- пользователь должен иметь возможность выбрать существующий root path, импортированный из `scanning.global_scan` или созданный через API, как target path для clone;
-- пользователь должен иметь возможность создать новый root path при clone;
-- новый root path, созданный при clone, должен автоматически сохраняться в `root_paths` с `source = api`; `scanning.global_scan` остаётся внешним config source и не переписывается repository-manager'ом;
-- внутри выбранного root path пользователь должен иметь возможность выбрать существующую директорию для clone или создать новую;
-- локальный путь репозитория должен находиться внутри выбранного root path и выбранной target directory;
-- в UI protocol для clone должен выбираться рядом с полем ввода URL и принимать `https` или `ssh`;
-- должны поддерживаться разные providers для clone по roadmap: `gitlab`, `github`, `bitbucket`, `azure_devops`; MVP включает `generic` Git и один managed provider из `gitlab` или `github`;
-- integration UX должен поддерживать cloud и on-premise/multi-domain provider hosts: GitHub, GitHub Enterprise Server, GitLab, GitLab Self-Managed, Bitbucket, Bitbucket Data Center и Azure DevOps;
-- для одного provider должно поддерживаться несколько hosts/provider instances;
-- для одного provider host должно поддерживаться несколько credentials с разными usages/permissions;
-- provider должен влиять на разбор URL, выбор transport protocol и bulk operations;
-- identity репозитория должен определяться как `provider + provider_host + full_path`, чтобы поддерживать несколько providers и self-hosted instances;
-- `clone_url` должен рассматриваться как nullable non-unique transport endpoint, а не как ключ идентичности или deduplication;
-- persisted `clone_url` не должен содержать credentials, tokens, passwords или URL userinfo;
-- repository operations должны принимать explicit `credential_id` или использовать repository default credential;
-- credentials должны хранить только `secretref://...` references, а не raw secret values;
-- должна поддерживаться возможность клонировать один repository и отдельный bulk clone workflow;
-- bulk clone всех проектов GitLab group с рекурсивным обходом всех вложенных subgroups переносится после single-repository clone MVP;
-- если локальный каталог уже содержит корректный Git-репозиторий, вместо повторного `clone` выполняется `pull`;
-- должны поддерживаться `SSH` и `HTTPS`;
-- конфликтующие параллельные операции по одному репозиторию должны блокироваться.
+- clone and scan must use the same materialized list of `root_paths`;
+- the user must be able to select an existing root path imported from `scanning.global_scan` or created through the API as the target path for clone;
+- the user must be able to create a new root path during clone;
+- a new root path created during clone must be saved automatically in `root_paths` with `source = api`; `scanning.global_scan` remains an external config source and is not rewritten by `repository-manager`;
+- inside the selected root path, the user must be able to select an existing directory for clone or create a new one;
+- the local repository path must be inside the selected root path and selected target directory;
+- in the UI, the protocol for clone must be selected next to the URL input and accept `https` or `ssh`;
+- different providers must be supported for clone on the roadmap: `gitlab`, `github`, `bitbucket`, `azure_devops`; the MVP includes `generic` Git and one managed provider from `gitlab` or `github`;
+- integration UX must support cloud and on-premise/multi-domain provider hosts: GitHub, GitHub Enterprise Server, GitLab, GitLab Self-Managed, Bitbucket, Bitbucket Data Center and Azure DevOps;
+- one provider must support multiple hosts/provider instances;
+- one provider host must support multiple credentials with different usages/permissions;
+- the provider must affect URL parsing, transport protocol selection and bulk operations;
+- repository identity must be defined as `provider + provider_host + full_path` to support multiple providers and self-hosted instances;
+- `clone_url` must be treated as a nullable non-unique transport endpoint, not as an identity key or deduplication key;
+- persisted `clone_url` must not contain credentials, tokens, passwords or URL userinfo;
+- repository operations must accept an explicit `credential_id` or use the repository default credential;
+- credentials must store only `secretref://...` references, not raw secret values;
+- cloning one repository and a separate bulk clone workflow must be supported;
+- bulk clone of all projects in a GitLab group with recursive traversal of all nested subgroups is deferred until after the single-repository clone MVP;
+- if the local directory already contains a valid Git repository, `pull` is performed instead of another `clone`;
+- `SSH` and `HTTPS` must be supported;
+- conflicting parallel operations on one repository must be blocked.
 
-### Базовый стек сканирования
+### Baseline Scanning Stack
 
-Роли модулей и локально запускаемых инструментов должны быть фиксированы документацией и runtime-конфигурацией:
+Module roles and locally executed tools must be fixed by documentation and
+runtime configuration:
 
-- `global-scanner` отвечает за Terraform project discovery, project registry update и enqueue фоновых `project_discovery` jobs;
-- `project-scanner` использует `terraform validate` и `TFLint` для project-level Terraform checks;
-- `security-validator` использует `Trivy` как обязательный MVP scanner; `Gitleaks`, `Checkov`, `OPA` и `Conftest` подключаются как extensions;
-- enterprise-policy checks подключаются через `OPA` и `Conftest`;
-- findings, rules и policies остаются локальными и не отправляются во внешние сервисы.
+- `global-scanner` is responsible for Terraform project discovery, project registry updates and enqueueing background `project_discovery` jobs;
+- `project-scanner` uses `terraform validate` and `TFLint` for project-level Terraform checks;
+- `security-validator` uses `Trivy` as the mandatory MVP scanner; `Gitleaks`, `Checkov`, `OPA` and `Conftest` are connected as extensions;
+- enterprise-policy checks are connected through `OPA` and `Conftest`;
+- findings, rules and policies remain local and are not sent to external services.
 
-### Проектное Terraform-сканирование
+### Project-Level Terraform Scanning
 
-Project-level scan запускается вручную, по расписанию, после `clone`, после `pull` или по внутреннему событию.
+Project-level scan is started manually, on a schedule, after `clone`, after
+`pull` or by an internal event.
 
-Настройки project-level scan задаются относительно отдельного проекта. Глобальная конфигурация не должна содержать default-настройки project scan.
+Project-level scan settings are defined relative to an individual project. The
+global configuration must not contain default project scan settings.
 
-Project-level scan выполняется отдельным модулем `project-scanner`.
+Project-level scan runs as a separate `project-scanner` module.
 
-Технологический baseline для `project-scanner`:
+Technology baseline for `project-scanner`:
 
 - `terraform validate`
 - `TFLint`
 
-Минимальный набор проверок:
+Minimum check set:
 
 - `terraform.providers`
 - `terraform.required_auth`
@@ -138,122 +144,125 @@ Project-level scan выполняется отдельным модулем `pro
 - `terraform.provider_usage`
 - `terraform.policy`
 
-### Сканирование безопасности и валидация кода
+### Security Scanning and Code Validation
 
-Security/validation scan запускается относительно отдельного проекта и выполняется отдельным модулем `security-validator`.
+Security/validation scan runs relative to an individual project and is executed
+by a separate `security-validator` module.
 
-Технологический roadmap baseline для `security-validator`:
+Technology roadmap baseline for `security-validator`:
 
 - `Trivy`
 - `Gitleaks`
 - `Checkov`
 
-Enterprise-policy checks должны поддерживаться через:
+Enterprise-policy checks must be supported through:
 
 - `OPA`
 - `Conftest`
 
-MVP requires `Trivy` as the mandatory local security scanner. `Gitleaks`, `Checkov`, `OPA` and `Conftest` are adapter extension points and are not mandatory MVP acceptance.
+MVP requires `Trivy` as the mandatory local security scanner. `Gitleaks`,
+`Checkov`, `OPA` and `Conftest` are adapter extension points and are not
+mandatory MVP acceptance.
 
-Система должна:
+The system must:
 
-- хранить в глобальной конфигурации `scanning.security_scan.modules` только список доступных модулей проверок и policy engines;
-- разрешать подключение доступных security/validation модулей в настройках конкретного проекта;
-- не запускать модуль проверки для проекта, если он не включён в проектной настройке;
-- выполнять проверки `terraform.validate`, `terraform.secrets`, `terraform.security.misconfig`, `terraform.policy` и расширяемые security/validation modules;
-- сохранять findings с привязкой к проекту, rule set, job и времени обнаружения.
+- store only the list of available check modules and policy engines in global configuration `scanning.security_scan.modules`;
+- allow available security/validation modules to be enabled in project-specific settings;
+- not run a check module for a project unless it is enabled in that project's settings;
+- run `terraform.validate`, `terraform.secrets`, `terraform.security.misconfig`, `terraform.policy` and extensible security/validation modules;
+- store findings linked to the project, rule set, job and discovery time.
 
-Ожидаемый результат:
+Expected result:
 
-- список providers, их версий и aliases;
-- metadata о требуемой авторизации;
-- findings по syntax, deprecations, quality и security;
-- fingerprinted результаты с привязкой к rule set и времени обнаружения.
+- list of providers, their versions and aliases;
+- metadata about required authorization;
+- findings for syntax, deprecations, quality and security;
+- fingerprinted results linked to rule set and discovery time.
 
-### Конфигурация и lifecycle
+### Configuration and Lifecycle
 
-Система должна:
+The system must:
 
-- хранить runtime-конфигурацию в БД;
-- валидировать конфигурацию перед записью;
-- применять reloadable-настройки через `thelper-ctl -reload`;
-- поддерживать `thelper-ctl -restart <module>` для любого отдельного модуля;
-- показывать состояния модулей через UI и CLI.
-- выполнять background jobs в отдельных `thelper-worker` процессах, а не inline внутри API runtime.
+- store runtime configuration in the database;
+- validate configuration before writing;
+- apply reloadable settings through `thelper-ctl -reload`;
+- support `thelper-ctl -restart <module>` for any individual module;
+- show module states through UI and CLI.
+- execute background jobs in separate `thelper-worker` processes, not inline inside the API runtime.
 
 ### Frontend
 
-Оба интерфейса, `GUI` и `Web UI`, должны использовать единый backend API. Для MVP обязательны основные read/operate сценарии:
+Both interfaces, `GUI` and `Web UI`, must use a unified backend API. The MVP
+requires the main read/operate scenarios:
 
-- просмотр проектов, environments и workspaces;
-- управление scan roots и ignore rules;
-- запуск глобального scan и project scan;
-- управление repository operations;
-- просмотр findings, jobs, module states и audit log;
-- просмотр конфигурации.
+- viewing projects, environments and workspaces;
+- managing scan roots and ignore rules;
+- starting global scans and project scans;
+- managing repository operations;
+- viewing findings, jobs, module states and audit log;
+- viewing configuration.
 
-Технологический стек frontend:
+Frontend technology stack:
 
 - `Web UI`: `React`, `TypeScript`, `Vite`, `TanStack Router`, `TanStack Query`, `Zod`, `React Hook Form`, `Ant Design`;
-- локальный `GUI`: `Tauri` поверх той же React/TypeScript codebase.
+- local `GUI`: `Tauri` over the same React/TypeScript codebase.
 
 Stage 08 includes full MVP administrative screens for backend APIs that are in
 the target MVP release scope. Platform-only administrative hardening and
 capabilities outside the MVP backend scope are delivered separately:
 
-- full SCIM sync management переносится в Stage 13;
+- full SCIM sync management is deferred to Stage 13;
 - advanced tool profile administration and platform-only controls can be
   hardened in Stage 12;
 - bundled policy pack management depends on Stage 11 scope.
 
-`GUI` работает только локально. Удалённый доступ предоставляется через `Web UI`.
+`GUI` works only locally. Remote access is provided through `Web UI`.
 
-В одной локальной установке активен только один `t-helper` runtime:
+Only one `t-helper` runtime is active in a single local installation:
 
-- если `thelper` уже запущен для `Web UI`, Tauri GUI подключается к существующему runtime;
-- если `thelper` ещё не запущен, Tauri GUI запускает local `thelper`, а `Web UI` затем подключается к тому же runtime;
-- повторный запуск `thelper` не должен создавать второй активный runtime.
+- if `thelper` is already running for the `Web UI`, the Tauri GUI connects to the existing runtime;
+- if `thelper` is not running yet, the Tauri GUI starts a local `thelper`, and the `Web UI` then connects to the same runtime;
+- a repeated `thelper` start must not create a second active runtime.
 
-## Нефункциональные требования
+## Non-Functional Requirements
 
-### Производительность
+### Performance
 
-- global-scanner минимизирует число операций `stat/open`;
-- global-scanner использует worker pool с ограничением параллелизма; SQLite
-  runtime may use effective traversal concurrency 1 to avoid local writer
-  contention;
-- security-validator использует отдельную очередь задач;
-- background jobs выполняются отдельными worker-процессами;
-- глобальное и проектное сканирование выполняются независимо.
+- `global-scanner` minimizes the number of `stat/open` operations;
+- `global-scanner` uses a worker pool with a concurrency limit; SQLite runtime
+  may use effective traversal concurrency 1 to avoid local writer contention;
+- `security-validator` uses a separate task queue;
+- background jobs are executed by separate worker processes;
+- global and project scanning run independently.
 
-### Масштабируемость
+### Scalability
 
-- поддерживаются несколько путей глобального сканирования;
-- модули логически изолированы;
-- `global-scanner`, `project-scanner`, `security-validator`, `repository-manager`, `auth` допускают вынос в отдельные процессы или узлы.
+- multiple global scan paths are supported;
+- modules are logically isolated;
+- `global-scanner`, `project-scanner`, `security-validator`, `repository-manager`, `auth` can be moved to separate processes or nodes.
 
-### Надёжность
+### Reliability
 
-- ошибки отдельных директорий не прерывают весь scan job;
-- ошибки отдельных project checks не прерывают глобальный scan и repository operations;
-- повторные scan, clone, pull, sync должны приводить систему к тому же целевому состоянию при неизменных входных данных;
-- повторные operations не должны создавать дубли `projects`, `repositories`, `jobs` и активных `job_locks`;
-- административные и фоновые операции должны журналироваться.
+- errors in individual directories do not interrupt the entire scan job;
+- errors in individual project checks do not interrupt the global scan and repository operations;
+- repeated scan, clone, pull and sync operations must bring the system to the same target state when inputs are unchanged;
+- repeated operations must not create duplicate `projects`, `repositories`, `jobs` or active `job_locks`;
+- administrative and background operations must be logged.
 
-### Безопасность
+### Security
 
-- frontend требует аутентификацию;
-- local auth должен поддерживать login, logout, current session, password reset и password change через documented backend API;
-- доступ к операциям контролируется через `RBAC`;
-- секреты БД и Git не хранятся в открытом виде;
-- код и findings не отправляются наружу;
-- security rules и policies используются только локально;
-- должен вестись audit log.
+- the frontend requires authentication;
+- local auth must support login, logout, current session, password reset and password change through the documented backend API;
+- access to operations is controlled through `RBAC`;
+- database and Git secrets are not stored in plaintext;
+- code and findings are not sent outside;
+- security rules and policies are used only locally;
+- an audit log must be maintained.
 
-## Ограничения MVP
+## MVP Constraints
 
-- Terraform-проект определяется только по наличию `*.tf`;
-- базовый ignore matcher в MVP может быть exclude-only, поддержка `!pattern` допускается отдельным расширением;
-- поддержка `terragrunt.hcl` не обязательна для первой версии;
-- runtime verification через `terraform init` и `terraform validate` может быть вынесена в отдельный worker;
-- `GUI` не является удалённым клиентом.
+- A Terraform project is identified only by the presence of `*.tf`;
+- the basic ignore matcher in the MVP may be exclude-only; `!pattern` support is allowed as a separate extension;
+- `terragrunt.hcl` support is not mandatory for the first version;
+- runtime verification through `terraform init` and `terraform validate` may be moved into a separate worker;
+- `GUI` is not a remote client.

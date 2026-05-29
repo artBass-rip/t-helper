@@ -1,16 +1,16 @@
 # Stage 12: Admin UI Hardening
 
-## Цель
+## Goal
 
-Усилить и расширить administrative UI после Stage 08 full MVP admin screens: SCIM sync management, advanced tool profile administration, platform-only controls and release-specific hardening поверх documented backend API и единого frontend UI contract.
+Strengthen and expand the administrative UI after the Stage 08 full MVP admin screens: SCIM sync management, advanced tool profile administration, platform-only controls and release-specific hardening on top of the documented backend API and unified frontend UI contract.
 
 ## Inputs
 
-- `docs/frontend-ui-contract.md`
-- `docs/api.md`
-- `docs/access-control.md`
-- `docs/test-plan.md`
-- `docs/technology-stack.md`
+- `docs/en/frontend-ui-contract.md`
+- `docs/en/api.md`
+- `docs/en/access-control.md`
+- `docs/en/test-plan.md`
+- `docs/en/technology-stack.md`
 
 ## Scope
 
@@ -38,7 +38,7 @@
 
 - admin screens available in `Web UI` are available in local `GUI` for the same release scope;
 - admin UI uses only documented backend API endpoints;
-- UI follows `docs/frontend-ui-contract.md`;
+- UI follows `docs/en/frontend-ui-contract.md`;
 - permissions are enforced by backend and represented clearly in UI states;
 - configuration and rule set changes show resulting jobs/status where applicable.
 
@@ -52,9 +52,9 @@
 - Roadmap: Stage 12.
 - Acceptance: `ACC-PLATFORM-002`, `ACC-PLATFORM-003`.
 - API: auth/RBAC, config, security rule sets, tool profiles, audit.
-- UI contract: `docs/frontend-ui-contract.md`.
+- UI contract: `docs/en/frontend-ui-contract.md`.
 
-## Риски
+## Risks
 
 - frontend compensates for missing backend contracts;
 - GUI and Web UI diverge in administrative screens;

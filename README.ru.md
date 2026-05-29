@@ -1,6 +1,6 @@
 # T-Helper
 
-[English version](README.md)
+[English version](README.en.md)
 
 `t-helper` - on-premise платформа для обнаружения Terraform-проектов, учета
 метаданных репозиториев, локального security-анализа и централизованного
@@ -109,8 +109,8 @@ Stage 05 предоставляет следующую runtime API surface:
 - `GET /api/environments`, `GET /api/environments/{id}`
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`
 
-Канонические contracts описаны в [docs/api.md](docs/api.md) и
-[docs/interfaces.md](docs/interfaces.md).
+Канонические contracts описаны в [docs/ru/api.md](docs/ru/api.md) и
+[docs/ru/interfaces.md](docs/ru/interfaces.md).
 
 ## Модель конфигурации
 
@@ -186,36 +186,36 @@ SQLite tests запускаются по умолчанию.
 
 ## Документация
 
-- [docs/requirements.md](docs/requirements.md) - functional и non-functional
+- [docs/ru/requirements.md](docs/ru/requirements.md) - functional и non-functional
   requirements.
-- [docs/architecture.md](docs/architecture.md) - architecture, modules,
+- [docs/ru/architecture.md](docs/ru/architecture.md) - architecture, modules,
   deployment modes и runtime flow.
-- [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration и
+- [docs/ru/interfaces.md](docs/ru/interfaces.md) - CLI, backend API, configuration и
   global scanning behavior.
-- [docs/api.md](docs/api.md) - текущий Stage 05 HTTP API baseline, будущие
+- [docs/ru/api.md](docs/ru/api.md) - текущий Stage 05 HTTP API baseline, будущие
   endpoint contracts и response schemas.
-- [docs/configuration.md](docs/configuration.md) - `config.json`,
+- [docs/ru/configuration.md](docs/ru/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability и validation.
-- [docs/development.md](docs/development.md) - local development и test
+- [docs/ru/development.md](docs/ru/development.md) - local development и test
   contract.
-- [docs/code-optimization.md](docs/code-optimization.md) - выполненные
+- [docs/ru/code-optimization.md](docs/ru/code-optimization.md) - выполненные
   оптимизации, quality gate и дальнейший optimization backlog.
-- [docs/github-pages.md](docs/github-pages.md) - структура двуязычных GitHub
+- [docs/ru/github-pages.md](docs/ru/github-pages.md) - структура двуязычных GitHub
   Pages и deployment workflow.
-- [docs/local-dev-environment.md](docs/local-dev-environment.md) -
+- [docs/ru/local-dev-environment.md](docs/ru/local-dev-environment.md) -
   Docker-based local environment.
-- [docs/data-model.md](docs/data-model.md) - entities, relationships и storage
+- [docs/ru/data-model.md](docs/ru/data-model.md) - entities, relationships и storage
   invariants.
-- [docs/payload-schemas.md](docs/payload-schemas.md) - versioned JSON
+- [docs/ru/payload-schemas.md](docs/ru/payload-schemas.md) - versioned JSON
   payload/result contracts.
-- [docs/access-control.md](docs/access-control.md) - auth, SCIM, RBAC и
+- [docs/ru/access-control.md](docs/ru/access-control.md) - auth, SCIM, RBAC и
   authorization matrix.
-- [docs/frontend-ui-contract.md](docs/frontend-ui-contract.md) - Stage 08 Web
+- [docs/ru/frontend-ui-contract.md](docs/ru/frontend-ui-contract.md) - Stage 08 Web
   UI и local GUI contract.
-- [docs/roadmap.md](docs/roadmap.md) - implementation stages и acceptance
+- [docs/ru/roadmap.md](docs/ru/roadmap.md) - implementation stages и acceptance
   criteria.
-- [docs/adr/](docs/adr/) - architecture decision records.
-- [docs/implementation-specs/](docs/implementation-specs/) - stage-level
+- [docs/ru/adr/](docs/ru/adr/) - architecture decision records.
+- [docs/ru/implementation-specs/](docs/ru/implementation-specs/) - stage-level
   implementation specs.
 - [CHANGELOG.md](CHANGELOG.md) и [CHANGELOG.ru.md](CHANGELOG.ru.md) - история
   изменений.

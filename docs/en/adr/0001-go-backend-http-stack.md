@@ -6,19 +6,19 @@ Accepted.
 
 ## Decision
 
-Backend runtime, CLI и worker components реализуются на `Go`.
+The backend runtime, CLI, and worker components are implemented in `Go`.
 
-HTTP API реализуется на стандартном `net/http` с lightweight router/middleware stack. Recommended router: `chi`.
+The HTTP API is implemented on the standard `net/http` package with a lightweight router/middleware stack. Recommended router: `chi`.
 
 ## Rationale
 
-- Go подходит для single-binary on-premise delivery.
-- `net/http` сохраняет backend framework-neutral.
-- `chi` хорошо ложится на REST API, middleware и `httptest`.
-- Router не должен протекать в доменную логику.
+- Go is suitable for single-binary on-premise delivery.
+- `net/http` keeps the backend framework-neutral.
+- `chi` fits REST APIs, middleware, and `httptest` well.
+- The router must not leak into domain logic.
 
 ## Consequences
 
-- Handlers вызывают application services.
-- API contracts остаются в `docs/api.md`.
-- Framework-specific code должен быть локализован в HTTP adapter layer.
+- Handlers call application services.
+- API contracts remain in `docs/en/api.md`.
+- Framework-specific code must be localized in the HTTP adapter layer.

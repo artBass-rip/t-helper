@@ -109,8 +109,8 @@ Stage 05 exposes the following runtime API surface:
 - `GET /api/environments`, `GET /api/environments/{id}`
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`
 
-The canonical contracts are documented in [docs/api.md](docs/api.md) and
-[docs/interfaces.md](docs/interfaces.md).
+The canonical contracts are documented in [docs/en/api.md](docs/en/api.md) and
+[docs/en/interfaces.md](docs/en/interfaces.md).
 
 ## Configuration Model
 
@@ -186,36 +186,36 @@ Use `make race` for manual or nightly race detector checks.
 
 ## Documentation
 
-- [docs/requirements.md](docs/requirements.md) - functional and
+- [docs/en/requirements.md](docs/en/requirements.md) - functional and
   non-functional requirements.
-- [docs/architecture.md](docs/architecture.md) - architecture, modules,
+- [docs/en/architecture.md](docs/en/architecture.md) - architecture, modules,
   deployment modes and runtime flow.
-- [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration
+- [docs/en/interfaces.md](docs/en/interfaces.md) - CLI, backend API, configuration
   and global scanning behavior.
-- [docs/api.md](docs/api.md) - current Stage 05 HTTP API baseline, future
+- [docs/en/api.md](docs/en/api.md) - current Stage 05 HTTP API baseline, future
   endpoint contracts and response schemas.
-- [docs/configuration.md](docs/configuration.md) - `config.json`,
+- [docs/en/configuration.md](docs/en/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability and validation.
-- [docs/development.md](docs/development.md) - local development and test
+- [docs/en/development.md](docs/en/development.md) - local development and test
   contract.
-- [docs/code-optimization.md](docs/code-optimization.md) - completed
+- [docs/en/code-optimization.md](docs/en/code-optimization.md) - completed
   optimizations, quality gate and remaining optimization backlog.
-- [docs/github-pages.md](docs/github-pages.md) - bilingual GitHub Pages
+- [docs/en/github-pages.md](docs/en/github-pages.md) - bilingual GitHub Pages
   structure and deployment workflow.
-- [docs/local-dev-environment.md](docs/local-dev-environment.md) -
+- [docs/en/local-dev-environment.md](docs/en/local-dev-environment.md) -
   Docker-based local environment.
-- [docs/data-model.md](docs/data-model.md) - entities, relationships and
+- [docs/en/data-model.md](docs/en/data-model.md) - entities, relationships and
   storage invariants.
-- [docs/payload-schemas.md](docs/payload-schemas.md) - versioned JSON
+- [docs/en/payload-schemas.md](docs/en/payload-schemas.md) - versioned JSON
   payload/result contracts.
-- [docs/access-control.md](docs/access-control.md) - auth, SCIM, RBAC and
+- [docs/en/access-control.md](docs/en/access-control.md) - auth, SCIM, RBAC and
   authorization matrix.
-- [docs/frontend-ui-contract.md](docs/frontend-ui-contract.md) - Stage 08 Web
+- [docs/en/frontend-ui-contract.md](docs/en/frontend-ui-contract.md) - Stage 08 Web
   UI and local GUI contract.
-- [docs/roadmap.md](docs/roadmap.md) - implementation stages and acceptance
+- [docs/en/roadmap.md](docs/en/roadmap.md) - implementation stages and acceptance
   criteria.
-- [docs/adr/](docs/adr/) - architecture decision records.
-- [docs/implementation-specs/](docs/implementation-specs/) - stage-level
+- [docs/en/adr/](docs/en/adr/) - architecture decision records.
+- [docs/en/implementation-specs/](docs/en/implementation-specs/) - stage-level
   implementation specs.
 - [CHANGELOG.md](CHANGELOG.md) and [CHANGELOG.ru.md](CHANGELOG.ru.md) -
   change history.
