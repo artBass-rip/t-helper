@@ -49,8 +49,8 @@ func TestApplyIsIdempotentForSQLite(t *testing.T) {
 	if err := db.QueryRow("SELECT value FROM system_metadata WHERE key = 'schema_version'").Scan(&value); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if value != "stage-04" {
-		t.Fatalf("schema_version = %q, want stage-04", value)
+	if value != "stage-05" {
+		t.Fatalf("schema_version = %q, want stage-05", value)
 	}
 }
 
@@ -96,6 +96,8 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 		"repositories": {
 			"repositories_provider_host_full_path_idx",
 			"repositories_local_path_idx",
+			"repositories_root_target_directory_idx",
+			"repositories_root_local_path_idx",
 			"repositories_status_idx",
 			"repositories_discovery_source_idx",
 		},
@@ -106,12 +108,43 @@ func TestStage04ReadPathIndexesExistForSQLite(t *testing.T) {
 			"workspaces_project_id_idx",
 			"workspaces_environment_id_idx",
 		},
+		"repository_provider_instances": {
+			"repository_provider_instances_provider_host_idx",
+		},
+		"repository_credentials": {
+			"repository_credentials_provider_instance_idx",
+			"repository_credentials_provider_instance_auth_type_idx",
+		},
 	} {
 		got := sqliteIndexes(t, db, table)
 		for _, name := range names {
 			if !got[name] {
 				t.Fatalf("missing index %s on %s; got indexes %#v", name, table, got)
 			}
+		}
+	}
+}
+
+func TestStage05RepositoryForeignKeysExistForSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := Apply(context.Background(), db, "sqlite"); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	got := sqliteForeignKeys(t, db, "repositories")
+	for _, want := range []string{
+		"provider_instance_id->repository_provider_instances(id)",
+		"default_credential_id->repository_credentials(id)",
+		"superseded_by_repository_id->repositories(id)",
+		"root_path_id->root_paths(id)",
+	} {
+		if !got[want] {
+			t.Fatalf("missing repository foreign key %s; got %#v", want, got)
 		}
 	}
 }
@@ -139,6 +172,28 @@ func sqliteIndexes(t *testing.T, db *sql.DB, table string) map[string]bool {
 		t.Fatalf("iterate indexes for %s: %v", table, err)
 	}
 	return indexes
+}
+
+func sqliteForeignKeys(t *testing.T, db *sql.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.Query("PRAGMA foreign_key_list(" + table + ")")
+	if err != nil {
+		t.Fatalf("list foreign keys for %s: %v", table, err)
+	}
+	defer rows.Close()
+	keys := map[string]bool{}
+	for rows.Next() {
+		var id, seq int
+		var refTable, from, to, onUpdate, onDelete, match string
+		if err := rows.Scan(&id, &seq, &refTable, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+			t.Fatalf("scan foreign key for %s: %v", table, err)
+		}
+		keys[from+"->"+refTable+"("+to+")"] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate foreign keys for %s: %v", table, err)
+	}
+	return keys
 }
 
 func migrationVersions(t *testing.T, dialect string) []string {

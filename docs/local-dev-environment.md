@@ -194,8 +194,10 @@ Run on every local developer test invocation:
 Expected command:
 
 ```text
-go test ./...
+make test
 ```
+
+`make test` includes `gofmt` check, `go vet ./...` and `go test ./...`.
 
 ### Container Integration Tests
 

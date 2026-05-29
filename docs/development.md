@@ -2,21 +2,26 @@
 
 ## Purpose
 
-This document defines the local development contract for the current Stage 04
-scanner/registry baseline and storage tests.
+This document defines the local development contract for the current Stage 05
+repository manager MVP baseline and storage tests.
 
 The Docker-based developer environment, product/dependency containers, manual
 testing profile and OS-family test matrix are defined in
 [`local-dev-environment.md`](local-dev-environment.md).
 
-Stage 04 has delivered the executable backend scaffold, persisted runtime
+Stage 05 has delivered the executable backend scaffold, persisted runtime
 configuration, module lifecycle, singleton runtime policy, jobs/workers/status,
-global scanning, Terraform project discovery and scanner/registry HTTP APIs.
+global scanning, Terraform project discovery, scanner/registry HTTP APIs and
+repository manager clone/pull/sync APIs.
 The current local baseline is:
 
-- `go test ./...`;
+- `make test`;
 - `go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl`;
 - `docker compose --profile offline -f docker-compose.test.yml run --rm test-runner`.
+
+`make test` is the fast pre-PR quality gate. It runs a `gofmt` check,
+`go vet ./...` and `go test ./...`. Use `make race` for manual or nightly race
+detector runs.
 
 The Docker `offline` test runner starts PostgreSQL and runs the same Go test
 suite with `THELPER_POSTGRES_DSN` set. DSN-backed tests run with `go test -p 1
@@ -83,7 +88,11 @@ migration versions:
   workflow statuses;
 - `000004_stage04_scanner_registry.sql` for root paths, projects, project
   links, minimal repositories, environments and workspaces;
-- `000005_stage04_root_path_source.sql` for root path source tracking.
+- `000005_stage04_root_path_source.sql` for root path source tracking;
+- `000006_stage05_repository_manager.sql` for provider instances, credentials
+  and repository operation reservations;
+- `000007_stage05_repository_manager_hardening.sql` for Stage 05 repository
+  manager hardening and indexes.
 
 The `mysql` and `mssql` directories are reserved for Stage 10 adapter expansion
 and contain no current SQL migrations.
@@ -117,17 +126,25 @@ Stage 04 migrations create:
 - `environments`;
 - `workspaces`.
 
-Stage 01-04 migrations must not create later-stage tables such as `users`,
-`groups`, `security_findings`, `project_scans` or repository operation tables
-owned by Stage 05 and later.
+Stage 05 migrations create or harden:
 
-## Stage 04 runtime behavior
+- repository provider instance metadata;
+- repository credentials with `secretref://...` values only;
+- repository operation reservation/index support;
+- repository enrichment and conflict-prevention fields needed by clone, pull
+  and sync workflows.
 
-- `cmd/thelper` applies Stage 01-04 migrations, starts the HTTP runtime and
+Stage 01-05 migrations must not create later-stage tables such as `users`,
+`groups`, `security_findings`, `project_scans`, tool profiles or policy-pack
+tables owned by Stage 06 and later.
+
+## Stage 05 runtime behavior
+
+- `cmd/thelper` applies Stage 01-05 migrations, starts the HTTP runtime and
   exposes `GET /api/health`, `GET/PUT /api/config`, `GET /api/modules`,
   `POST /api/modules/reload`, `POST /api/modules/restart`, `GET /api/jobs`,
-  `GET /api/jobs/{id}`, `GET /api/status*` and Stage 04 scanner/registry
-  endpoints.
+  `GET /api/jobs/{id}`, `GET /api/status*`, Stage 04 scanner/registry
+  endpoints and Stage 05 repository manager endpoints.
 - `GET /api/health` returns `health_status.v1` with `instance_id`, `mode`,
   safe `database_fingerprint`, `started_at`, `readiness` and `schema_version`.
 - `database_fingerprint` is derived from safe storage locator components and
@@ -157,12 +174,34 @@ owned by Stage 05 and later.
 - Stage 04 ignore matching is exclude-only. `!pattern` rules are preserved but
   not applied until full `.gitignore` semantics are implemented in a later
   hardening stage.
+- Stage 05 repository endpoints expose provider instances, credentials,
+  repository list/detail and `clone`, `pull`, `sync` job creation.
+- Stage 05 repository operations use normalized repository identity,
+  path containment checks, credential references and `job_locks` for
+  conflicting operation serialization.
+
+## Code quality and optimization contract
+
+- HTTP handlers implement `httpapi.RouteRegistrar` and register their own
+  routes through `RegisterRoutes(chi.Router)`.
+- `internal/httpapi/router_test.go` is the route smoke-test for the current
+  executable API surface.
+- Store code should use `storage.WithTx` in new or materially changed
+  transaction paths unless a method needs custom retry/isolation behavior.
+- Performance work must add benchmarks or another repeatable measurement before
+  changing hot paths. Current job benchmarks live in
+  `internal/jobs/store_benchmark_test.go`.
+- The optimization register is maintained in
+  [`code-optimization.md`](code-optimization.md).
 
 ## Project Pages
 
 - `docs/index.html` is the default Russian GitHub Pages entrypoint.
 - `docs/en.html` is the English language variant.
 - Both pages share `docs/pages.css` and `docs/pages.js`.
+- `docs/build-pages.js` renders every `docs/**/*.md` file to a styled
+  dependency-free HTML page for the published artifact and rewrites internal
+  Markdown links to generated HTML links.
 - `.github/workflows/pages.yml` publishes the `docs` directory through GitHub
   Actions to the `gh-pages` branch.
 - Repository Pages settings must use source `Deploy from a branch`, branch

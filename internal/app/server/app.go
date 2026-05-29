@@ -15,6 +15,7 @@ import (
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	applog "github.com/artBass-rip/t-helper/internal/log"
 	"github.com/artBass-rip/t-helper/internal/modules"
+	"github.com/artBass-rip/t-helper/internal/repository"
 	"github.com/artBass-rip/t-helper/internal/runtime"
 	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
@@ -157,6 +158,7 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 	moduleStore := modules.NewStore(handle)
 	jobStore := jobs.NewStore(handle)
 	scannerStore := scanner.NewStore(handle)
+	repositoryStore := repository.NewStore(handle)
 	settings, err := configStore.RuntimeSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -174,6 +176,7 @@ func (a *App) BuildHandler(ctx context.Context, handle *storage.Handle, instance
 		httpapi.NewJobsHandler(jobStore),
 		httpapi.NewStatusHandler(jobStore),
 		httpapi.NewScannerHandler(scannerStore, jobStore),
+		httpapi.NewRepositoryHandler(repositoryStore, scannerStore, jobStore),
 	), nil
 }
 

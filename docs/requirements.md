@@ -81,10 +81,10 @@ MVP repository-manager поддерживает `clone`, `pull`, `sync` для `
 
 Ограничения:
 
-- clone и scan должны использовать один и тот же список `root_path` из `scanning.global_scan`;
-- пользователь должен иметь возможность выбрать существующий root path из `scanning.global_scan` как target path для clone;
+- clone и scan должны использовать один и тот же materialized список `root_paths`;
+- пользователь должен иметь возможность выбрать существующий root path, импортированный из `scanning.global_scan` или созданный через API, как target path для clone;
 - пользователь должен иметь возможность создать новый root path при clone;
-- новый root path, созданный при clone, должен автоматически добавляться в `scanning.global_scan`;
+- новый root path, созданный при clone, должен автоматически сохраняться в `root_paths` с `source = api`; `scanning.global_scan` остаётся внешним config source и не переписывается repository-manager'ом;
 - внутри выбранного root path пользователь должен иметь возможность выбрать существующую директорию для clone или создать новую;
 - локальный путь репозитория должен находиться внутри выбранного root path и выбранной target directory;
 - в UI protocol для clone должен выбираться рядом с полем ввода URL и принимать `https` или `ssh`;

@@ -209,7 +209,12 @@ processes are replaced.
 
 `global_scan` является каноническим именем поля входной конфигурации. Внутри storage эти записи мапятся на сущность `root_paths`.
 
-Для scan и clone используется один и тот же список путей. При clone пользователь выбирает существующий `global_scan[].root_path` или создаёт новый root path. Если clone выполняется в новый root path, он должен быть добавлен в `scanning.global_scan` и сохранён как новый `root_path`.
+Для scan и clone используется один и тот же materialized список `root_paths`.
+При clone пользователь выбирает существующий root path, импортированный из
+`global_scan[].root_path` или созданный через API, либо создаёт новый root path.
+Если clone выполняется в новый root path, он сохраняется как новый `root_path`
+с `source = api`; `scanning.global_scan` как внешний config source не
+переписывается repository-manager'ом.
 
 ### `repositories`
 

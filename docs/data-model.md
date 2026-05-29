@@ -214,11 +214,17 @@ roots are preserved.
 
 Инварианты:
 
+- Stage 05 MVP stores `display_name` as `name` and does not yet persist
+  `deployment_type` or `default_clone_protocol`; those fields remain the
+  forward data-model contract for later provider-profile expansion.
 - `provider` принимает `gitlab`, `github`, `bitbucket`, `azure_devops` или `generic`;
 - `deployment_type` принимает `cloud`, `self_managed`, `enterprise_server`, `data_center` или `organization`;
 - `provider_host` normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;
 - `provider + provider_host` unique;
 - provider instance stores host/profile metadata only, not secrets.
+- Stage 05 MVP accepts `api_base_url` and `web_base_url` only as HTTPS URLs
+  without userinfo; their host must normalize to the same value as
+  `provider_host`.
 
 ### `repository_credentials`
 
@@ -241,6 +247,10 @@ roots are preserved.
 
 Инварианты:
 
+- Stage 05 MVP persists a single `secret_ref` selected by `auth_type` instead
+  of separate `token_ref`, `password_ref`, `private_key_ref`,
+  `passphrase_ref` and `webhook_secret_ref` columns; the separate columns are
+  the forward data-model contract for richer credential material.
 - `provider_instance_id` обязателен;
 - `auth_type` принимает `ssh_key`, `https_token`, `https_basic`, `oauth_token`, `app_password`, `webhook_secret`;
 - `usages` содержит один или несколько values: `git_transport`, `provider_api`, `webhook`;
@@ -248,7 +258,7 @@ roots are preserved.
 - MVP accepts only `secretref://env/...` secret refs;
 - API responses mask secret refs and never return resolved secrets;
 - one provider instance may have multiple credentials with different usages, scope hints and permissions;
-- repository operations must validate that selected `credential_id` belongs to the same provider instance and supports the required usage.
+- repository operations must validate that selected `credential_id` belongs to the same provider instance, supports the required usage and has an `auth_type` compatible with the selected transport protocol.
 
 ### `ignore_rules`
 
@@ -528,6 +538,9 @@ Initial module registry seed:
 - одновременно может существовать только один lock со статусом `held` для одного `lock_key`;
 - для repository operations final `lock_key` строится как `repository:<repository_id>`, чтобы сериализовать `clone`, `pull` и `sync` между собой;
 - clone additionally uses pre-create lock keys `repository-identity:<provider>:<provider_host>:<full_path>` and `repository-path:<root_path_id>:<normalized_target_path>` before a stable `repository_id` exists;
+- released/expired repository-operation reservations are removed by an explicit
+  cleanup storage primitive and may also be pruned opportunistically before new
+  reservations are created;
 - истёкшие locks не должны блокировать новые операции, но должны сохраняться для audit/debug.
 
 ### `project_scans`

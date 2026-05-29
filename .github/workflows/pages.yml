@@ -27,7 +27,7 @@ jobs:
           publish_source="$(mktemp -d)"
           publish_worktree="$(mktemp -d)"
 
-          cp -R docs/. "$publish_source/"
+          node docs/build-pages.js --out "$publish_source"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
