@@ -18,16 +18,20 @@ Project/security scans, authentication/RBAC и frontend намеренно от�
 
 ## Страница проекта
 
-GitHub Pages поставляются как статическая двуязычная landing page проекта:
+GitHub Pages поставляются как статическая двуязычная landing page проекта с
+генерируемыми двуязычными страницами документации:
 
 - русская страница: [docs/index.html](docs/index.html);
 - английская страница: [docs/en.html](docs/en.html);
 - deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml).
 
 В начале страницы явно указано, что проект реализуется исключительно ИИ.
-Публикация идет из директории `docs` через GitHub Actions в ветку `gh-pages`.
-В настройках Pages нужно выбрать source `Deploy from a branch`, branch
-`gh-pages`, folder `/ (root)`.
+Во время публикации `docs/build-pages.js` рендерит каждый исходный
+`docs/**/*.md` в русскую и английскую HTML-оболочку с локальной навигацией,
+связанными документами и ссылками внутри той же языковой версии. Публикация
+идет из директории `docs` через GitHub Actions в ветку `gh-pages`. В настройках
+Pages нужно выбрать source `Deploy from a branch`, branch `gh-pages`, folder
+`/ (root)`.
 
 ## Лицензия
 

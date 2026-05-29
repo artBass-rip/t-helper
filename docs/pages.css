@@ -542,8 +542,6 @@ code {
   font-weight: 760;
 }
 
-<<<<<<< Updated upstream
-=======
 .doc-page {
   background: var(--surface);
 }
@@ -880,7 +878,6 @@ code {
   transform: translateX(3px);
 }
 
->>>>>>> Stashed changes
 [data-reveal] {
   opacity: 0;
   transform: translateY(24px);
@@ -942,8 +939,6 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-<<<<<<< Updated upstream
-=======
   .doc-shell {
     grid-template-columns: 1fr;
     padding-top: 36px;
@@ -966,7 +961,6 @@ code {
     grid-template-columns: 1fr;
   }
 
->>>>>>> Stashed changes
   .status-rail article:nth-child(2n),
   .doc-links a:nth-child(2n) {
     border-right: 0;
@@ -1016,13 +1010,11 @@ code {
     grid-template-columns: 1fr;
   }
 
-<<<<<<< Updated upstream
-=======
   .doc-header {
     gap: 14px;
   }
 
-  .doc-source {
+  .doc-source .source-link {
     display: none;
   }
 
@@ -1040,7 +1032,6 @@ code {
     grid-template-columns: 1fr;
   }
 
->>>>>>> Stashed changes
   .status-rail article,
   .doc-links a {
     min-height: auto;

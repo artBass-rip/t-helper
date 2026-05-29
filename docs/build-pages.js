@@ -15,6 +15,72 @@ const markdownFiles = [];
 let renderContext = {
   currentDir: "",
   docsByRel: new Map(),
+  lang: "ru",
+};
+
+const languages = {
+  ru: {
+    code: "ru",
+    root: "",
+    home: "index.html",
+    skip: "К содержанию",
+    navAria: "Навигация документации",
+    navSectionsAria: "Разделы документации",
+    docs: "Документы",
+    roadmap: "Roadmap",
+    source: ".md",
+    asideAria: "Навигация по документу",
+    homeLabel: "T-Helper Docs",
+    globalAria: "Ключевые документы",
+    tocFallback: "Начало",
+    related: "Связанные документы",
+    referencedBy: "Ссылаются сюда",
+    relationsAria: "Перекрёстные ссылки",
+    fallbackTitle: "Навигация",
+    fallbackText: "Этот документ входит в общий каталог T-Helper Docs.",
+    directoryAria: "Каталог документации",
+    docsMap: "Docs map",
+    allPages: "Все страницы документации",
+    sourceLabel: "Исходный Markdown",
+    ruPage: "Русская страница",
+    enPage: "English page",
+    groupLabels: {
+      "Core Docs": "Core Docs",
+      "Implementation Specs": "Implementation Specs",
+      ADR: "ADR",
+    },
+  },
+  en: {
+    code: "en",
+    root: "en",
+    home: "en.html",
+    skip: "Skip to content",
+    navAria: "Documentation navigation",
+    navSectionsAria: "Documentation sections",
+    docs: "Docs",
+    roadmap: "Roadmap",
+    source: ".md",
+    asideAria: "Document navigation",
+    homeLabel: "T-Helper Docs",
+    globalAria: "Key documents",
+    tocFallback: "Top",
+    related: "Related documents",
+    referencedBy: "Referenced by",
+    relationsAria: "Cross references",
+    fallbackTitle: "Navigation",
+    fallbackText: "This document is part of the T-Helper Docs catalog.",
+    directoryAria: "Documentation catalog",
+    docsMap: "Docs map",
+    allPages: "All documentation pages",
+    sourceLabel: "Source Markdown",
+    ruPage: "Русская страница",
+    enPage: "English page",
+    groupLabels: {
+      "Core Docs": "Core Docs",
+      "Implementation Specs": "Implementation Specs",
+      ADR: "ADR",
+    },
+  },
 };
 
 function walk(dir) {
@@ -165,8 +231,50 @@ function relativeHtmlHref(fromMdPath, toMdPath) {
   return href || path.posix.basename(targetHtml);
 }
 
+function htmlPathForDoc(relativeMdPath, lang = "ru") {
+  const relativeHtmlPath = toPosix(relativeMdPath).replace(/\.md$/, ".html");
+  return lang === "en" ? path.posix.join("en", relativeHtmlPath) : relativeHtmlPath;
+}
+
+function currentHtmlDir(relativeMdPath, lang = "ru") {
+  const dir = path.posix.dirname(htmlPathForDoc(relativeMdPath, lang));
+  return dir === "." ? "" : dir;
+}
+
+function relativeHtmlHrefForLang(fromMdPath, toMdPath, lang = "ru") {
+  const fromDir = currentHtmlDir(fromMdPath, lang);
+  const targetHtml = htmlPathForDoc(toMdPath, lang);
+  const href = path.posix.relative(fromDir || ".", targetHtml);
+
+  if (!href.startsWith(".") && !href.startsWith("/")) {
+    return href;
+  }
+
+  return href || path.posix.basename(targetHtml);
+}
+
+function relativeDocPageHref(fromMdPath, fromLang, toLang) {
+  const fromDir = currentHtmlDir(fromMdPath, fromLang);
+  const targetHtml = htmlPathForDoc(fromMdPath, toLang);
+  const href = path.posix.relative(fromDir || ".", targetHtml);
+
+  if (!href.startsWith(".") && !href.startsWith("/")) {
+    return href;
+  }
+
+  return href || path.posix.basename(targetHtml);
+}
+
+function assetPrefix(relativeMdPath, lang = "ru") {
+  return `${lang === "en" ? "../" : ""}${relativePrefix(relativeMdPath)}`;
+}
+
+function homeHref(relativeMdPath, lang = "ru") {
+  return `${assetPrefix(relativeMdPath, lang)}${languages[lang].home}`;
+}
+
 function docHrefFromCurrent(targetMdPath) {
-  return relativeHtmlHref(renderContext.currentMdPath || "", targetMdPath);
+  return relativeHtmlHrefForLang(renderContext.currentMdPath || "", targetMdPath, renderContext.lang || "ru");
 }
 
 function renderInline(value, options = {}) {
@@ -451,6 +559,7 @@ function extractReferencedDocs(markdown, relativeMdPath, docsByRel) {
     currentDir: normalizedDir,
     currentMdPath: relativeMdPath,
     docsByRel,
+    lang: "ru",
   };
 
   for (const pattern of patterns) {
@@ -473,7 +582,8 @@ function extractReferencedDocs(markdown, relativeMdPath, docsByRel) {
   return [...references].sort();
 }
 
-function documentCatalog(currentMdPath, docs) {
+function documentCatalog(currentMdPath, docs, lang = "ru") {
+  const locale = languages[lang];
   const groups = ["Core Docs", "Implementation Specs", "ADR"];
 
   return groups
@@ -485,12 +595,12 @@ function documentCatalog(currentMdPath, docs) {
       }
 
       return `<section class="doc-directory-group">
-          <h2>${group}</h2>
+          <h2>${locale.groupLabels[group] || group}</h2>
           <div class="doc-directory-links">
             ${items
               .map((doc) => {
                 const current = doc.relativeMdPath === currentMdPath ? ' aria-current="page"' : "";
-                const href = escapeHtml(relativeHtmlHref(currentMdPath, doc.relativeMdPath));
+                const href = escapeHtml(relativeHtmlHrefForLang(currentMdPath, doc.relativeMdPath, lang));
                 return `<a href="${href}"${current}>${escapeHtml(doc.title)}</a>`;
               })
               .join("\n")}
@@ -500,7 +610,7 @@ function documentCatalog(currentMdPath, docs) {
     .join("\n");
 }
 
-function relationLinks(title, docs, currentMdPath) {
+function relationLinks(title, docs, currentMdPath, lang = "ru") {
   if (docs.length === 0) {
     return "";
   }
@@ -511,7 +621,7 @@ function relationLinks(title, docs, currentMdPath) {
             ${docs
               .slice(0, 12)
               .map((doc) => {
-                const href = escapeHtml(relativeHtmlHref(currentMdPath, doc.relativeMdPath));
+                const href = escapeHtml(relativeHtmlHrefForLang(currentMdPath, doc.relativeMdPath, lang));
                 return `<a href="${href}"><span>${escapeHtml(doc.group)}</span>${escapeHtml(doc.title)}</a>`;
               })
               .join("\n")}
@@ -519,8 +629,9 @@ function relationLinks(title, docs, currentMdPath) {
         </section>`;
 }
 
-function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, incomingDocs }) {
-  const prefix = relativePrefix(relativeMdPath);
+function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, incomingDocs, lang }) {
+  const locale = languages[lang];
+  const prefix = assetPrefix(relativeMdPath, lang);
   const sourceHref = `https://github.com/artBass-rip/t-helper/blob/master/docs/${relativeMdPath
     .split(path.sep)
     .join("/")}`;
@@ -531,57 +642,63 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
         `<a class="toc-level-${heading.level}" href="#${heading.id}">${renderInline(heading.text)}</a>`,
     )
     .join("\n");
-  const catalog = documentCatalog(relativeMdPath, docs);
+  const catalog = documentCatalog(relativeMdPath, docs, lang);
   const relations = [
-    relationLinks("Связанные документы", outgoingDocs, relativeMdPath),
-    relationLinks("Ссылаются сюда", incomingDocs, relativeMdPath),
+    relationLinks(locale.related, outgoingDocs, relativeMdPath, lang),
+    relationLinks(locale.referencedBy, incomingDocs, relativeMdPath, lang),
   ]
     .filter(Boolean)
     .join("\n");
+  const ruHref = escapeHtml(relativeDocPageHref(relativeMdPath, lang, "ru"));
+  const enHref = escapeHtml(relativeDocPageHref(relativeMdPath, lang, "en"));
 
   return `<!doctype html>
-<html lang="ru">
+<html lang="${locale.code}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="${escapeHtml(title)} - T-Helper documentation.">
     <title>${escapeHtml(title)} - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="${ruHref}">
+    <link rel="alternate" hreflang="en" href="${enHref}">
     <link rel="stylesheet" href="${prefix}pages.css">
   </head>
   <body class="doc-page">
-    <a class="skip-link" href="#main">К содержанию</a>
+    <a class="skip-link" href="#main">${locale.skip}</a>
 
-    <header class="site-header doc-header" aria-label="Навигация документации">
-      <a class="brand" href="${prefix}index.html" aria-label="T-Helper">
+    <header class="site-header doc-header" aria-label="${locale.navAria}">
+      <a class="brand" href="${homeHref(relativeMdPath, lang)}" aria-label="T-Helper">
         <span class="brand-mark" aria-hidden="true">T</span>
         <span>T-Helper</span>
       </a>
-      <nav class="nav-links" aria-label="Разделы документации">
-        <a href="${prefix}index.html#docs">Документы</a>
-        <a href="${prefix}requirements.html">Requirements</a>
-        <a href="${prefix}architecture.html">Architecture</a>
-        <a href="${prefix}roadmap.html">Roadmap</a>
-        <a href="${prefix}api.html">API</a>
+      <nav class="nav-links" aria-label="${locale.navSectionsAria}">
+        <a href="${homeHref(relativeMdPath, lang)}#docs">${locale.docs}</a>
+        <a href="${relativeHtmlHrefForLang(relativeMdPath, "requirements.md", lang)}">Requirements</a>
+        <a href="${relativeHtmlHrefForLang(relativeMdPath, "architecture.md", lang)}">Architecture</a>
+        <a href="${relativeHtmlHrefForLang(relativeMdPath, "roadmap.md", lang)}">${locale.roadmap}</a>
+        <a href="${relativeHtmlHrefForLang(relativeMdPath, "api.md", lang)}">API</a>
       </nav>
       <div class="lang-switch doc-source">
-        <a href="${sourceHref}">.md</a>
+        <a class="${lang === "ru" ? "is-active" : ""}" href="${ruHref}"${lang === "ru" ? ' aria-current="page"' : ""}>RU</a>
+        <a class="${lang === "en" ? "is-active" : ""}" href="${enHref}"${lang === "en" ? ' aria-current="page"' : ""}>EN</a>
+        <a class="source-link" href="${sourceHref}">${locale.source}</a>
       </div>
     </header>
 
     <main class="doc-shell" id="main">
-      <aside class="doc-aside" aria-label="Навигация по документу">
-        <a class="doc-home" href="${prefix}index.html">T-Helper Docs</a>
+      <aside class="doc-aside" aria-label="${locale.asideAria}">
+        <a class="doc-home" href="${homeHref(relativeMdPath, lang)}">${locale.homeLabel}</a>
         <span>${escapeHtml(relativeMdPath.split(path.sep).join("/"))}</span>
-        <nav class="doc-global-links" aria-label="Ключевые документы">
-          <a href="${prefix}requirements.html">Requirements</a>
-          <a href="${prefix}architecture.html">Architecture</a>
-          <a href="${prefix}api.html">API</a>
-          <a href="${prefix}data-model.html">Data model</a>
-          <a href="${prefix}roadmap.html">Roadmap</a>
-          <a href="${prefix}traceability.html">Traceability</a>
+        <nav class="doc-global-links" aria-label="${locale.globalAria}">
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "requirements.md", lang)}">Requirements</a>
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "architecture.md", lang)}">Architecture</a>
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "api.md", lang)}">API</a>
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "data-model.md", lang)}">Data model</a>
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "roadmap.md", lang)}">Roadmap</a>
+          <a href="${relativeHtmlHrefForLang(relativeMdPath, "traceability.md", lang)}">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          ${toc || '<a href="#main">Начало</a>'}
+          ${toc || `<a href="#main">${locale.tocFallback}</a>`}
         </nav>
       </aside>
 
@@ -590,14 +707,14 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
           ${body}
         </article>
 
-        <section class="doc-relations" aria-label="Перекрёстные ссылки">
-          ${relations || '<section><h2>Навигация</h2><p>Этот документ входит в общий каталог T-Helper Docs.</p></section>'}
+        <section class="doc-relations" aria-label="${locale.relationsAria}">
+          ${relations || `<section><h2>${locale.fallbackTitle}</h2><p>${locale.fallbackText}</p></section>`}
         </section>
 
-        <section class="doc-directory" aria-label="Каталог документации">
+        <section class="doc-directory" aria-label="${locale.directoryAria}">
           <div class="doc-directory-heading">
-            <p class="eyebrow">Docs map</p>
-            <h2>Все страницы документации</h2>
+            <p class="eyebrow">${locale.docsMap}</p>
+            <h2>${locale.allPages}</h2>
           </div>
           ${catalog}
         </section>
@@ -606,9 +723,9 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
 
     <footer class="site-footer doc-footer">
       <span>T-Helper</span>
-      <a href="${prefix}index.html">Русская страница</a>
-      <a href="${prefix}en.html">English page</a>
-      <a href="${sourceHref}">Исходный Markdown</a>
+      <a href="${ruHref}">${locale.ruPage}</a>
+      <a href="${enHref}">${locale.enPage}</a>
+      <a href="${sourceHref}">${locale.sourceLabel}</a>
     </footer>
 
     <script src="${prefix}pages.js"></script>
@@ -620,9 +737,20 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
 function rewritePublishedHtmlLinks() {
   for (const htmlPath of findFiles(outRoot, ".html")) {
     const source = fs.readFileSync(htmlPath, "utf8");
+    const relativeHtmlPath = toPosix(path.relative(outRoot, htmlPath));
+    const isEnglishLanding = relativeHtmlPath === "en.html";
     const rewritten = source.replace(
       /(href=["'])([^"']+\.md(?:#[^"']*)?)(["'])/g,
-      (_, start, href, end) => `${start}${markdownHrefToHtml(href)}${end}`,
+      (_, start, href, end) => {
+        const { base, suffix } = splitLink(href);
+        const normalizedDoc = normalizeDocRef(base);
+
+        if (isEnglishLanding && renderContext.docsByRel.has(normalizedDoc)) {
+          return `${start}${escapeHtml(htmlPathForDoc(normalizedDoc, "en"))}${suffix}${end}`;
+        }
+
+        return `${start}${markdownHrefToHtml(href)}${end}`;
+      },
     );
 
     if (rewritten !== source) {
@@ -695,32 +823,35 @@ for (const doc of docs) {
     .map((candidate) => candidate.relativeMdPath);
 }
 
-for (const doc of docs) {
-  const relativeHtmlPath = doc.relativeMdPath.replace(/\.md$/, ".html");
-  const targetPath = path.join(outRoot, relativeHtmlPath);
-  const currentDir = path.posix.dirname(doc.relativeMdPath);
+for (const lang of Object.keys(languages)) {
+  for (const doc of docs) {
+    const targetPath = path.join(outRoot, htmlPathForDoc(doc.relativeMdPath, lang));
+    const currentDir = path.posix.dirname(doc.relativeMdPath);
 
-  renderContext = {
-    currentDir: currentDir === "." ? "" : currentDir,
-    currentMdPath: doc.relativeMdPath,
-    docsByRel,
-  };
+    renderContext = {
+      currentDir: currentDir === "." ? "" : currentDir,
+      currentMdPath: doc.relativeMdPath,
+      docsByRel,
+      lang,
+    };
 
-  const rendered = renderMarkdown(doc.markdown);
-  const html = docShell({
-    relativeMdPath: doc.relativeMdPath,
-    title: rendered.title || doc.title,
-    body: rendered.body,
-    headings: rendered.headings,
-    docs,
-    outgoingDocs: doc.references.map((reference) => docsByRel.get(reference)).filter(Boolean),
-    incomingDocs: doc.referencedBy.map((reference) => docsByRel.get(reference)).filter(Boolean),
-  });
+    const rendered = renderMarkdown(doc.markdown);
+    const html = docShell({
+      relativeMdPath: doc.relativeMdPath,
+      title: rendered.title || doc.title,
+      body: rendered.body,
+      headings: rendered.headings,
+      docs,
+      outgoingDocs: doc.references.map((reference) => docsByRel.get(reference)).filter(Boolean),
+      incomingDocs: doc.referencedBy.map((reference) => docsByRel.get(reference)).filter(Boolean),
+      lang,
+    });
 
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, html);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, html);
+  }
 }
 
 rewritePublishedHtmlLinks();
 
-console.log(`Generated ${markdownFiles.length} documentation pages in ${outRoot}`);
+console.log(`Generated ${markdownFiles.length * Object.keys(languages).length} documentation pages in ${outRoot}`);

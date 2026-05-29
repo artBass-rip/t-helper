@@ -83,11 +83,12 @@
       <section class="section status-section" id="status" aria-labelledby="status-title">
         <div class="section-heading" data-reveal>
           <p class="eyebrow">Current baseline</p>
-          <h2 id="status-title">Stage 04: scanner and registry MVP</h2>
+          <h2 id="status-title">Stage 05: repository manager MVP</h2>
           <p>
             The backend foundation is implemented: service entrypoints, storage
             adapters, migrations, runtime config, module lifecycle,
-            jobs/workers/status, global scanning and scanner/registry HTTP API.
+            jobs/workers/status, global scanning, scanner/registry HTTP API
+            and repository clone/pull/sync workflows.
           </p>
         </div>
 
@@ -109,8 +110,8 @@
           </article>
           <article>
             <span>04</span>
-            <h3>Jobs</h3>
-            <p>Background queue with leases, heartbeat, retry/backoff and status read models.</p>
+            <h3>Repositories</h3>
+            <p>Provider profiles, masked credentials, clone/pull/sync jobs and path safety.</p>
           </article>
         </div>
       </section>
@@ -154,11 +155,11 @@
         <ol class="roadmap" data-reveal>
           <li>
             <span>Stage 05</span>
-            Repository manager MVP: clone, pull, sync, credentials and path safety.
+            Completed: repository manager MVP with generic Git plus GitHub, credentials and operation serialization.
           </li>
           <li>
-            <span>Stage 06</span>
-            Project scanner and security validator on local toolchain profiles.
+            <span>Stage 06A/06B</span>
+            External toolchain profiles, project scanner and security validator on local CLI tools.
           </li>
           <li>
             <span>Stage 07-08</span>
@@ -209,8 +210,6 @@
             <span>Development</span>
             Local development and test contract.
           </a>
-<<<<<<< Updated upstream
-=======
           <a href="access-control.md">
             <span>Access control</span>
             Auth, SCIM, RBAC, permissions and audit scope.
@@ -239,7 +238,6 @@
             <span>Optimization</span>
             Completed optimizations, quality gate and remaining backlog.
           </a>
->>>>>>> Stashed changes
         </div>
       </section>
     </main>

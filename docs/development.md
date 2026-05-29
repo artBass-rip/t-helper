@@ -163,14 +163,11 @@ owned by Stage 05 and later.
 - `docs/index.html` is the default Russian GitHub Pages entrypoint.
 - `docs/en.html` is the English language variant.
 - Both pages share `docs/pages.css` and `docs/pages.js`.
-<<<<<<< Updated upstream
-=======
-- `docs/build-pages.js` renders every `docs/**/*.md` file to a styled
-  dependency-free HTML page for the published artifact and rewrites internal
-  Markdown links to generated HTML links.
+- `docs/build-pages.js` renders every `docs/**/*.md` file to styled
+  dependency-free Russian and English HTML pages for the published artifact and
+  rewrites internal Markdown links to generated same-language HTML links.
 - Generated document pages share the same navigation shell, local table of
   contents, related-document links, backlinks and full documentation catalog.
->>>>>>> Stashed changes
 - `.github/workflows/pages.yml` publishes the `docs` directory through GitHub
   Actions to the `gh-pages` branch.
 - Repository Pages settings must use source `Deploy from a branch`, branch

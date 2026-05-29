@@ -18,16 +18,20 @@ owned by later roadmap stages.
 
 ## Project Pages
 
-GitHub Pages are provided as a static bilingual project landing page:
+GitHub Pages are provided as a static bilingual project landing page with
+generated bilingual documentation pages:
 
 - Russian page: [docs/index.html](docs/index.html)
 - English page: [docs/en.html](docs/en.html)
 - Deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml)
 
 The landing page explicitly states at the top that the project is implemented
-exclusively by AI. Pages are published from the `docs` directory through GitHub
-Actions to the `gh-pages` branch. Repository Pages settings must use source
-`Deploy from a branch`, branch `gh-pages`, folder `/ (root)`.
+exclusively by AI. During publication, `docs/build-pages.js` renders every
+`docs/**/*.md` source into Russian and English HTML shells with local
+navigation, related documents and same-language links. Pages are published from
+the `docs` directory through GitHub Actions to the `gh-pages` branch.
+Repository Pages settings must use source `Deploy from a branch`, branch
+`gh-pages`, folder `/ (root)`.
 
 ## License
 
