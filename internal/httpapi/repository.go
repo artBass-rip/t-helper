@@ -10,6 +10,7 @@ import (
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/repository"
 	"github.com/artBass-rip/t-helper/internal/scanner"
+	"github.com/go-chi/chi/v5"
 )
 
 type RepositoryHandler struct {
@@ -26,6 +27,16 @@ type cloneRootSelection struct {
 
 func NewRepositoryHandler(store *repository.Store, scannerStore *scanner.Store, jobStore *jobs.Store) *RepositoryHandler {
 	return &RepositoryHandler{store: store, scannerStore: scannerStore, jobStore: jobStore}
+}
+
+func (h *RepositoryHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/repo-provider-instances", h.ListProviderInstances)
+	r.Put("/api/repo-provider-instances", h.PutProviderInstances)
+	r.Get("/api/repo-credentials", h.ListCredentials)
+	r.Put("/api/repo-credentials", h.PutCredentials)
+	r.Post("/api/repos/clone", h.Clone)
+	r.Post("/api/repos/pull", h.Pull)
+	r.Post("/api/repos/sync", h.Sync)
 }
 
 func (h *RepositoryHandler) ListProviderInstances(w http.ResponseWriter, r *http.Request) {

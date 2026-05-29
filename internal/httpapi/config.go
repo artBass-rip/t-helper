@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
+	"github.com/go-chi/chi/v5"
 )
 
 type ConfigHandler struct {
@@ -13,6 +14,11 @@ type ConfigHandler struct {
 
 func NewConfigHandler(store *appconfig.Store) *ConfigHandler {
 	return &ConfigHandler{store: store}
+}
+
+func (h *ConfigHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/config", h.Get)
+	r.Put("/api/config", h.Put)
 }
 
 func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {

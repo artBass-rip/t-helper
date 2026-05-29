@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/artBass-rip/t-helper/internal/runtime"
+	"github.com/go-chi/chi/v5"
 )
 
 type HealthHandler struct {
@@ -13,6 +14,10 @@ type HealthHandler struct {
 
 func NewHealthHandler(service *runtime.HealthService) *HealthHandler {
 	return &HealthHandler{service: service}
+}
+
+func (h *HealthHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/health", h.ServeHTTP)
 }
 
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

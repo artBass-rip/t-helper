@@ -17,6 +17,11 @@ func NewJobsHandler(store *jobs.Store) *JobsHandler {
 	return &JobsHandler{store: store}
 }
 
+func (h *JobsHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/jobs", h.List)
+	r.Get("/api/jobs/{id}", h.Get)
+}
+
 func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	page, err := h.store.ListPage(r.Context(), jobs.ListFilters{
@@ -58,6 +63,14 @@ type StatusHandler struct {
 
 func NewStatusHandler(store *jobs.Store) *StatusHandler {
 	return &StatusHandler{store: store}
+}
+
+func (h *StatusHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/status", h.Runtime)
+	r.Get("/api/status/workflows", h.Workflows)
+	r.Get("/api/status/workflows/{job_group_id}", h.Workflow)
+	r.Get("/api/status/jobs/{job_id}", h.Job)
+	r.Get("/api/status/workers", h.Workers)
 }
 
 func (h *StatusHandler) Runtime(w http.ResponseWriter, r *http.Request) {
