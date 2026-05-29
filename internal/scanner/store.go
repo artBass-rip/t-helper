@@ -253,6 +253,14 @@ func (s *Store) GetRootPath(ctx context.Context, id string) (RootPath, error) {
 	return root, err
 }
 
+func (s *Store) RootPathByPath(ctx context.Context, path string) (RootPath, error) {
+	normalized, err := normalizeAbsPath(path)
+	if err != nil {
+		return RootPath{}, err
+	}
+	return s.findRootPath(ctx, "", normalized)
+}
+
 func (s *Store) ListRootPaths(ctx context.Context, opts ListOptions) (Page[RootPath], error) {
 	query := "SELECT " + s.rootPathColumns() + " FROM root_paths"
 	return listPage(ctx, s, query, nil, "created_at", opts, scanRootPath)

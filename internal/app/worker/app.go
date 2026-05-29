@@ -13,6 +13,7 @@ import (
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/modules"
+	"github.com/artBass-rip/t-helper/internal/repository"
 	"github.com/artBass-rip/t-helper/internal/scanner"
 	"github.com/artBass-rip/t-helper/internal/storage"
 )
@@ -119,7 +120,11 @@ func (a *App) runtimeOptions(ctx context.Context, handle *storage.Handle, config
 	}
 	workerID := jobs.NewWorkerID()
 	handlers := jobs.ModuleHandlers(configStore, moduleStore)
-	for jobType, handler := range scanner.JobHandlers(scanner.NewStore(handle)) {
+	scannerStore := scanner.NewStore(handle)
+	for jobType, handler := range scanner.JobHandlers(scannerStore) {
+		handlers[jobType] = handler
+	}
+	for jobType, handler := range repository.JobHandlers(repository.NewStore(handle), scannerStore) {
 		handlers[jobType] = handler
 	}
 	return jobs.RuntimeOptions{

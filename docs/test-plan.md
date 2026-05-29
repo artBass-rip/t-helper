@@ -228,8 +228,9 @@
 - Проверить, что Aurora MySQL tests используют InnoDB-compatible schema assumptions.
 - Проверить, что Babelfish for Aurora PostgreSQL не проходит как `mssql` adapter target без отдельного compatibility decision.
 
-Stage 01 implemented coverage:
+Implemented baseline coverage:
 
+- `make test` runs `gofmt` check, `go vet ./...` and `go test ./...`;
 - shared storage contract tests run for SQLite in every `go test ./...` run;
 - the same storage contract suite runs for PostgreSQL when
   `THELPER_POSTGRES_DSN` is set, including the Docker `offline` test runner and

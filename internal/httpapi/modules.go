@@ -11,6 +11,7 @@ import (
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
 	"github.com/artBass-rip/t-helper/internal/modules"
+	"github.com/go-chi/chi/v5"
 )
 
 type ModulesHandler struct {
@@ -20,6 +21,12 @@ type ModulesHandler struct {
 
 func NewModulesHandler(configStore *appconfig.Store, moduleStore *modules.Store) *ModulesHandler {
 	return &ModulesHandler{configStore: configStore, moduleStore: moduleStore}
+}
+
+func (h *ModulesHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/modules", h.List)
+	r.Post("/api/modules/reload", h.Reload)
+	r.Post("/api/modules/restart", h.Restart)
 }
 
 func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {

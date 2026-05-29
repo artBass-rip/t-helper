@@ -84,6 +84,20 @@ Provider-specific integrations are pluggable modules or libraries:
 
 Provider-specific code must not live in HTTP handlers, CLI commands or domain logic. Runtime services select providers through configuration and provider registries.
 
+## HTTP API composition
+
+Executable HTTP routes are registered through a compile-time
+`httpapi.RouteRegistrar` contract. Each handler owns its route declarations via
+`RegisterRoutes(chi.Router)`, while `httpapi.New` owns only router creation,
+common middleware and composition.
+
+This keeps route ownership close to handler behavior and prevents unsupported
+handler types from being silently ignored. The current route surface is guarded
+by `internal/httpapi/router_test.go`.
+
+The accepted decision is documented in
+[`adr/0019-code-quality-and-route-registration.md`](adr/0019-code-quality-and-route-registration.md).
+
 ## Сценарии развёртывания
 
 ### Монолитный режим
@@ -157,6 +171,11 @@ Managed engine compatibility:
 - если `external_databases.enabled = true`, runtime использует `external_databases` и не использует внутреннюю БД для рабочих данных;
 - `SQLite` и `PostgreSQL` входят в первый обязательный этап реализации;
 - `MySQL`, `MSSQL` и другие SQL-compatible adapters поставляются отдельными adapters на Stage 10 Storage Adapter Expansion.
+- transaction boilerplate should be centralized with `storage.WithTx` in new
+  or materially changed store paths, while domain-specific retry/isolation
+  remains explicit in the store code;
+- shared SQL dialect helpers are a documented optimization backlog item before
+  Stage 10 expands storage adapters.
 
 ## Jobs и worker execution
 
@@ -194,7 +213,11 @@ Background jobs выполняются отдельными worker-процес�
 
 ### Repo storage strategy
 
-Для локального размещения клонированных репозиториев используется тот же набор `root_path`, что и для глобального сканирования: `scanning.global_scan`.
+Для локального размещения клонированных репозиториев используется тот же
+materialized набор `root_paths`, что и для глобального сканирования.
+`scanning.global_scan` остаётся внешним config source для `source = config`
+rows; root paths, созданные через clone/API, сохраняются как `source = api` и
+не переписывают config.
 
 Правила:
 
@@ -208,7 +231,7 @@ Background jobs выполняются отдельными worker-процес�
 - `clone_url` хранится только как nullable non-unique transport metadata без credentials/userinfo и не участвует в deduplication;
 - credentials are selected by `credential_id`; workers resolve `secretref://...` values at use time and never receive raw secrets in job payloads;
 - recursive GitLab group clone is a later repository operations extension after single-repository clone;
-- если clone выполняется в новый path, `repository-manager` добавляет его в список `root_paths`;
+- если clone выполняется в новый path, `repository-manager` добавляет его в список `root_paths` с `source = api`;
 - локальный путь репозитория строится внутри выбранного `root_path`;
 - `provider_host`, `full_path` и итоговый `local_path` должны быть нормализованы; `local_path` не должен позволять выход за пределы выбранного `root_path`;
 - если каталог уже содержит корректный Git-репозиторий с ожидаемым remote, `clone` заменяется на `pull`;

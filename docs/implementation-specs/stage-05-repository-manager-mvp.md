@@ -4,6 +4,15 @@
 
 Добавить управляемые repository operations поверх registry, не нарушая инварианты путей, идемпотентности и сериализации конкурентных действий.
 
+## Implementation status
+
+Stage 05 is implemented as the current repository manager MVP baseline. The
+remaining repository work is split into later stages:
+
+- Stage 05A: additional managed providers and recursive GitLab group clone;
+- Stage 05B: polling-based sync and scheduler integration;
+- Stage 14: webhook-based sync.
+
 ## Inputs
 
 - `docs/requirements.md`
@@ -15,6 +24,42 @@
 - `docs/adr/0013-repository-identity.md`
 - `docs/adr/0015-repository-provider-integration-profiles.md`
 - `docs/adr/0016-repository-provider-url-parsing.md`
+
+## Entry baseline
+
+Stage 05 starts from a completed Stage 04 scanner/registry baseline:
+
+- `repositories` already exists with `provider`, `provider_host`, `full_path`,
+  lifecycle fields and uniqueness indexes for provider-aware and generic local
+  identities;
+- Stage 04 `project_discovery` can create generic local repository cards and
+  `project_links`;
+- `GET /api/repos` and `GET /api/repos/{id}` are read-only Stage 04 routes;
+- the job system already accepts `repo_clone`, `repo_pull` and `repo_sync`
+  payload schemas and maps them to `repository_operation` workflow status;
+- worker runtime and `job_locks` exist;
+- the module registry contains `repository-manager`.
+
+Closed Stage 05 gaps in the implementation:
+
+- `POST /api/repos/clone`, `POST /api/repos/pull` and `POST /api/repos/sync`
+  are executable routes;
+- `repository_provider_instances`, `repository_credentials` and
+  `repository_operation_reservations` exist for provider profiles, credentials
+  and clone pre-create identity/path reservations;
+- Stage 05 credential usages are executable for `git_transport`; `provider_api`
+  and `webhook` usages are persisted and validated as profile metadata for
+  Stage 05A/Stage 14 workflows, not invoked by Stage 05 single-repository
+  clone/pull/sync operations;
+- Stage 05 hardening migration adds repository/provider and
+  repository/default credential FK parity plus credential lookup indexes across
+  SQLite and Postgres;
+- provider URL parsing and path normalization are implemented as
+  repository-manager domain services;
+- repository operation conflict lookup is cross-operation for `repo_clone`,
+  `repo_pull` and `repo_sync`, with clone pre-create identity/path checks.
+- repository operation reservation cleanup is available as an explicit storage
+  primitive and still runs opportunistically before new reservations.
 
 ## Scope
 
@@ -44,7 +89,7 @@
 
 - repository-manager module;
 - provider adapter для `generic` Git;
-- provider adapter для одного managed provider: `gitlab` или `github`;
+- provider adapter для одного managed provider: `github`;
 - provider instance/profile API and storage;
 - repository credentials API and storage using `secretref://...`;
 - normalized repository identity handling with `provider_host`;
@@ -66,13 +111,36 @@
 - one provider can have multiple configured hosts/provider instances;
 - one provider instance can have multiple credentials with different usages/permissions;
 - repository operation jobs carry `credential_id`, not raw secret refs or resolved secrets;
-- selected credentials are validated for provider instance ownership and required usage;
+- selected credentials are validated for provider instance ownership, required usage and transport protocol compatibility;
+- Git operations run non-interactively and repository operation failure messages are redacted before being persisted on repository cards;
+- released/expired clone pre-create reservations are pruned after the retention window;
 - provider URL parsing follows ADR 0016 and equivalent HTTPS/SSH/scp-like URLs resolve to the same repository identity;
 - `local_path` всегда внутри выбранного `root_path`;
 - path traversal отклоняется на API и domain layer;
 - новый root path при clone сохраняется в `root_paths`;
 - конфликтующие repo operations сериализуются через `job_locks` and the MVP conflict policy below;
 - provider-aware operations reject `status = superseded` repositories with controlled validation error.
+- Stage 05 MVP `repo_sync` is pull-only: the worker runs the same Git pull
+  path as `repo_pull` and records `operation = repo_sync`; project/security
+  scan orchestration is intentionally outside this stage.
+
+## Implementation sequencing
+
+Stage 05 should be implemented in this order to keep the risk surface small:
+
+1. Add repository-manager storage migrations and stores for
+   `repository_provider_instances` and `repository_credentials`, including
+   `secretref://env/...` validation and masked API responses.
+2. Add provider URL parsing and repository identity normalization tests before
+   wiring clone/pull/sync. The MVP managed provider must be selected explicitly
+   in the implementation branch: `gitlab` or `github`.
+3. Add clone target normalization and containment checks as a domain service
+   used by both API handlers and worker handlers.
+4. Add repository operation enqueue APIs with idempotency and conflict handling.
+5. Add worker handlers for `repo_clone`, `repo_pull` and `repo_sync`, then enable
+   the `repository-manager` module.
+6. Add filesystem/Git integration tests after pure normalization, credential and
+   conflict tests are passing.
 
 ## Repository enrichment contract
 
@@ -118,6 +186,12 @@ strict and predictable:
 
 - at most one active repository operation job may exist for one
   `lock_key = repository:<repository_id>`;
+- this check is cross-operation: an active `repo_clone` blocks `repo_pull` and
+  `repo_sync` for the same repository, and the same applies to every other
+  pair among `repo_clone`, `repo_pull` and `repo_sync`;
+- implementation must not rely only on a helper that searches by exact
+  `job_type + lock_key`; repository operation conflict lookup must search all
+  active repository operation job types for the same `lock_key`;
 - `clone` must also use pre-create conflict checks before `repository_id` is
   available;
 - active means `jobs.status in (queued, running)`;
@@ -151,14 +225,28 @@ Required API/domain flow:
    `repository-path:<root_path_id>:<normalized_target_path>`.
 4. Upsert or find `repositories` by `provider + provider_host + full_path`.
 5. Create the job with final `lock_key = repository:<repository_id>`.
-6. Worker execution acquires `job_locks` for `repository:<repository_id>` and
-   the normalized target path lock before writing to disk.
+6. Worker execution acquires the final repository lock
+   `repository:<repository_id>`.
+7. Before writing to disk, the worker also holds the normalized target path lock
+   `repository-path:<root_path_id>:<normalized_target_path>` or an equivalent
+   repository-manager storage lock, then re-validates the target path against
+   the persisted `root_path` and expected repository identity.
 
 The identity lock prevents duplicate clone jobs for the same Git repository
 before a stable repository row exists. The path lock prevents two different
 repositories from writing into the same local directory. The final
 `repository:<repository_id>` lock remains the common serialization key for later
 `pull` and `sync`.
+
+Pre-create and worker-side identity/path locks may be represented as queued job
+lock keys, multiple held `job_locks`, transactional conflict rows or an
+equivalent repository-manager storage primitive. They must expire or be released
+safely when enqueue or execution fails so a failed clone request cannot
+permanently block later operations.
+If a repository-manager reservation expires while the owning `repo_clone` job is
+still queued or running, the API must still reject a second clone into the same
+normalized target path by inspecting active clone jobs before creating/updating a
+second repository card.
 
 Conflict errors from pre-create locking use machine-readable codes:
 
@@ -188,9 +276,66 @@ Required cases:
 - existing Git repository with a different remote must reject clone unless an
   explicit future takeover workflow is documented.
 
+The implementation must include domain-level tests for the same path safety
+rules in addition to HTTP API tests. Worker handlers must repeat containment
+checks immediately before filesystem writes, because queued jobs may run after
+root paths or symlinks have changed.
+
+## Acceptance checklist
+
+Stage 05 is considered complete only when the implementation and tests cover the
+following checklist:
+
+- provider profile APIs validate `api_base_url` and `web_base_url` as safe
+  HTTPS URLs without userinfo and with a host matching normalized
+  `provider_host`;
+- managed provider `clone_url` is used for identity extraction and mismatch
+  validation, while the selected `protocol` controls the persisted transport
+  URL;
+- HTTP clone requests reject credentials embedded in URLs and exact
+  `Idempotency-Key` replay returns the existing `job_ref`;
+- active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are
+  cross-operation for the same `repository:<id>` lock key and are backed by a
+  storage-level active repository operation uniqueness guard;
+- clone pre-create locking rejects duplicate normalized repository identities
+  and duplicate normalized target paths before filesystem side effects;
+- worker execution repeats target containment checks and rejects symlink escapes
+  that appear after enqueue;
+- existing empty target directories are accepted after containment/conflict
+  checks, existing non-empty non-Git directories are rejected, matching existing
+  Git remotes degrade clone to pull, and mismatched Git remotes are rejected;
+- provider-aware enrichment keeps generic repository IDs when no canonical
+  provider card exists, and relinks projects/project links plus supersedes the
+  generic row when a canonical card already exists;
+- repository operation job payloads contain `credential_id` only and never raw
+  `secretref` values or resolved secrets;
+- repository operation failure messages are redacted before persistence.
+
+## Acceptance matrix
+
+| Requirement | Implementation | Test coverage |
+| --- | --- | --- |
+| Provider profile APIs validate safe HTTPS `api_base_url`/`web_base_url` without userinfo and with matching `provider_host`. | `internal/repository/store.go` provider instance normalization; `internal/httpapi/repository.go` provider instance routes. | `TestProviderInstanceValidatesProfileURLs`, `TestStage05ProviderProfileAPIValidatesSafeHTTPSURLs`. |
+| Managed provider `clone_url` is used for identity extraction and mismatch validation; selected `protocol` controls persisted transport URL. | `internal/repository/domain.go` `NormalizeIdentity`, `ParseCloneURL`, `TransportURL`. | `TestNormalizeIdentityGitHubEquivalentURLs`, `TestNormalizeIdentityUsesSelectedProtocolForManagedTransport`, `TestNormalizeIdentityRejectsExplicitURLMismatch`. |
+| HTTP clone rejects credentials embedded in URLs and exact `Idempotency-Key` replay returns the existing `job_ref`. | `internal/httpapi/repository.go` clone normalization and `cloneIdempotentReplay`. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`. |
+| Active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are cross-operation for `repository:<id>`. | `internal/jobs/store.go` `ActiveRepositoryOperation` and `EnqueueRepositoryOperation`; `jobs_active_repository_operation_lock_uidx`; repository operation enqueue paths. | `TestEnqueueRepositoryOperationRejectsActiveCrossOperationLock`, `TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes`, `TestStage05ConcurrentPullRequestsCreateSingleActiveRepositoryJob`, `TestStage05CloneConflictWithActivePullDoesNotMutateRepository`. |
+| Clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects. | `repository_operation_reservations`, `IdentityReservationKey`, `TargetReservationKey`, clone API reservation flow. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`, `TestStage05CloneRejectsBusyTargetPathForDifferentRepository`, `TestStage05CloneConflictDoesNotCreateNewRootPath`. |
+| Active clone jobs keep target paths busy even after a pre-create reservation expires before worker start. | `internal/httpapi/repository.go` active clone target-path lookup before repository upsert. | `TestStage05CloneRejectsBusyTargetPathAfterReservationExpiry`. |
+| Released/expired clone pre-create reservations can be explicitly cleaned after retention. | `internal/repository/store.go` `CleanupOperationReservations`; migration cleanup indexes. | `TestCleanupOperationReservationsPrunesWithoutNewReservation`, `TestReserveOperationKeysPrunesOldReleasedReservations`. |
+| Worker repeats target containment checks and rejects symlink escapes that appear after enqueue. | `internal/repository/handlers.go` `handleClone`; `internal/repository/domain.go` `NormalizeTarget`. | `TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue`, `TestNormalizeTargetRejectsSymlinkEscapeInExistingParent`. |
+| Existing empty target directories are accepted, non-empty non-Git directories are rejected, matching Git remotes degrade clone to pull, and mismatched remotes are rejected. | `internal/repository/handlers.go` clone worker filesystem and remote checks. | `TestOperationHandlerCloneUsesExistingEmptyTargetDirectory`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`, `TestOperationHandlerCloneExistingExpectedRemoteRunsPull`, `TestOperationHandlerCloneExistingDifferentRemoteRejects`. |
+| Provider-aware enrichment keeps generic repository IDs or relinks/supersedes generic rows when a canonical card exists, without merging project rows. | `internal/repository/store.go` `UpsertRepositoryForClone`, `supersedeGenericRepository`. | `TestUpsertRepositoryEnrichesGenericRepositoryInPlace`, `TestUpsertRepositoryRelinksAndSupersedesGenericRepository`. |
+| Repository operation job payloads contain `credential_id` only and never raw `secretref` values or resolved secrets. | `internal/httpapi/repository.go` repo operation payload construction; worker resolves secrets only at execution time. | `TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs`. |
+| Existing repository operations validate explicit and default credentials before enqueue. | `internal/httpapi/repository.go` existing operation enqueue validation. | `TestStage05PullValidatesDefaultCredentialBeforeEnqueue`. |
+| Store-level repository upsert validates provider instance and credential ownership/protocol invariants. | `internal/repository/store.go` `validateRepositoryOperationReferences`. | `TestUpsertRepositoryValidatesProviderInstanceIdentity`, `TestUpsertRepositoryValidatesCredentialOwnershipAndProtocol`. |
+| Repository operation failure messages are redacted before persistence. | `internal/repository/handlers.go` `recordRepositoryFailure`, `redactRepositoryMessage`. | `TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`. |
+| Clone target selection is unambiguous and path traversal is rejected at API/domain boundaries. | `internal/httpapi/repository.go` `cloneTargetDirectory`; `internal/repository/domain.go` `NormalizeTarget`, `NormalizeFullPath`. | `TestStage05CloneRejectsAmbiguousTargetDirectoryFields`, `TestNormalizeTargetRejectsTraversal`, `TestNormalizeFullPathRejectsUnsafeSegmentsBeforeCleaning`. |
+| Superseded repositories reject provider-aware operations with controlled validation errors. | `internal/httpapi/repository.go` existing operation enqueue validation; `internal/repository/handlers.go` worker validation. | `TestStage05PullRejectsSupersededRepository`. |
+
 ## Stage-local blockers
 
-- none.
+- none for starting implementation.
+- MVP managed provider selection: `github`.
 
 ## Traceability
 

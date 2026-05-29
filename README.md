@@ -6,15 +6,15 @@
 tracking repository metadata, running local security analysis, and managing
 runtime configuration, modules, jobs and access control from one backend.
 
-The repository is currently at the **Stage 04 scanner/registry baseline**.
+The repository is currently at the **Stage 05 repository manager MVP baseline**.
 The executable backend foundation is implemented: service entrypoints, storage
 adapters, migrations, health checks, persisted runtime configuration, module
 lifecycle, singleton runtime locking, jobs/workers/status, global scanning,
-Terraform project discovery, root paths, project registry and scanner/registry
-HTTP APIs.
+Terraform project discovery, root paths, project registry, scanner/registry
+HTTP APIs and repository manager clone/pull/sync workflows.
 
-Repository operations, project/security scans, authentication/RBAC and the
-frontend are intentionally owned by later roadmap stages.
+Project/security scans, authentication/RBAC and the frontend are intentionally
+owned by later roadmap stages.
 
 ## Project Pages
 
@@ -49,8 +49,12 @@ copyright holder.
   `job_locks`, job events and status read models.
 - `global_scan` jobs that enqueue coalesced `project_discovery` jobs for Git
   repository association without blocking the global scan result.
+- Stage 05 repository manager APIs for provider profiles, masked credentials,
+  safe repository identity normalization, clone/pull/sync job enqueueing and
+  worker execution.
 - SQLite and PostgreSQL storage adapters for the current MVP baseline.
-- HTTP APIs for health, config, modules, jobs/status and scanner/registry.
+- HTTP APIs for health, config, modules, jobs/status, scanner/registry and
+  repository management.
 
 ## Executables
 
@@ -75,7 +79,7 @@ When using built binaries, replace `go run ./cmd/<name>` with the binary name.
 
 ## HTTP API
 
-Stage 04 exposes the following runtime API surface:
+Stage 05 exposes the following runtime API surface:
 
 - `GET /api/health`
 - `GET /api/config`, `PUT /api/config`
@@ -91,6 +95,10 @@ Stage 04 exposes the following runtime API surface:
   `GET /api/projects/{id}/links`
 - `POST /api/project-scans` lifecycle guard for future Stage 06 scans
 - `GET /api/repos`, `GET /api/repos/{id}`
+- `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`
+- `GET /api/repo-credentials`, `PUT /api/repo-credentials`
+- `POST /api/repos/clone`, `POST /api/repos/pull`,
+  `POST /api/repos/sync`
 - `GET /api/ignore-rules`, `PUT /api/ignore-rules`
 - `GET /api/environments`, `GET /api/environments/{id}`
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`
@@ -138,6 +146,8 @@ Important behavior:
   `workflow_statuses`.
 - Stage 04 schema: `root_paths`, `projects`, `project_links`, minimal
   `repositories`, `environments`, `workspaces`.
+- Stage 05 schema: provider instances, repository credentials, repository
+  operation reservations/indexes and repository manager hardening.
 - MySQL and MSSQL are roadmap targets for Stage 10, not current runtime
   adapters.
 
@@ -159,13 +169,14 @@ Important behavior:
 Recommended checks:
 
 ```text
-go test ./...
+make test
 go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
 docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 ```
 
 PostgreSQL contract tests run when `THELPER_POSTGRES_DSN` is set. SQLite tests
 run by default.
+Use `make race` for manual or nightly race detector checks.
 
 ## Documentation
 
@@ -175,12 +186,14 @@ run by default.
   deployment modes and runtime flow.
 - [docs/interfaces.md](docs/interfaces.md) - CLI, backend API, configuration
   and global scanning behavior.
-- [docs/api.md](docs/api.md) - current Stage 04 HTTP API baseline, future
+- [docs/api.md](docs/api.md) - current Stage 05 HTTP API baseline, future
   endpoint contracts and response schemas.
 - [docs/configuration.md](docs/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability and validation.
 - [docs/development.md](docs/development.md) - local development and test
   contract.
+- [docs/code-optimization.md](docs/code-optimization.md) - completed
+  optimizations, quality gate and remaining optimization backlog.
 - [docs/github-pages.md](docs/github-pages.md) - bilingual GitHub Pages
   structure and deployment workflow.
 - [docs/local-dev-environment.md](docs/local-dev-environment.md) -
@@ -209,9 +222,9 @@ run by default.
   runtime.
 - Stage 03: completed jobs, workers and status foundation.
 - Stage 04: completed scanner and registry MVP.
-- Stage 05: next planned repository manager MVP: generic Git plus one managed
-  provider, clone/pull/sync jobs, credentials, path safety and serialization
-  through `job_locks`.
+- Stage 05: completed repository manager MVP: generic Git plus GitHub,
+  clone/pull/sync jobs, provider profiles, masked credentials, path safety,
+  repository enrichment and operation serialization.
 - Stage 06A/06B: external toolchain profiles, project scanner and security
   validator MVP.
 - Stage 07: auth, RBAC, SCIM contract/stub and audit.

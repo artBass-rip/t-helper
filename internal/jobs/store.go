@@ -19,10 +19,26 @@ var (
 	ErrNotFound            = errors.New("job not found")
 	ErrIdempotencyConflict = errors.New("idempotency conflict")
 	ErrInvalidCursor       = errors.New("invalid cursor")
+	ErrActiveRepositoryOp  = errors.New("active repository operation exists")
 )
 
 type Store struct {
 	handle *storage.Handle
+}
+
+type ActiveRepositoryOperationError struct {
+	Active Job
+}
+
+func (e ActiveRepositoryOperationError) Error() string {
+	if e.Active.ID == "" {
+		return ErrActiveRepositoryOp.Error()
+	}
+	return ErrActiveRepositoryOp.Error() + ": " + e.Active.ID
+}
+
+func (e ActiveRepositoryOperationError) Unwrap() error {
+	return ErrActiveRepositoryOp
 }
 
 type sqlExecutor interface {
@@ -33,10 +49,14 @@ func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle}
 }
 
+func NewJobID() string {
+	return newID("job")
+}
+
 func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	now := time.Now().UTC()
 	if req.ID == "" {
-		req.ID = newID("job")
+		req.ID = NewJobID()
 	}
 	if strings.TrimSpace(req.Actor) == "" {
 		req.Actor = "system"
@@ -110,6 +130,27 @@ VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14
 	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
 }
 
+func (s *Store) EnqueueRepositoryOperation(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	switch req.JobType {
+	case "repo_clone", "repo_pull", "repo_sync":
+	default:
+		return JobRef{}, fmt.Errorf("repository operation enqueue requires repo_clone, repo_pull or repo_sync")
+	}
+	if strings.TrimSpace(req.LockKey) == "" {
+		return JobRef{}, fmt.Errorf("repository operation enqueue requires lock_key")
+	}
+	ref, err := s.Enqueue(ctx, req)
+	if err == nil {
+		return ref, nil
+	}
+	if isUniqueConstraintError(err) {
+		if active, activeErr := s.ActiveRepositoryOperation(ctx, req.LockKey); activeErr == nil {
+			return JobRef{}, ActiveRepositoryOperationError{Active: active}
+		}
+	}
+	return JobRef{}, err
+}
+
 func (s *Store) EnqueueIfNoActive(ctx context.Context, req EnqueueRequest) (JobRef, bool, error) {
 	if strings.TrimSpace(req.LockKey) == "" {
 		ref, err := s.Enqueue(ctx, req)
@@ -127,6 +168,46 @@ func (s *Store) EnqueueIfNoActive(ctx context.Context, req EnqueueRequest) (JobR
 		return JobRef{}, false, err
 	}
 	return ref, true, nil
+}
+
+func (s *Store) ActiveRepositoryOperation(ctx context.Context, lockKey string) (Job, error) {
+	return s.findActiveRepositoryOperation(ctx, lockKey)
+}
+
+func (s *Store) ActiveRepositoryOperationByID(ctx context.Context, id string) (Job, error) {
+	job, err := s.Get(ctx, id)
+	if err != nil {
+		return Job{}, err
+	}
+	if job.Status != StatusQueued && job.Status != StatusRunning {
+		return Job{}, ErrNotFound
+	}
+	switch job.JobType {
+	case "repo_clone", "repo_pull", "repo_sync":
+		return job, nil
+	default:
+		return Job{}, ErrNotFound
+	}
+}
+
+func (s *Store) IdempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
+	if strings.TrimSpace(req.IdempotencyKey) == "" {
+		return JobRef{}, ErrNotFound
+	}
+	if strings.TrimSpace(req.Actor) == "" {
+		req.Actor = "system"
+	}
+	return s.idempotentReplay(ctx, req)
+}
+
+func (s *Store) JobByIdempotency(ctx context.Context, actor, jobType, key string) (Job, error) {
+	if strings.TrimSpace(key) == "" {
+		return Job{}, ErrNotFound
+	}
+	if strings.TrimSpace(actor) == "" {
+		actor = "system"
+	}
+	return s.findByIdempotency(ctx, actor, jobType, key)
 }
 
 func (s *Store) idempotentReplay(ctx context.Context, req EnqueueRequest) (JobRef, error) {
@@ -334,29 +415,24 @@ WHERE id = ? AND status = 'queued'`
 
 func (s *Store) Start(ctx context.Context, job Job, workerID string) error {
 	now := time.Now().UTC()
-	tx, err := s.handle.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	query := `UPDATE jobs SET started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
 	args := []any{formatTime(now), formatTime(now), job.ID, workerID}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET started_at = COALESCE(started_at, $1), updated_at = $2 WHERE id = $3 AND leased_by = $4 AND status = 'running'`
 	}
-	res, err := tx.ExecContext(ctx, query, args...)
+	err := storage.WithTx(ctx, s.handle.DB, nil, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		if affected, err := res.RowsAffected(); err != nil {
+			return err
+		} else if affected == 0 {
+			return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+		}
+		return s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID})
+	})
 	if err != nil {
-		return err
-	}
-	if affected, err := res.RowsAffected(); err != nil {
-		return err
-	} else if affected == 0 {
-		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
-	}
-	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventStarted, Status: StatusRunning, WorkerID: workerID}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
 		return err
 	}
 	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
@@ -447,27 +523,10 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	result = safeJSONPayload(result)
 	message = safeMessage(message)
 	now := time.Now().UTC()
-	tx, err := s.handle.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	query := `UPDATE jobs SET status = ?, result_payload = ?, error_message = ?, finished_at = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
 	args := []any{status, string(result), nullEmpty(message), formatTime(now), formatTime(now), job.ID, workerID}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = $1, result_payload = $2, error_message = $3, finished_at = $4, updated_at = $5 WHERE id = $6 AND leased_by = $7 AND status = 'running'`
-	}
-	res, err := tx.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	if affected, err := res.RowsAffected(); err != nil {
-		return err
-	} else if affected == 0 {
-		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
-	}
-	if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
-		return err
 	}
 	eventType := EventSucceeded
 	if status == StatusFailed {
@@ -475,10 +534,22 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 	} else if status == StatusCancelled {
 		eventType = EventCancelled
 	}
-	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: eventType, Status: status, WorkerID: workerID}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
+	err := storage.WithTx(ctx, s.handle.DB, nil, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		if affected, err := res.RowsAffected(); err != nil {
+			return err
+		} else if affected == 0 {
+			return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+		}
+		if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
+			return err
+		}
+		return s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: eventType, Status: status, WorkerID: workerID})
+	})
+	if err != nil {
 		return err
 	}
 	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
@@ -488,32 +559,27 @@ func (s *Store) Complete(ctx context.Context, job Job, workerID, status string, 
 func (s *Store) Requeue(ctx context.Context, job Job, workerID, reason string, runAfter time.Time) error {
 	now := time.Now().UTC()
 	reason = safeMessage(reason)
-	tx, err := s.handle.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	query := `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = ?, error_message = ?, updated_at = ? WHERE id = ? AND leased_by = ? AND status = 'running'`
 	args := []any{formatTime(runAfter), nullEmpty(reason), formatTime(now), job.ID, workerID}
 	if s.handle.Provider == "postgres" {
 		query = `UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, heartbeat_at = NULL, run_after = $1, error_message = $2, updated_at = $3 WHERE id = $4 AND leased_by = $5 AND status = 'running'`
 	}
-	res, err := tx.ExecContext(ctx, query, args...)
+	err := storage.WithTx(ctx, s.handle.DB, nil, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		if affected, err := res.RowsAffected(); err != nil {
+			return err
+		} else if affected == 0 {
+			return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
+		}
+		if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
+			return err
+		}
+		return s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayloadDetails(reason, map[string]any{"error_code": reason, "lock_key": job.LockKey, "retry_after": runAfter})})
+	})
 	if err != nil {
-		return err
-	}
-	if affected, err := res.RowsAffected(); err != nil {
-		return err
-	} else if affected == 0 {
-		return fmt.Errorf("job %s is not running under worker lease %s", job.ID, workerID)
-	}
-	if err := s.releaseLocks(ctx, tx, job.ID, workerID, now); err != nil {
-		return err
-	}
-	if err := s.addEvent(ctx, tx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventRetryScheduled, Status: StatusQueued, WorkerID: workerID, Payload: eventPayloadDetails(reason, map[string]any{"error_code": reason, "lock_key": job.LockKey, "retry_after": runAfter})}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
 		return err
 	}
 	_ = s.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job))
@@ -626,6 +692,19 @@ func (s *Store) findActiveByLock(ctx context.Context, jobType, lockKey string) (
 	args := []any{jobType, lockKey}
 	if s.handle.Provider == "postgres" {
 		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type = $1 AND lock_key = $2 AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
+	}
+	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) findActiveRepositoryOperation(ctx context.Context, lockKey string) (Job, error) {
+	query := "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type IN ('repo_clone', 'repo_pull', 'repo_sync') AND lock_key = ? AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
+	args := []any{lockKey}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT " + s.jobSelectColumns() + " FROM jobs WHERE job_type IN ('repo_clone', 'repo_pull', 'repo_sync') AND lock_key = $1 AND status IN ('queued', 'running') ORDER BY created_at ASC, id ASC LIMIT 1"
 	}
 	job, err := scanJob(s.handle.DB.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {

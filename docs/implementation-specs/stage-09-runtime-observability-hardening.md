@@ -48,8 +48,18 @@
 
 ## Optimization backlog
 
-Stage 09 owns optimization work that hardens already delivered Stage 03-04
-runtime behavior without changing public API contracts.
+Stage 09 owns optimization work that hardens already delivered Stage 03-05
+runtime behavior without changing public API contracts. The current optimization
+register and already completed quality work are tracked in
+[`../code-optimization.md`](../code-optimization.md).
+
+Completed before Stage 09:
+
+- route registration now uses `httpapi.RouteRegistrar`;
+- `storage.WithTx` exists for new or materially changed transaction paths;
+- `make test` is the local quality gate;
+- initial `jobs` benchmarks cover `ClaimNext` and
+  `RefreshWorkflowStatus`.
 
 Recommended implementation order:
 
@@ -92,12 +102,12 @@ Recommended implementation order:
    such as `(status, created_at DESC, id DESC)` or switch endpoints to existing
    indexed ordering only when the documented API contract allows it.
 
-6. Extract shared SQL dialect helpers.
+6. Expand shared SQL dialect helpers.
 
-   The `jobs`, `scanner` and `config` stores duplicate placeholder, bool, time
-   casting and upsert differences between SQLite and PostgreSQL. Introduce a
-   small internal helper layer before Stage 10 adapter expansion so MySQL/MSSQL
-   support does not multiply branch logic inside domain stores.
+   The `jobs`, `scanner` and `config` stores still duplicate placeholder, bool,
+   time casting and upsert differences between SQLite and PostgreSQL. Introduce
+   a small internal helper layer before Stage 10 adapter expansion so
+   MySQL/MSSQL support does not multiply branch logic inside domain stores.
 
 ## Definition of Done
 

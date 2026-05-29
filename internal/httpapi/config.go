@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	appconfig "github.com/artBass-rip/t-helper/internal/config"
+	"github.com/go-chi/chi/v5"
 )
 
 type ConfigHandler struct {
@@ -13,6 +14,11 @@ type ConfigHandler struct {
 
 func NewConfigHandler(store *appconfig.Store) *ConfigHandler {
 	return &ConfigHandler{store: store}
+}
+
+func (h *ConfigHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/config", h.Get)
+	r.Put("/api/config", h.Put)
 }
 
 func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -49,15 +55,22 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	writeErrorDetails(w, r, status, code, message, map[string]any{})
+}
+
+func writeErrorDetails(w http.ResponseWriter, r *http.Request, status int, code, message string, details map[string]any) {
 	correlationID := CorrelationIDFromContext(r.Context())
 	if correlationID == "" {
 		correlationID = r.Header.Get(CorrelationIDHeader)
+	}
+	if details == nil {
+		details = map[string]any{}
 	}
 	writeJSON(w, status, map[string]any{
 		"error": map[string]any{
 			"code":           code,
 			"message":        message,
-			"details":        map[string]any{},
+			"details":        details,
 			"correlation_id": correlationID,
 		},
 	})

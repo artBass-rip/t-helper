@@ -22,6 +22,25 @@ func NewScannerHandler(store *scanner.Store, jobStore *jobs.Store) *ScannerHandl
 	return &ScannerHandler{store: store, jobStore: jobStore}
 }
 
+func (h *ScannerHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/root-paths", h.ListRootPaths)
+	r.Put("/api/root-paths", h.PutRootPaths)
+	r.Post("/api/scans", h.CreateScan)
+	r.Get("/api/scans/{job_id}", h.GetScan)
+	r.Get("/api/projects", h.ListProjects)
+	r.Get("/api/projects/{id}", h.GetProject)
+	r.Get("/api/projects/{id}/links", h.ListProjectLinks)
+	r.Post("/api/project-scans", h.CreateProjectScan)
+	r.Get("/api/repos", h.ListRepositories)
+	r.Get("/api/repos/{id}", h.GetRepository)
+	r.Get("/api/ignore-rules", h.ListIgnoreRules)
+	r.Put("/api/ignore-rules", h.PutIgnoreRules)
+	r.Get("/api/environments", h.ListEnvironments)
+	r.Get("/api/environments/{id}", h.GetEnvironment)
+	r.Get("/api/workspaces", h.ListWorkspaces)
+	r.Get("/api/workspaces/{id}", h.GetWorkspace)
+}
+
 func (h *ScannerHandler) ListRootPaths(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.SyncRootPathsFromConfig(r.Context()); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
