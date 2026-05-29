@@ -1,14 +1,14 @@
 # Backend API Contracts
 
-Документ фиксирует текущий executable HTTP API baseline и целевые API
-contracts для следующих roadmap stages. Канонический список capability-level
-interfaces остаётся в [`interfaces.md`](interfaces.md), а правила авторизации -
-в [`access-control.md`](access-control.md).
+This document defines the current executable HTTP API baseline and target API
+contracts for the next roadmap stages. The canonical list of capability-level
+interfaces remains in [`interfaces.md`](interfaces.md), and authorization rules
+remain in [`access-control.md`](access-control.md).
 
-## Текущий executable baseline
+## Current Executable Baseline
 
-Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В
-текущем runtime реализованы:
+The repository is currently at the Stage 05 repository manager MVP baseline. The
+current runtime implements:
 
 - `GET /api/health`;
 - `GET /api/config`, `PUT /api/config`;
@@ -43,28 +43,28 @@ whose Notes column identifies a later stage are specification targets, not
 current runtime routes, unless the Notes column explicitly says that the current
 baseline exposes a guard or compatibility endpoint.
 
-## Общие правила
+## General Rules
 
 - Base path: `/api`
-- Формат тела запроса и ответа: JSON.
-- Идентификаторы в URL opaque для API consumers.
-- Время возвращается в UTC в RFC 3339 format.
-- Write endpoints, которые запускают фоновые операции, возвращают `202 Accepted` и `job_id`.
-- Write endpoints, которые меняют справочники или конфигурацию без фоновой операции, возвращают обновлённую сущность или `204 No Content`.
+- Request and response bodies use JSON.
+- URL identifiers are opaque to API consumers.
+- Times are returned in UTC using RFC 3339 format.
+- Write endpoints that start background operations return `202 Accepted` and `job_id`.
+- Write endpoints that change reference data or configuration without a background operation return the updated entity or `204 No Content`.
 - Stage 02 synchronous module lifecycle endpoints are explicit exceptions:
   `POST /api/modules/reload` and `POST /api/modules/restart` keep returning
   synchronous result DTOs until an async variant or contract migration is
   documented.
-- Повторяемые write requests должны поддерживать `Idempotency-Key`, если операция создаёт `job`.
+- Repeatable write requests must support `Idempotency-Key` when the operation creates a `job`.
   For jobs, idempotency is scoped to `(actor, job_type, Idempotency-Key)` rather
   than global across all job-producing endpoints.
 - Confirmed MVP behavior: bulk `PUT` endpoints are non-destructive idempotent upserts by stable identity or `id`; omitted records are not deleted unless a future endpoint explicitly documents delete/disable semantics.
 - Confirmed MVP behavior: public `DELETE` endpoints are out of scope; delete permissions are seeded for future lifecycle expansion and do not imply an implemented delete route.
 - Confirmed MVP lifecycle behavior: user-facing removal/deactivation is expressed through explicit state fields and non-destructive `PUT` updates, for example `enabled = false`, `active = false`, `status = disabled`, `status = missing` or `status = superseded` depending on entity type. UI/API wording must use disable, deactivate, mark missing or supersede instead of delete unless a future endpoint explicitly defines hard delete semantics.
-- List endpoints должны поддерживать `limit` и `cursor`; фильтры добавляются по capability.
-- Ошибки возвращаются в едином формате `api_error`.
+- List endpoints must support `limit` and `cursor`; filters are added per capability.
+- Errors are returned in the unified `api_error` format.
 
-## Общие response schemas
+## Common Response Schemas
 
 ### `job_ref`
 
@@ -240,48 +240,48 @@ paths, usernames, passwords or userinfo.
 | Endpoint | Request | Success response | Notes |
 | --- | --- | --- | --- |
 | `GET /api/health` | n/a | `health_status` | Safe unauthenticated health/readiness endpoint for singleton runtime discovery; detailed status remains under authenticated `/api/status`. |
-| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Возвращает активные и отключённые root paths. Before read, backend materializes `scanning.global_scan` from config into `root_paths`. |
-| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Operational API: идемпотентно upsert'ит root paths by `id` or normalized `path`; omitted records are not deleted in MVP and this endpoint does not rewrite `scanning.global_scan` config. |
-| `POST /api/scans` | `root_path_ids?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = global_scan`; global scan creates/updates project records and enqueues background `project_discovery` jobs without waiting for them; `job_ref.job_id` используется для чтения статуса через `GET /api/scans/{job_id}` или `GET /api/jobs/{job_id}`. |
-| `GET /api/scans/{job_id}` | n/a | `job` | Temporary compatibility endpoint для global scan jobs; canonical job status endpoint - `GET /api/jobs/{id}`. Frontend MUST use `GET /api/jobs/{id}` or status endpoints for new code. Compatibility endpoint remains during MVP and may be removed only after one documented deprecation cycle. |
-| `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model для registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |
-| `GET /api/projects/{id}` | n/a | `project` | Возвращает проект с базовыми связями. |
-| `GET /api/projects/{id}/links` | `limit`, `cursor`, `link_type?` | `list_response<project_link>` | Возвращает связи отдельного project record, например `same_repository`, без merge project rows. |
+| `GET /api/root-paths` | `limit`, `cursor` | `list_response<root_path>` | Returns active and disabled root paths. Before read, backend materializes `scanning.global_scan` from config into `root_paths`. |
+| `PUT /api/root-paths` | `root_paths[]` | `list_response<root_path>` | Operational API: idempotently upserts root paths by `id` or normalized `path`; omitted records are not deleted in MVP and this endpoint does not rewrite `scanning.global_scan` config. |
+| `POST /api/scans` | `root_path_ids?`, `reason?` | `202 job_ref` | Creates `jobs.job_type = global_scan`; global scan creates/updates project records and enqueues background `project_discovery` jobs without waiting for them; `job_ref.job_id` is used to read status through `GET /api/scans/{job_id}` or `GET /api/jobs/{job_id}`. |
+| `GET /api/scans/{job_id}` | n/a | `job` | Temporary compatibility endpoint for global scan jobs; canonical job status endpoint - `GET /api/jobs/{id}`. Frontend MUST use `GET /api/jobs/{id}` or status endpoints for new code. Compatibility endpoint remains during MVP and may be removed only after one documented deprecation cycle. |
+| `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model for the registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |
+| `GET /api/projects/{id}` | n/a | `project` | Returns the project with basic links. |
+| `GET /api/projects/{id}/links` | `limit`, `cursor`, `link_type?` | `list_response<project_link>` | Returns links for a single project record, for example `same_repository`, without merging project rows. |
 | `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
 | `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. When implemented, `security.enabled_modules` must come from `scanning.security_scan.modules`. |
 | `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Stage 06 contract. Stage 04 exposes only the lifecycle guard: missing/disabled projects return controlled validation errors; otherwise the endpoint returns `501 project_scan_unavailable`. |
 | `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
 | `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
-| `GET /api/repos` | `limit`, `cursor`, `provider?`, `provider_host?`, `full_path?`, `status?`, `discovery_source?`, `auto_sync_enabled?` | `list_response<repository>` | Read model для repositories. Default `status` filter is `active`; `full_path` без provider/provider_host может вернуть несколько repositories. |
-| `GET /api/repos/{id}` | n/a | `repository` | Возвращает repository card. |
+| `GET /api/repos` | `limit`, `cursor`, `provider?`, `provider_host?`, `full_path?`, `status?`, `discovery_source?`, `auto_sync_enabled?` | `list_response<repository>` | Read model for repositories. Default `status` filter is `active`; `full_path` without provider/provider_host may return multiple repositories. |
+| `GET /api/repos/{id}` | n/a | `repository` | Returns the repository card. |
 | `GET /api/repo-provider-instances` | `limit`, `cursor`, `provider?`, `provider_host?`, `enabled?` | `list_response<repository_provider_instance>` | GitKraken-like integration profiles for cloud, on-premise and multi-domain provider hosts. |
-| `PUT /api/repo-provider-instances` | `repository_provider_instances[]` | `list_response<repository_provider_instance>` | Идемпотентно upsert'ит configured provider hosts/profiles by `id` or `provider + provider_host`; secrets are not accepted here. |
-| `GET /api/repo-credentials` | `limit`, `cursor`, `provider_instance_id?`, `usage?`, `auth_type?` | `list_response<repository_credential>` | Возвращает credentials with masked secret refs only. |
-| `PUT /api/repo-credentials` | `repository_credentials[]` | `list_response<repository_credential>` | Идемпотентно upsert'ит credential metadata and secret refs by `id` or `provider_instance_id + name`; raw secret values are rejected. |
-| `POST /api/repos/clone` | `provider_instance_id?`, `provider`, `provider_host?`, `credential_id?`, `protocol`, `clone_url?`, `group_path?`, `clone_scope`, `full_path?`, `root_path_id?`, `new_root_path?`, `target_directory?`, `new_target_directory?` | `202 job_ref` | Создаёт `jobs.job_type = repo_clone`; URL parsing follows ADR 0016; repository identity нормализуется как `provider + provider_host + full_path`; before a stable `repository_id` exists, clone checks active conflicts by normalized repository identity and normalized target path; `provider_instance_id` выбирает configured host/profile; `credential_id` выбирает credential with required usage and protocol-compatible `auth_type` (`ssh_key` for `ssh`, HTTPS/token auth types for `https`); `clone_url` принимается только как transport metadata, не участвует в deduplication и не должен сохраняться с credentials/userinfo; Stage 05 MVP supports `single_repository` clone for `generic` Git and GitHub; `gitlab_group_recursive` is a post-MVP extension and requires `provider_api` credential usage when enabled. |
-| `POST /api/repos/pull` | `repository_id`, `credential_id?` | `202 job_ref` | Создаёт `jobs.job_type = repo_pull`; credential must support `git_transport` and match the repository transport protocol. |
-| `POST /api/repos/sync` | `repository_id`, `credential_id?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = repo_sync`; Stage 05 sync is pull-only and applies the same credential usage/protocol validation as pull. |
-| `GET /api/jobs` | `limit`, `cursor`, `job_type?`, `status?`, `lock_key?`, `job_group_id?`, `parent_job_id?` | `list_response<job>` | Общая видимость jobs. Для UI workflow status предпочтительнее status/project-scan aggregate endpoints. |
-| `GET /api/jobs/{id}` | n/a | `job` | Возвращает payload/result metadata без секретов. |
-| `GET /api/status` | n/a | `runtime_status.v1` | Aggregate runtime status из `status-monitor`; summarizes jobs, derived worker status and module states. |
+| `PUT /api/repo-provider-instances` | `repository_provider_instances[]` | `list_response<repository_provider_instance>` | Idempotently upserts configured provider hosts/profiles by `id` or `provider + provider_host`; secrets are not accepted here. |
+| `GET /api/repo-credentials` | `limit`, `cursor`, `provider_instance_id?`, `usage?`, `auth_type?` | `list_response<repository_credential>` | Returns credentials with masked secret refs only. |
+| `PUT /api/repo-credentials` | `repository_credentials[]` | `list_response<repository_credential>` | Idempotently upserts credential metadata and secret refs by `id` or `provider_instance_id + name`; raw secret values are rejected. |
+| `POST /api/repos/clone` | `provider_instance_id?`, `provider`, `provider_host?`, `credential_id?`, `protocol`, `clone_url?`, `group_path?`, `clone_scope`, `full_path?`, `root_path_id?`, `new_root_path?`, `target_directory?`, `new_target_directory?` | `202 job_ref` | Creates `jobs.job_type = repo_clone`; URL parsing follows ADR 0016; repository identity is normalized as `provider + provider_host + full_path`; before a stable `repository_id` exists, clone checks active conflicts by normalized repository identity and normalized target path; `provider_instance_id` selects the configured host/profile; `credential_id` selects a credential with the required usage and protocol-compatible `auth_type` (`ssh_key` for `ssh`, HTTPS/token auth types for `https`); `clone_url` is accepted only as transport metadata, does not participate in deduplication and must not be stored with credentials/userinfo; Stage 05 MVP supports `single_repository` clone for `generic` Git and GitHub; `gitlab_group_recursive` is a post-MVP extension and requires `provider_api` credential usage when enabled. |
+| `POST /api/repos/pull` | `repository_id`, `credential_id?` | `202 job_ref` | Creates `jobs.job_type = repo_pull`; credential must support `git_transport` and match the repository transport protocol. |
+| `POST /api/repos/sync` | `repository_id`, `credential_id?`, `reason?` | `202 job_ref` | Creates `jobs.job_type = repo_sync`; Stage 05 sync is pull-only and applies the same credential usage/protocol validation as pull. |
+| `GET /api/jobs` | `limit`, `cursor`, `job_type?`, `status?`, `lock_key?`, `job_group_id?`, `parent_job_id?` | `list_response<job>` | General jobs visibility. For UI workflow status, prefer status/project-scan aggregate endpoints. |
+| `GET /api/jobs/{id}` | n/a | `job` | Returns payload/result metadata without secrets. |
+| `GET /api/status` | n/a | `runtime_status.v1` | Aggregate runtime status from `status-monitor`; summarizes jobs, derived worker status and module states. |
 | `GET /api/status/workflows` | `limit`, `cursor`, `workflow_type?`, `aggregate_status?` | `list_response<workflow_status>` | Aggregate workflow statuses. |
-| `GET /api/status/workflows/{job_group_id}` | n/a | `workflow_status` | Единая точка чтения workflow status по `job_group_id`. |
+| `GET /api/status/workflows/{job_group_id}` | n/a | `workflow_status` | Single read endpoint for workflow status by `job_group_id`. |
 | `GET /api/status/jobs/{job_id}` | n/a | `job_status.v1` | Operational job status, latest event and worker lease diagnostics. |
 | `GET /api/status/workers` | n/a | `list_response<worker_status.v1>` | Stage 03 derives worker health/status from running jobs and leases; idle workers are not reported. |
-| `GET /api/config` | n/a | `config` | Возвращает активную runtime-конфигурацию с masked sensitive values; resolved secrets never returned. |
+| `GET /api/config` | n/a | `config` | Returns the active runtime configuration with masked sensitive values; resolved secrets never returned. |
 | `PUT /api/config` | `config` | `config_import.result.v1` | Stage 02 synchronously imports config with strict schema validation, rejects unknown keys, sensitive literals, malformed JSON and trailing payload, and preserves existing imported ignore rules because `.t-helper.ignore` is not part of this HTTP payload. Later job-backed workflows may extend this contract without changing Stage 02 sync import semantics. |
-| `GET /api/ignore-rules` | `limit`, `cursor`, `scope_type?`, `scope_id?` | `list_response<ignore_rule>` | Возвращает правила без потери `!pattern`. |
-| `PUT /api/ignore-rules` | `ignore_rules[]` | `list_response<ignore_rule>` | Идемпотентно upsert'ит rules by `scope_type + scope_id + pattern`; omitted rules are not deleted in MVP. |
+| `GET /api/ignore-rules` | `limit`, `cursor`, `scope_type?`, `scope_id?` | `list_response<ignore_rule>` | Returns rules without losing `!pattern`. |
+| `PUT /api/ignore-rules` | `ignore_rules[]` | `list_response<ignore_rule>` | Idempotently upserts rules by `scope_type + scope_id + pattern`; omitted rules are not deleted in MVP. |
 | `GET /api/security/findings` | `limit`, `cursor`, `project_id?`, `repository_id?`, `severity?`, `status?` | `list_response<security_finding>` | Global findings view. |
-| `GET /api/security/findings/{id}` | n/a | `security_finding` | Детальная карточка finding. |
-| `GET /api/security/rule-sets` | `limit`, `cursor`, `active?` | `list_response<security_rule_set>` | Список rule sets. |
-| `PUT /api/security/rule-sets` | `security_rule_set` | `security_rule_set` | Идемпотентное обновление metadata/rule set registration by `id` or `name + version`. |
-| `GET /api/tool-profiles` | `limit`, `cursor`, `tool?`, `active?`, `source_type?` | `list_response<tool_profile>` | Список tool profiles from ADR 0018. |
-| `POST /api/tool-profiles/validate` | `profile_path?`, `profile_payload?`, `fixture_set?` | `tool_profile_validation_result` | Валидирует profile files or payloads without activation. Raw tool outputs in fixtures must be redacted/size-limited and are not persisted as primary scan data. |
+| `GET /api/security/findings/{id}` | n/a | `security_finding` | Detailed finding card. |
+| `GET /api/security/rule-sets` | `limit`, `cursor`, `active?` | `list_response<security_rule_set>` | List of rule sets. |
+| `PUT /api/security/rule-sets` | `security_rule_set` | `security_rule_set` | Idempotent metadata/rule set registration update by `id` or `name + version`. |
+| `GET /api/tool-profiles` | `limit`, `cursor`, `tool?`, `active?`, `source_type?` | `list_response<tool_profile>` | List of tool profiles from ADR 0018. |
+| `POST /api/tool-profiles/validate` | `profile_path?`, `profile_payload?`, `fixture_set?` | `tool_profile_validation_result` | Validates profile files or payloads without activation. Raw tool outputs in fixtures must be redacted/size-limited and are not persisted as primary scan data. |
 | `POST /api/tool-profiles/import` | `profile_path?`, `profile_payload?` | `tool_profile` | Imports bundled/local/generated profile metadata after validation; imported profiles are inactive unless separately activated. |
 | `POST /api/tool-profiles/activate` | `tool`, `profile_id`, `profile_version` | `tool_profile` | Explicitly activates a validated profile for runtime selection. Generated candidate profiles cannot be activated without successful validation results. |
 | `POST /api/tool-profiles/analyze` | `samples_path?`, `sample_payload?`, `baseline_profile_id?` | `tool_profile_candidate` | Optional analyzer endpoint that generates candidate profiles/fixtures; it never activates profiles automatically. |
-| `GET /api/modules` | n/a | `list_response<module_state>` | Состояния runtime modules. |
+| `GET /api/modules` | n/a | `list_response<module_state>` | Runtime module states. |
 | `POST /api/modules/reload` | `keys?`, `module_name?`, `reason?` | `config_reload.result.v1` or `module_reload.result.v1` | Stage 02 synchronous operation and explicit Stage 03 jobs exception. Without `module_name`, accepts reloadable config keys and applies only keys with implemented Stage 02 runtime effects, currently `modules.enabled`; accepted-but-not-applied keys remain visible in `accepted_keys`, and unknown explicit keys are returned in `failed_keys`. With `module_name`, reloads one available module. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict: unknown fields, `null`, malformed JSON and trailing payload are rejected. Stage 03 implements job-backed `config_reload` handlers for framework validation/future workflow integration without changing this public sync contract. |
 | `POST /api/modules/restart` | `module_name`, `reason?` | `module_restart.result.v1` | Stage 02 synchronous restart for one available module and explicit Stage 03 jobs exception. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict and `module_name` is required. Stage 03 implements job-backed `module_restart` handlers for framework validation/future workflow integration without changing this public sync contract. |
 | `GET /api/environments` | `limit`, `cursor` | `list_response<environment>` | MVP read endpoint. |
@@ -295,15 +295,15 @@ paths, usernames, passwords or userinfo.
 | `POST /api/auth/password-reset/confirm` | `token`, `new_password` | `204 No Content` | Verifies one-time reset token and updates local credentials using Argon2id PHC hashing. |
 | `POST /api/auth/password/change` | `current_password`, `new_password` | `204 No Content` | Changes password for current authenticated local user. |
 | `GET /api/auth/users` | `limit`, `cursor`, `active?` | `list_response<user>` | Administrative endpoint; full MVP UI is Stage 08 scope. |
-| `PUT /api/auth/users` | `users[]` | `list_response<user>` | Идемпотентно upsert'ит users by `id` or `username`; omitted users are not deleted in MVP. |
+| `PUT /api/auth/users` | `users[]` | `list_response<user>` | Idempotently upserts users by `id` or `username`; omitted users are not deleted in MVP. |
 | `GET /api/auth/groups` | `limit`, `cursor` | `list_response<group>` | Administrative endpoint; full MVP UI is Stage 08 scope. |
-| `PUT /api/auth/groups` | `groups[]` | `list_response<group>` | Идемпотентно upsert'ит groups by `id` or `name`; omitted groups are not deleted in MVP. |
+| `PUT /api/auth/groups` | `groups[]` | `list_response<group>` | Idempotently upserts groups by `id` or `name`; omitted groups are not deleted in MVP. |
 | `GET /api/auth/roles` | `limit`, `cursor`, `scope_type?` | `list_response<role>` | Administrative endpoint; full MVP UI is Stage 08 scope. |
-| `PUT /api/auth/roles` | `roles[]` | `list_response<role>` | Идемпотентно upsert'ит roles by `id` or `name + scope_type`; omitted roles are not deleted in MVP. |
+| `PUT /api/auth/roles` | `roles[]` | `list_response<role>` | Idempotently upserts roles by `id` or `name + scope_type`; omitted roles are not deleted in MVP. |
 | `GET /api/auth/role-bindings` | `limit`, `cursor`, `scope_type?`, `scope_id?`, `subject_type?`, `subject_id?` | `list_response<role_binding>` | Administrative endpoint; full MVP UI is Stage 08 scope. |
-| `PUT /api/auth/role-bindings` | `role_bindings[]` | `list_response<role_binding>` | Идемпотентно upsert'ит bindings by subject/role/scope tuple; omitted bindings are not deleted in MVP. |
+| `PUT /api/auth/role-bindings` | `role_bindings[]` | `list_response<role_binding>` | Idempotently upserts bindings by subject/role/scope tuple; omitted bindings are not deleted in MVP. |
 | `GET /api/auth/scim/identities` | `limit`, `cursor`, `provider?` | `list_response<scim_identity>` | SCIM identity read model. |
-| `POST /api/auth/scim/sync` | `provider?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = scim_sync`. |
+| `POST /api/auth/scim/sync` | `provider?`, `reason?` | `202 job_ref` | Creates `jobs.job_type = scim_sync`. |
 | `GET /api/audit` | `limit`, `cursor`, `actor?`, `entity_type?`, `action?` | `list_response<audit_log>` | Audit log read model. |
 
 ## Repository operation conflicts
@@ -319,6 +319,6 @@ normalized target path before a stable `repository_id` exists.
 
 ## Schema sources
 
-Имена сущностей в таблице endpoint'ов соответствуют persistent entities из [`data-model.md`](data-model.md). API DTO могут скрывать внутренние поля, но имена полей должны оставаться согласованными, если нет явно описанной причины для расхождения.
+Entity names in the endpoint table correspond to persistent entities from [`data-model.md`](data-model.md). API DTOs may hide internal fields, but field names must remain consistent unless an explicit reason for divergence is documented.
 
-Версионируемые `jobs.payload`, `jobs.result_payload`, `project_scans.result_payload` и `module_states.details` описаны в [`payload-schemas.md`](payload-schemas.md).
+Versioned `jobs.payload`, `jobs.result_payload`, `project_scans.result_payload` and `module_states.details` are described in [`payload-schemas.md`](payload-schemas.md).

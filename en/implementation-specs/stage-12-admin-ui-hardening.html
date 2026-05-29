@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-12-admin-ui-hardening">Stage 12: Admin UI Hardening</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -53,22 +53,22 @@
 <a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
 <a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-12-admin-ui-hardening">Stage 12: Admin UI Hardening</h1>
-<h2 id="цель">Цель</h2>
-<p>Усилить и расширить administrative UI после Stage 08 full MVP admin screens: SCIM sync management, advanced tool profile administration, platform-only controls and release-specific hardening поверх documented backend API и единого frontend UI contract.</p>
+<h2 id="goal">Goal</h2>
+<p>Strengthen and expand the administrative UI after the Stage 08 full MVP admin screens: SCIM sync management, advanced tool profile administration, platform-only controls and release-specific hardening on top of the documented backend API and unified frontend UI contract.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../access-control.html"><code>docs/access-control.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
+<li><a href="../frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../access-control.html"><code>docs/en/access-control.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -96,7 +96,7 @@
 <ul>
 <li>admin screens available in <code>Web UI</code> are available in local <code>GUI</code> for the same release scope;</li>
 <li>admin UI uses only documented backend API endpoints;</li>
-<li>UI follows <a href="../frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a>;</li>
+<li>UI follows <a href="../frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a>;</li>
 <li>permissions are enforced by backend and represented clearly in UI states;</li>
 <li>configuration and rule set changes show resulting jobs/status where applicable.</li>
 </ul>
@@ -110,9 +110,9 @@
 <li>Roadmap: Stage 12.</li>
 <li>Acceptance: <code>ACC-PLATFORM-002</code>, <code>ACC-PLATFORM-003</code>.</li>
 <li>API: auth/RBAC, config, security rule sets, tool profiles, audit.</li>
-<li>UI contract: <a href="../frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a>.</li>
+<li>UI contract: <a href="../frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>frontend compensates for missing backend contracts;</li>
 <li>GUI and Web UI diverge in administrative screens;</li>

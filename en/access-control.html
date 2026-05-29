@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Auth, SCIM и RBAC - T-Helper documentation.">
-    <title>Auth, SCIM и RBAC - T-Helper Docs</title>
+    <meta name="description" content="Auth, SCIM and RBAC - T-Helper documentation.">
+    <title>Auth, SCIM and RBAC - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../access-control.html">
     <link rel="alternate" hreflang="en" href="access-control.html">
     <link rel="stylesheet" href="../pages.css">
@@ -44,15 +44,15 @@
           <a href="traceability.html">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          <a class="toc-level-1" href="#auth-scim-и-rbac">Auth, SCIM и RBAC</a>
-<a class="toc-level-2" href="#обязательные-возможности-модуля-auth">Обязательные возможности модуля auth</a>
+          <a class="toc-level-1" href="#auth-scim-and-rbac">Auth, SCIM and RBAC</a>
+<a class="toc-level-2" href="#required-capabilities-of-the-auth-module">Required capabilities of the auth module</a>
 <a class="toc-level-2" href="#local-password-policy">Local password policy</a>
-<a class="toc-level-2" href="#scope-модель">Scope-модель</a>
-<a class="toc-level-2" href="#системные-роли">Системные роли</a>
-<a class="toc-level-2" href="#объектные-роли">Объектные роли</a>
+<a class="toc-level-2" href="#scope-model">Scope Model</a>
+<a class="toc-level-2" href="#system-roles">System Roles</a>
+<a class="toc-level-2" href="#object-roles">Object Roles</a>
 <a class="toc-level-2" href="#role-to-permission-matrix">Role-to-permission matrix</a>
-<a class="toc-level-3" href="#системные-роли-2">Системные роли</a>
-<a class="toc-level-3" href="#объектные-роли-2">Объектные роли</a>
+<a class="toc-level-3" href="#system-roles-2">System Roles</a>
+<a class="toc-level-3" href="#object-roles-2">Object Roles</a>
 <a class="toc-level-2" href="#machine-readable-permissions">Machine-readable permissions</a>
 <a class="toc-level-3" href="#system">System</a>
 <a class="toc-level-3" href="#auth">Auth</a>
@@ -61,31 +61,31 @@
 <a class="toc-level-3" href="#environment">Environment</a>
 <a class="toc-level-3" href="#workspace">Workspace</a>
 <a class="toc-level-3" href="#repository">Repository</a>
-<a class="toc-level-2" href="#минимальные-правила-авторизации-api">Минимальные правила авторизации API</a>
+<a class="toc-level-2" href="#minimum-api-authorization-rules">Minimum API Authorization Rules</a>
 <a class="toc-level-3" href="#systemruntimeread-visibility-examples">system.runtime.read visibility examples</a>
 <a class="toc-level-2" href="#api-authorization-matrix">API authorization matrix</a>
-<a class="toc-level-2" href="#sql-ориентированные-инварианты">SQL-ориентированные инварианты</a>
+<a class="toc-level-2" href="#sql-oriented-invariants">SQL-Oriented Invariants</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
-          <h1 id="auth-scim-и-rbac">Auth, SCIM и RBAC</h1>
-<h2 id="обязательные-возможности-модуля-auth">Обязательные возможности модуля <code>auth</code></h2>
+          <h1 id="auth-scim-and-rbac">Auth, SCIM and RBAC</h1>
+<h2 id="required-capabilities-of-the-auth-module">Required capabilities of the <code>auth</code> module</h2>
 <ul>
-<li>локальная аутентификация;</li>
-<li>расширяемая модель внешних authentication providers;</li>
+<li>local authentication;</li>
+<li>extensible model for external authentication providers;</li>
 <li><code>SCIM</code>;</li>
 <li><code>RBAC</code>;</li>
-<li>управление users, groups, roles и role bindings;</li>
-<li>audit security-событий.</li>
+<li>management of users, groups, roles and role bindings;</li>
+<li>auditing of security events.</li>
 </ul>
 <h2 id="local-password-policy">Local password policy</h2>
-<p>Local auth uses Argon2id PHC password hashes as defined in <a href="adr/0014-local-password-hashing.html"><code>docs/adr/0014-local-password-hashing.md</code></a>.</p>
+<p>Local auth uses Argon2id PHC password hashes as defined in <a href="adr/0014-local-password-hashing.html"><code>docs/en/adr/0014-local-password-hashing.md</code></a>.</p>
 <p>API responses, logs, job payloads, workflow payloads and audit payloads must never expose raw passwords, password hashes, reset tokens or reset token hashes. Authentication failures must use generic errors and must not reveal whether a username exists.</p>
 <p>Runtime auth endpoints are separate from administrative auth endpoints. Login, logout, session, password reset and password change flows operate on session/local credential state; users/groups/roles/role-bindings/SCIM endpoints remain administrative APIs.</p>
-<h2 id="scope-модель">Scope-модель</h2>
-<p>Поддерживаемые scope:</p>
+<h2 id="scope-model">Scope Model</h2>
+<p>Supported scopes:</p>
 <ul>
 <li><code>system</code></li>
 <li><code>project</code></li>
@@ -93,47 +93,47 @@
 <li><code>workspace</code></li>
 <li><code>repository</code></li>
 </ul>
-<p>Субъекты назначения ролей:</p>
+<p>Role assignment subjects:</p>
 <ul>
 <li><code>user</code></li>
 <li><code>group</code></li>
 </ul>
-<p>Правила разрешения:</p>
+<p>Resolution rules:</p>
 <ul>
-<li>системная роль имеет приоритет над объектной;</li>
-<li>permissions нескольких ролей объединяются;</li>
-<li>базовая модель строится на <code>allow</code> без явного <code>deny</code>;</li>
-<li>права группы наследуются её участниками.</li>
+<li>a system role takes precedence over an object role;</li>
+<li>permissions from multiple roles are merged;</li>
+<li>the base model is built on <code>allow</code> without an explicit <code>deny</code>;</li>
+<li>group permissions are inherited by group members.</li>
 </ul>
-<h2 id="системные-роли">Системные роли</h2>
+<h2 id="system-roles">System Roles</h2>
 <ul>
-<li><code>system_admin</code> - полный доступ ко всей системе</li>
+<li><code>system_admin</code> - full access to the entire system</li>
 <li><code>platform_operator</code> - scan, runtime, config, module operations, repo sync, security scan</li>
-<li><code>security_admin</code> - auth, RBAC, <code>SCIM</code>, security rule sets и findings</li>
-<li><code>auditor</code> - расширенный read-only по объектам, config, jobs, audit и findings</li>
-<li><code>viewer</code> - базовый глобальный read-only</li>
+<li><code>security_admin</code> - auth, RBAC, <code>SCIM</code>, security rule sets and findings</li>
+<li><code>auditor</code> - extended read-only access to objects, config, jobs, audit and findings</li>
+<li><code>viewer</code> - basic global read-only access</li>
 </ul>
-<h2 id="объектные-роли">Объектные роли</h2>
+<h2 id="object-roles">Object Roles</h2>
 <ul>
-<li><code>owner</code> - полный доступ к объекту, delete, role binding management</li>
-<li><code>maintainer</code> - operational access без управления RBAC</li>
-<li><code>editor</code> - изменение метаданных без delete и без RBAC management</li>
-<li><code>viewer</code> - read-only доступ</li>
+<li><code>owner</code> - full access to the object, delete and role binding management</li>
+<li><code>maintainer</code> - operational access without RBAC management</li>
+<li><code>editor</code> - metadata changes without delete or RBAC management</li>
+<li><code>viewer</code> - read-only access</li>
 </ul>
 <h2 id="role-to-permission-matrix">Role-to-permission matrix</h2>
-<p>Wildcard permissions вида <code>project.*</code> используются в документации как сокращение. В persistent storage и seed/migration они должны разворачиваться в конкретные permissions из раздела &quot;Machine-readable permissions&quot;; runtime authorization не должен полагаться на строковое сопоставление wildcard.</p>
-<h3 id="системные-роли-2">Системные роли</h3>
+<p>Wildcard permissions such as <code>project.*</code> are used in the documentation as shorthand. In persistent storage and seed/migration data they must be expanded into concrete permissions from the &quot;Machine-readable permissions&quot; section; runtime authorization must not rely on wildcard string matching.</p>
+<h3 id="system-roles-2">System Roles</h3>
 <table>
 <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
 <tbody>
-<tr><td><code>system_admin</code></td><td>все <code>system.*</code>, <code>auth.*</code>, <code>security.*</code>, <code>project.*</code>, <code>environment.*</code>, <code>workspace.*</code>, <code>repository.*</code></td></tr>
+<tr><td><code>system_admin</code></td><td>all <code>system.*</code>, <code>auth.*</code>, <code>security.*</code>, <code>project.*</code>, <code>environment.*</code>, <code>workspace.*</code>, <code>repository.*</code></td></tr>
 <tr><td><code>platform_operator</code></td><td><code>system.config.read</code>, <code>system.globalscan.run</code>, <code>system.rootpath.*</code>, <code>system.ignore.*</code>, <code>system.module.*</code>, <code>system.job.read</code>, <code>system.status.read</code>, <code>system.audit.read</code>, <code>system.runtime.*</code>, <code>security.scan.*</code>, <code>security.finding.read</code>, <code>project.read</code>, <code>project.job.read</code>, <code>project.scan.*</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code>, <code>repository.job.read</code>, <code>repository.provider.*</code>, <code>repository.credential.*</code>, <code>repository.clone</code>, <code>repository.pull</code>, <code>repository.sync</code>, <code>repository.webhook.write</code>, <code>repository.polling.write</code></td></tr>
 <tr><td><code>security_admin</code></td><td><code>system.audit.read</code>, <code>system.job.read</code>, <code>auth.*</code>, <code>security.*</code>, <code>project.read</code>, <code>project.scan.read</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code></td></tr>
 <tr><td><code>auditor</code></td><td><code>system.config.read</code>, <code>system.security.read</code>, <code>system.module.read</code>, <code>system.job.read</code>, <code>system.status.read</code>, <code>system.audit.read</code>, <code>system.runtime.read</code>, <code>auth.user.read</code>, <code>auth.group.read</code>, <code>auth.role.read</code>, <code>auth.rolebind.read</code>, <code>auth.provider.read</code>, <code>auth.scim.read</code>, <code>security.ruleset.read</code>, <code>security.toolprofile.read</code>, <code>security.finding.read</code>, <code>security.scan.read</code>, <code>security.exception.read</code>, <code>project.read</code>, <code>project.job.read</code>, <code>project.log.read</code>, <code>project.scan.read</code>, <code>environment.read</code>, <code>environment.job.read</code>, <code>environment.log.read</code>, <code>workspace.read</code>, <code>workspace.job.read</code>, <code>workspace.log.read</code>, <code>repository.read</code>, <code>repository.job.read</code>, <code>repository.log.read</code></td></tr>
 <tr><td><code>viewer</code></td><td><code>system.runtime.read</code>, <code>project.read</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code></td></tr>
 </tbody></table>
-<h3 id="объектные-роли-2">Объектные роли</h3>
-<p>Permissions объектных ролей применяются только внутри scope, к которому привязан role binding. Например, <code>maintainer</code> на <code>repository:&lt;id&gt;</code> выдаёт перечисленные repository permissions только для этого репозитория.</p>
+<h3 id="object-roles-2">Object Roles</h3>
+<p>Object-role permissions apply only within the scope to which the role binding is attached. For example, <code>maintainer</code> on <code>repository:&lt;id&gt;</code> grants the listed repository permissions only for that repository.</p>
 <table>
 <thead><tr><th>Scope</th><th><code>owner</code></th><th><code>maintainer</code></th><th><code>editor</code></th><th><code>viewer</code></th></tr></thead>
 <tbody>
@@ -234,16 +234,16 @@ repository.credential.read
 repository.credential.write
 repository.webhook.write
 repository.polling.write</code></pre>
-<h2 id="минимальные-правила-авторизации-api">Минимальные правила авторизации API</h2>
+<h2 id="minimum-api-authorization-rules">Minimum API Authorization Rules</h2>
 <ul>
-<li>чтение требует <code>viewer</code> и выше в системном или объектном scope;</li>
-<li>изменение требует <code>editor</code> и выше либо соответствующий system permission;</li>
-<li>hard delete требует <code>owner</code> или <code>system_admin</code> only after a future endpoint explicitly implements delete semantics;</li>
-<li>управление role bindings требует <code>security_admin</code>, <code>system_admin</code> или <code>owner</code> в объектном scope;</li>
-<li>runtime-операции требуют <code>platform_operator</code> или <code>system_admin</code>;</li>
-<li><code>SCIM</code>-операции требуют <code>security_admin</code> или <code>system_admin</code>.</li>
-<li><code>system.runtime.read</code> разрешает читать runtime summary и списочные metadata, но не должен автоматически раскрывать все object-scoped детали без соответствующего object permission или отдельного системного read permission.</li>
-<li>Confirmed MVP behavior: <code>GET /api/health</code> доступен без аутентификации только как safe readiness/discovery endpoint и не раскрывает config, filesystem paths, DSN, users, secrets или object-scoped details.</li>
+<li>reads require <code>viewer</code> or higher in a system or object scope;</li>
+<li>changes require <code>editor</code> or higher, or the corresponding system permission;</li>
+<li>hard delete requires <code>owner</code> or <code>system_admin</code> only after a future endpoint explicitly implements delete semantics;</li>
+<li>role binding management requires <code>security_admin</code>, <code>system_admin</code> or <code>owner</code> in the object scope;</li>
+<li>runtime operations require <code>platform_operator</code> or <code>system_admin</code>;</li>
+<li><code>SCIM</code> operations require <code>security_admin</code> or <code>system_admin</code>.</li>
+<li><code>system.runtime.read</code> allows reading runtime summaries and list metadata, but must not automatically expose all object-scoped details without the corresponding object permission or a separate system read permission.</li>
+<li>Confirmed MVP behavior: <code>GET /api/health</code> is available without authentication only as a safe readiness/discovery endpoint and does not expose config, filesystem paths, DSNs, users, secrets or object-scoped details.</li>
 <li>Confirmed MVP behavior: public <code>DELETE</code> endpoints are out of scope; seeded <code>*.delete</code> permissions are reserved for future lifecycle endpoints.</li>
 <li>Confirmed MVP lifecycle behavior: disable/deactivate/mark-missing/supersede operations are write operations controlled by the corresponding <code>*.write</code>, runtime or specialized operation permissions, not by reserved <code>*.delete</code> permissions.</li>
 </ul>
@@ -339,20 +339,20 @@ repository.polling.write</code></pre>
 <tr><td><code>POST /api/auth/scim/sync</code></td><td><code>auth.scim.write</code></td></tr>
 <tr><td><code>GET /api/audit</code></td><td><code>system.audit.read</code></td></tr>
 </tbody></table>
-<h2 id="sql-ориентированные-инварианты">SQL-ориентированные инварианты</h2>
-<p>Для SQL-реализации должны соблюдаться ограничения:</p>
+<h2 id="sql-oriented-invariants">SQL-Oriented Invariants</h2>
+<p>SQL implementations must enforce these constraints:</p>
 <ul>
-<li><code>subject_type</code> принимает только <code>user</code> или <code>group</code>;</li>
-<li><code>scope_type</code> принимает только <code>system</code>, <code>project</code>, <code>environment</code>, <code>workspace</code>, <code>repository</code>;</li>
-<li>для <code>system</code> scope <code>scope_id = NULL</code>;</li>
-<li>для объектных scope <code>scope_id</code> обязателен;</li>
-<li><code>scim_identities</code> ссылается либо на <code>user_id</code>, либо на <code>group_id</code>.</li>
+<li><code>subject_type</code> accepts only <code>user</code> or <code>group</code>;</li>
+<li><code>scope_type</code> accepts only <code>system</code>, <code>project</code>, <code>environment</code>, <code>workspace</code>, <code>repository</code>;</li>
+<li>for the <code>system</code> scope, <code>scope_id = NULL</code>;</li>
+<li>for object scopes, <code>scope_id</code> is required;</li>
+<li><code>scim_identities</code> references either <code>user_id</code> or <code>group_id</code>.</li>
 </ul>
-<p>Рекомендации:</p>
+<p>Recommendations:</p>
 <ul>
-<li>в <code>PostgreSQL</code> использовать <code>CHECK CONSTRAINT</code>;</li>
-<li>в <code>MySQL</code>, <code>MSSQL</code> и <code>SQLite</code> дублировать критичную валидацию на уровне приложения, если конкретный constraint нельзя надёжно выразить средствами dialect;</li>
-<li>effective permissions кэшировать после объединения системных и объектных bindings.</li>
+<li>use <code>CHECK CONSTRAINT</code> in <code>PostgreSQL</code>;</li>
+<li>in <code>MySQL</code>, <code>MSSQL</code> and <code>SQLite</code>, duplicate critical validation at the application level if a specific constraint cannot be expressed reliably by the dialect;</li>
+<li>cache effective permissions after merging system and object bindings.</li>
 </ul>
         </article>
 

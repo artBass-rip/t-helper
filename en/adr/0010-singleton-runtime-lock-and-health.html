@@ -85,7 +85,7 @@
 <p>Health endpoint:</p>
 <pre><code class="language-text">GET /api/health</code></pre>
 <p>The health response must include <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code> and a basic readiness state. Tauri GUI and local tools use the lock file plus <code>/api/health</code> to discover and verify an existing runtime.</p>
-<p>Stage 01 must introduce the final <code>health_status.v1</code> response shape from <a href="../api.html"><code>docs/api.md</code></a>. Stage 02 adds runtime lock acquisition, stale lock handling and lock/probe semantics to that endpoint without a breaking response schema change.</p>
+<p>Stage 01 must introduce the final <code>health_status.v1</code> response shape from <a href="../api.html"><code>docs/en/api.md</code></a>. Stage 02 adds runtime lock acquisition, stale lock handling and lock/probe semantics to that endpoint without a breaking response schema change.</p>
 <p><code>config_database_fingerprint</code> identifies the runtime database/config target without exposing credentials. A second runtime must not attach to a different local database while an active runtime lock exists.</p>
 <h2 id="rationale">Rationale</h2>
 <p>A lock file alone is not enough after crashes, and a health endpoint alone does not tell local clients where to connect before discovery. Combining both gives deterministic startup behavior for <code>thelper</code>, Tauri GUI and <code>thelper-ctl</code>.</p>

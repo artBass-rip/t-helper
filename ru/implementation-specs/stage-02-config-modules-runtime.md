@@ -14,15 +14,15 @@ persist runtime observability in `module_states`.
 
 ## Inputs
 
-- `docs/configuration.md`
-- `docs/data-model.md`
-- `docs/interfaces.md`
-- `docs/api.md`
-- `docs/technology-stack.md`
-- `docs/adr/0004-frontend-and-tauri-runtime-policy.md`
-- `docs/adr/0008-configuration-key-compatibility.md`
-- `docs/adr/0009-secret-resolution.md`
-- `docs/adr/0010-singleton-runtime-lock-and-health.md`
+- `docs/ru/configuration.md`
+- `docs/ru/data-model.md`
+- `docs/ru/interfaces.md`
+- `docs/ru/api.md`
+- `docs/ru/technology-stack.md`
+- `docs/ru/adr/0004-frontend-and-tauri-runtime-policy.md`
+- `docs/ru/adr/0008-configuration-key-compatibility.md`
+- `docs/ru/adr/0009-secret-resolution.md`
+- `docs/ru/adr/0010-singleton-runtime-lock-and-health.md`
 
 ## Scope
 

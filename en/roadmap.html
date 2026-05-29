@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Roadmap и приёмка - T-Helper documentation.">
-    <title>Roadmap и приёмка - T-Helper Docs</title>
+    <meta name="description" content="Roadmap and Acceptance - T-Helper documentation.">
+    <title>Roadmap and Acceptance - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../roadmap.html">
     <link rel="alternate" hreflang="en" href="roadmap.html">
     <link rel="stylesheet" href="../pages.css">
@@ -44,8 +44,8 @@
           <a href="traceability.html">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          <a class="toc-level-1" href="#roadmap-и-приёмка">Roadmap и приёмка</a>
-<a class="toc-level-2" href="#оптимизированные-stage-реализации">Оптимизированные stage реализации</a>
+          <a class="toc-level-1" href="#roadmap-and-acceptance">Roadmap and Acceptance</a>
+<a class="toc-level-2" href="#optimized-implementation-stages">Optimized Implementation Stages</a>
 <a class="toc-level-3" href="#stage-00-delivery-contract">Stage 00. Delivery contract</a>
 <a class="toc-level-3" href="#stage-01-backend-storage-foundation">Stage 01. Backend storage foundation</a>
 <a class="toc-level-3" href="#stage-02-config-modules-and-runtime-lifecycle">Stage 02. Config, modules and runtime lifecycle</a>
@@ -64,98 +64,98 @@
 <a class="toc-level-3" href="#stage-13-scim-full-sync">Stage 13. SCIM full sync</a>
 <a class="toc-level-3" href="#stage-14-repository-webhook-sync">Stage 14. Repository webhook sync</a>
 <a class="toc-level-3" href="#stage-15-distributed-deployment">Stage 15. Distributed deployment</a>
-<a class="toc-level-2" href="#критерии-приёмки">Критерии приёмки</a>
+<a class="toc-level-2" href="#acceptance-criteria">Acceptance Criteria</a>
 <a class="toc-level-3" href="#mvp-acceptance">MVP acceptance</a>
 <a class="toc-level-3" href="#platform-acceptance">Platform acceptance</a>
-<a class="toc-level-2" href="#статус-открытых-решений">Статус открытых решений</a>
+<a class="toc-level-2" href="#open-decision-status">Open Decision Status</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
-          <h1 id="roadmap-и-приёмка">Roadmap и приёмка</h1>
-<h2 id="оптимизированные-stage-реализации">Оптимизированные stage реализации</h2>
-<p>Декомпозиция уменьшает размер foundation-части и делает каждый stage проверяемым отдельно. Детальные implementation specs находятся в <code>docs/implementation-specs/</code>.</p>
+          <h1 id="roadmap-and-acceptance">Roadmap and Acceptance</h1>
+<h2 id="optimized-implementation-stages">Optimized Implementation Stages</h2>
+<p>The decomposition reduces the size of the foundation portion and makes each stage independently verifiable. Detailed implementation specs are in <code>docs/en/implementation-specs/</code>.</p>
 <h3 id="stage-00-delivery-contract">Stage 00. Delivery contract</h3>
 <ul>
-<li>зафиксировать Definition of Done для MVP и platform release;</li>
-<li>присвоить открытым продуктовым решениям статус <code>accepted</code>, <code>deferred</code> или <code>out-of-scope</code> в Stage 00 decision register;</li>
-<li>зафиксировать структуру будущего code repository, style guides, CI/scaffolding checklist и правила обновления трассировки как документационный contract;</li>
-<li>нормализовать референсные примеры конфигурации и секретов.</li>
+<li>fix the Definition of Done for the MVP and platform release;</li>
+<li>assign open product decisions the status <code>accepted</code>, <code>deferred</code> or <code>out-of-scope</code> in the Stage 00 decision register;</li>
+<li>fix the future code repository structure, style guides, CI/scaffolding checklist and traceability update rules as a documentation contract;</li>
+<li>normalize reference examples for configuration and secrets.</li>
 </ul>
 <p>Executable scaffolding, actual CI files, Go modules and storage test harnesses are Stage 01 implementation deliverables. Stage 00 is considered complete when the delivery decisions and documentation contracts are accepted.</p>
 <h3 id="stage-01-backend-storage-foundation">Stage 01. Backend storage foundation</h3>
 <p>Status: completed.</p>
 <ul>
-<li>создан Go module and executable entrypoints <code>thelper</code>, <code>thelper-worker</code>, <code>thelper-ctl</code>;</li>
-<li>реализован HTTP adapter skeleton на <code>net/http</code>/<code>chi</code>;</li>
-<li>реализованы storage abstraction, provider registry и миграционный каркас;</li>
-<li>поддержаны <code>SQLite</code> и <code>PostgreSQL</code> для stage-owned системных таблиц Stage 01;</li>
-<li>добавлены базовое логирование, correlation IDs и <code>GET /api/health</code>;</li>
-<li>добавлены SQLite/PostgreSQL storage contract tests and GitHub Actions CI gate.</li>
+<li>created the Go module and executable entrypoints <code>thelper</code>, <code>thelper-worker</code>, <code>thelper-ctl</code>;</li>
+<li>implemented the HTTP adapter skeleton on <code>net/http</code>/<code>chi</code>;</li>
+<li>implemented storage abstraction, provider registry and migration framework;</li>
+<li>supported <code>SQLite</code> and <code>PostgreSQL</code> for Stage 01-owned system tables;</li>
+<li>added baseline logging, correlation IDs and <code>GET /api/health</code>;</li>
+<li>added SQLite/PostgreSQL storage contract tests and GitHub Actions CI gate.</li>
 </ul>
 <h3 id="stage-02-config-modules-and-runtime-lifecycle">Stage 02. Config, modules and runtime lifecycle</h3>
 <p>Status: completed.</p>
 <ul>
-<li>реализованы <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code> и imported system <code>ignore_rules</code>;</li>
-<li>реализован import через <code>thelper-ctl -reconfigure</code>;</li>
-<li>реализованы reloadability matrix и synchronous <code>thelper-ctl -reload</code> без Stage 03 <code>jobs</code> dependency;</li>
-<li>реализован module registry с lifecycle <code>start</code>, <code>stop</code>, <code>reload</code>, <code>health</code>;</li>
-<li>реализованы <code>thelper-ctl -restart &lt;module&gt;</code> и Stage 02 sync result DTOs;</li>
-<li>зафиксирован singleton runtime lock/health mechanism для локального режима.</li>
+<li>implemented <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code> and imported system <code>ignore_rules</code>;</li>
+<li>implemented import through <code>thelper-ctl -reconfigure</code>;</li>
+<li>implemented the reloadability matrix and synchronous <code>thelper-ctl -reload</code> without a Stage 03 <code>jobs</code> dependency;</li>
+<li>implemented module registry with lifecycle <code>start</code>, <code>stop</code>, <code>reload</code>, <code>health</code>;</li>
+<li>implemented <code>thelper-ctl -restart &lt;module&gt;</code> and Stage 02 sync result DTOs;</li>
+<li>fixed the singleton runtime lock/health mechanism for local mode.</li>
 </ul>
 <h3 id="stage-03-jobs-workers-and-status-foundation">Stage 03. Jobs, workers and status foundation</h3>
 <p>Status: completed.</p>
 <ul>
-<li>реализованы <code>jobs</code>, <code>job_locks</code>, <code>job_events</code>, <code>workflow_statuses</code>;</li>
-<li>реализованы atomic job claim, leases, heartbeat, expired lease recovery и retry/backoff;</li>
-<li>выполнение background jobs вынесено в <code>thelper-worker</code>;</li>
-<li>реализованы worker handlers для <code>config_reload</code> и <code>module_restart</code>;</li>
-<li>поднят базовый <code>status-monitor</code> для jobs/workers/modules.</li>
+<li>implemented <code>jobs</code>, <code>job_locks</code>, <code>job_events</code>, <code>workflow_statuses</code>;</li>
+<li>implemented atomic job claim, leases, heartbeat, expired lease recovery and retry/backoff;</li>
+<li>moved background job execution into <code>thelper-worker</code>;</li>
+<li>implemented worker handlers for <code>config_reload</code> and <code>module_restart</code>;</li>
+<li>started the baseline <code>status-monitor</code> for jobs/workers/modules.</li>
 </ul>
 <h3 id="stage-04-scanner-and-registry-mvp">Stage 04. Scanner and registry MVP</h3>
 <p>Status: completed.</p>
 <ul>
-<li>реализованы <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>environments</code>, <code>workspaces</code> и минимальный <code>repositories</code> registry;</li>
-<li>реализован exclude-only ignore matcher с сохранением <code>!pattern</code>;</li>
-<li>реализован discovery Terraform-проектов по <code>*.tf</code> без чтения исходников;</li>
-<li>реализованы coalesced фоновые <code>project_discovery</code> jobs для определения Git-связей проекта без блокировки глобального scan;</li>
-<li>реализовано обнаружение Git markers внутри <code>project_discovery</code> и прекращение обхода ниже найденного Terraform-проекта в global scan;</li>
-<li>реализованы <code>project_links</code> для связи отдельных project records, относящихся к одному Git repository, без merge project rows;</li>
-<li>закрыт API для scan roots, ignore rules, scans, projects, environments и workspaces.</li>
+<li>implemented <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>environments</code>, <code>workspaces</code> and a minimal <code>repositories</code> registry;</li>
+<li>implemented an exclude-only ignore matcher with preservation of <code>!pattern</code>;</li>
+<li>implemented Terraform project discovery by <code>*.tf</code> without reading source contents;</li>
+<li>implemented coalesced background <code>project_discovery</code> jobs for determining project Git relationships without blocking the global scan;</li>
+<li>implemented Git marker discovery inside <code>project_discovery</code> and stopping traversal below a discovered Terraform project in global scan;</li>
+<li>implemented <code>project_links</code> for relating separate project records that belong to one Git repository without merging project rows;</li>
+<li>closed the API for scan roots, ignore rules, scans, projects, environments and workspaces.</li>
 </ul>
 <h3 id="stage-05-repository-manager-mvp">Stage 05. Repository manager MVP</h3>
 <p>Status: completed.</p>
 <ul>
-<li>реализована расширенная модель <code>repositories</code>;</li>
-<li>реализованы <code>clone</code>, <code>pull</code>, <code>sync</code> через jobs и <code>job_locks</code>;</li>
-<li>обеспечена path safety: нормализация, запрет path traversal, <code>local_path</code> только внутри выбранного <code>root_path</code>;</li>
-<li>зафиксирована repository identity как <code>provider + provider_host + full_path</code>;</li>
-<li>реализованы GitKraken-like provider integration profiles: multi-host и multi-credential per host;</li>
-<li>реализованы MVP adapters для <code>generic</code> Git и GitHub;</li>
-<li><code>bitbucket</code>, <code>azure_devops</code>, recursive GitLab group clone, webhook sync и polling sync оставлены вне Stage 05 MVP.</li>
+<li>implemented the expanded <code>repositories</code> model;</li>
+<li>implemented <code>clone</code>, <code>pull</code>, <code>sync</code> through jobs and <code>job_locks</code>;</li>
+<li>ensured path safety: normalization, path traversal rejection, <code>local_path</code> only inside the selected <code>root_path</code>;</li>
+<li>fixed repository identity as <code>provider + provider_host + full_path</code>;</li>
+<li>implemented GitKraken-like provider integration profiles: multi-host and multi-credential per host;</li>
+<li>implemented MVP adapters for <code>generic</code> Git and GitHub;</li>
+<li>left <code>bitbucket</code>, <code>azure_devops</code>, recursive GitLab group clone, webhook sync and polling sync outside the Stage 05 MVP.</li>
 </ul>
 <h3 id="stage-05a-repository-operations-extensions">Stage 05A. Repository operations extensions</h3>
 <ul>
-<li>добавить второй managed provider из пары <code>gitlab</code>/<code>github</code>, если он не был включён в Stage 05;</li>
-<li>реализовать recursive clone GitLab group/subgroups после стабилизации single-repository clone;</li>
-<li>добавить provider adapters для <code>bitbucket</code> и <code>azure_devops</code>;</li>
-<li>сохранить тот же repository identity, credential и path safety contract, что и Stage 05.</li>
+<li>add the second managed provider from the <code>gitlab</code>/<code>github</code> pair if it was not included in Stage 05;</li>
+<li>implement recursive clone of GitLab group/subgroups after single-repository clone stabilizes;</li>
+<li>add provider adapters for <code>bitbucket</code> and <code>azure_devops</code>;</li>
+<li>preserve the same repository identity, credential and path safety contract as Stage 05.</li>
 </ul>
 <h3 id="stage-05b-repository-polling-sync">Stage 05B. Repository polling sync</h3>
 <ul>
-<li>реализовать polling-based sync как отдельный repository workflow;</li>
-<li>добавить scheduler integration для polling;</li>
-<li>проверить, что polling не обходит <code>job_locks</code>, credential usage validation и status-monitor aggregation.</li>
+<li>implement polling-based sync as a separate repository workflow;</li>
+<li>add scheduler integration for polling;</li>
+<li>verify that polling does not bypass <code>job_locks</code>, credential usage validation or status-monitor aggregation.</li>
 </ul>
 <h3 id="stage-06-project-scanner-and-security-validator-mvp">Stage 06. Project scanner and security validator MVP</h3>
 <ul>
-<li>реализовать <code>project_scan_settings</code>, <code>project_security_scan_settings</code>, <code>project_scans</code>;</li>
-<li>реализовать parent-child workflow <code>project_scan</code> -&gt; <code>security_validation_scan</code> через <code>job_group_id</code>;</li>
-<li>подключить <code>terraform validate</code> и <code>TFLint</code> для <code>project-scanner</code>;</li>
-<li>подключить <code>Trivy</code> как обязательный security scanner для MVP;</li>
-<li>оставить <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> и <code>Conftest</code> как adapter extension points без обязательной MVP-приёмки;</li>
-<li>сохранять <code>security_rule_sets</code>, <code>security_findings</code> и aggregate status через <code>status-monitor</code>.</li>
+<li>implement <code>project_scan_settings</code>, <code>project_security_scan_settings</code>, <code>project_scans</code>;</li>
+<li>implement parent-child workflow <code>project_scan</code> -&gt; <code>security_validation_scan</code> through <code>job_group_id</code>;</li>
+<li>connect <code>terraform validate</code> and <code>TFLint</code> for <code>project-scanner</code>;</li>
+<li>connect <code>Trivy</code> as the mandatory security scanner for the MVP;</li>
+<li>leave <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code> as adapter extension points without mandatory MVP acceptance;</li>
+<li>store <code>security_rule_sets</code>, <code>security_findings</code> and aggregate status through <code>status-monitor</code>.</li>
 </ul>
 <p>Stage 06 intentionally split into two delivery packages:</p>
 <ul>
@@ -164,126 +164,126 @@
 </ul>
 <h3 id="stage-07-auth-rbac-scim-and-audit">Stage 07. Auth, RBAC, SCIM and audit</h3>
 <ul>
-<li>реализовать локальную аутентификацию и каркас external auth providers;</li>
-<li>реализовать local credentials storage с Argon2id PHC password hashes по ADR 0014;</li>
-<li>реализовать first-run bootstrap admin user flow;</li>
-<li>реализовать users, groups, memberships, roles, permissions и role bindings;</li>
-<li>включить API authorization enforcement по matrix из <a href="access-control.html"><code>access-control.md</code></a>;</li>
-<li>реализовать SCIM contract/stub без полноценного sync workflow в MVP;</li>
-<li>писать audit security-события.</li>
+<li>implement local authentication and the external auth providers framework;</li>
+<li>implement local credentials storage with Argon2id PHC password hashes according to ADR 0014;</li>
+<li>implement the first-run bootstrap admin user flow;</li>
+<li>implement users, groups, memberships, roles, permissions and role bindings;</li>
+<li>enable API authorization enforcement according to the matrix in <a href="access-control.html"><code>access-control.md</code></a>;</li>
+<li>implement SCIM contract/stub without a full sync workflow in the MVP;</li>
+<li>write audit security events.</li>
 </ul>
 <h3 id="stage-08-frontend-mvp-and-local-gui">Stage 08. Frontend MVP and local GUI</h3>
 <ul>
-<li>реализовать единый React/TypeScript frontend для <code>Web UI</code> и <code>GUI</code>;</li>
-<li>использовать Vite, TanStack Router, TanStack Query, Zod, React Hook Form и Ant Design;</li>
-<li>покрыть основные read/operate сценарии: projects, roots, ignore rules, scans, repos, findings, jobs, modules, audit, config;</li>
-<li>реализовать полноценные administrative screens для auth/RBAC/configuration/security rule sets, так как соответствующие backend APIs входят в целевой MVP release scope;</li>
-<li>реализовать Tauri GUI только для локального режима;</li>
-<li>проверить, что <code>GUI</code> и <code>Web UI</code> используют только documented backend API;</li>
-<li>обеспечить feature parity для MVP read/operate и MVP administrative scenarios;</li>
+<li>implement a unified React/TypeScript frontend for <code>Web UI</code> and <code>GUI</code>;</li>
+<li>use Vite, TanStack Router, TanStack Query, Zod, React Hook Form and Ant Design;</li>
+<li>cover the main read/operate scenarios: projects, roots, ignore rules, scans, repos, findings, jobs, modules, audit, config;</li>
+<li>implement full administrative screens for auth/RBAC/configuration/security rule sets because the corresponding backend APIs are in the target MVP release scope;</li>
+<li>implement the Tauri GUI only for local mode;</li>
+<li>verify that <code>GUI</code> and <code>Web UI</code> use only the documented backend API;</li>
+<li>provide feature parity for MVP read/operate and MVP administrative scenarios;</li>
 </ul>
 <p>Stage 08 entry contract for route map, navigation, operational density and Tauri local runtime discovery/start policy is accepted in <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>. Packaging/signing and update/distribution policy remain release artifact exit decisions.</p>
 <h3 id="stage-09-runtime-and-observability-hardening">Stage 09. Runtime and observability hardening</h3>
 <ul>
-<li>расширить observability и <code>status-monitor</code>;</li>
-<li>усилить scheduler, worker shutdown/recovery и module runtime;</li>
-<li>выполнить приоритизированный runtime/scanner optimization backlog из Stage 09 implementation spec и <a href="code-optimization.html"><code>code-optimization.md</code></a>;</li>
-<li>реализовать full <code>.gitignore</code> semantics с <code>!pattern</code>;</li>
-<li>реализовать optional <code>follow_symlinks = true</code> hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;</li>
-<li>формализовать degraded states, retention cleanup и operator diagnostics для jobs, locks, modules, workers and scans.</li>
+<li>expand observability and <code>status-monitor</code>;</li>
+<li>strengthen scheduler, worker shutdown/recovery and module runtime;</li>
+<li>complete the prioritized runtime/scanner optimization backlog from the Stage 09 implementation spec and <a href="code-optimization.html"><code>code-optimization.md</code></a>;</li>
+<li>implement full <code>.gitignore</code> semantics with <code>!pattern</code>;</li>
+<li>implement optional <code>follow_symlinks = true</code> hardening with cycle detection, root containment checks and traversal guards if this mode is approved;</li>
+<li>formalize degraded states, retention cleanup and operator diagnostics for jobs, locks, modules, workers and scans.</li>
 </ul>
 <h3 id="stage-10-storage-adapter-expansion">Stage 10. Storage adapter expansion</h3>
 <ul>
-<li>добавить <code>MySQL</code>, <code>MSSQL</code> и другие утверждённые SQL-compatible adapters;</li>
-<li>поставить dialect-specific migrations with synchronized logical migration versions;</li>
-<li>расширить shared storage contract suite на все target adapters;</li>
-<li>задокументировать dialect-specific behavior differences и application-level validation fallback.</li>
+<li>add <code>MySQL</code>, <code>MSSQL</code> and other approved SQL-compatible adapters;</li>
+<li>deliver dialect-specific migrations with synchronized logical migration versions;</li>
+<li>expand the shared storage contract suite to all target adapters;</li>
+<li>document dialect-specific behavior differences and application-level validation fallback.</li>
 </ul>
 <h3 id="stage-11-security-tooling-and-policy-packs">Stage 11. Security tooling and policy packs</h3>
 <ul>
-<li>определить и поставить baseline локальных rule sets и enterprise-policy packs;</li>
-<li>подключить дополнительные security adapters: <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> и <code>Conftest</code>;</li>
-<li>использовать ADR 0018 tool profiles для дополнительных tools;</li>
-<li>проверить локальность security stack и стабильность ADR 0017 findings fingerprints.</li>
+<li>define and deliver baseline local rule sets and enterprise-policy packs;</li>
+<li>connect additional security adapters: <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code>;</li>
+<li>use ADR 0018 tool profiles for additional tools;</li>
+<li>verify locality of the security stack and stability of ADR 0017 findings fingerprints.</li>
 </ul>
 <h3 id="stage-12-admin-ui-hardening">Stage 12. Admin UI hardening</h3>
 <ul>
 <li>hardened extensions for administrative UI beyond the Stage 08 full MVP admin screens;</li>
-<li>добавить UI для advanced tool profile administration, SCIM sync management and platform-only administrative workflows where in release scope;</li>
-<li>добавить SCIM visibility and sync operation surfaces where backend APIs are available;</li>
-<li>сохранить <code>Web UI</code>/<code>GUI</code> parity по <a href="frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a>.</li>
+<li>add UI for advanced tool profile administration, SCIM sync management and platform-only administrative workflows where in release scope;</li>
+<li>add SCIM visibility and sync operation surfaces where backend APIs are available;</li>
+<li>preserve <code>Web UI</code>/<code>GUI</code> parity according to <a href="frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a>.</li>
 </ul>
 <h3 id="stage-13-scim-full-sync">Stage 13. SCIM full sync</h3>
 <ul>
-<li>реализовать полноценный SCIM sync workflow поверх Stage 07 contract/stub;</li>
-<li>зафиксировать conflict policy, mapping rules, audit events and partial failure behavior;</li>
-<li>подключить scheduled/manual sync через jobs, worker leases and status-monitor.</li>
+<li>implement a full SCIM sync workflow over the Stage 07 contract/stub;</li>
+<li>fix conflict policy, mapping rules, audit events and partial failure behavior;</li>
+<li>connect scheduled/manual sync through jobs, worker leases and status-monitor.</li>
 </ul>
 <h3 id="stage-14-repository-webhook-sync">Stage 14. Repository webhook sync</h3>
 <ul>
-<li>реализовать webhook-based repository sync;</li>
-<li>добавить provider-specific webhook payload validation and secret verification;</li>
+<li>implement webhook-based repository sync;</li>
+<li>add provider-specific webhook payload validation and secret verification;</li>
 <li>enqueue repository sync jobs without bypassing <code>job_locks</code>;</li>
-<li>обеспечить audit/status integration for webhook events.</li>
+<li>provide audit/status integration for webhook events.</li>
 </ul>
 <h3 id="stage-15-distributed-deployment">Stage 15. Distributed deployment</h3>
 <ul>
-<li>вынести <code>global-scanner</code>, <code>project-scanner</code>, <code>repository-manager</code>, <code>security-validator</code>, <code>auth</code> и <code>status-monitor</code> в совместимые runtime modes;</li>
-<li>формализовать межмодульные retry, timeout, idempotency и auth contracts;</li>
-<li>подготовить service discovery, health model, worker groups и HA topology;</li>
-<li>проверить, что distributed mode не вводит второй source of truth и не ломает API/storage contracts.</li>
+<li>move <code>global-scanner</code>, <code>project-scanner</code>, <code>repository-manager</code>, <code>security-validator</code>, <code>auth</code> and <code>status-monitor</code> into compatible runtime modes;</li>
+<li>formalize inter-module retry, timeout, idempotency and auth contracts;</li>
+<li>prepare service discovery, health model, worker groups and HA topology;</li>
+<li>verify that distributed mode does not introduce a second source of truth and does not break API/storage contracts.</li>
 </ul>
-<h2 id="критерии-приёмки">Критерии приёмки</h2>
+<h2 id="acceptance-criteria">Acceptance Criteria</h2>
 <h3 id="mvp-acceptance">MVP acceptance</h3>
 <table>
 <thead><tr><th>ID</th><th>Criterion</th></tr></thead>
 <tbody>
-<tr><td><code>ACC-MVP-001</code></td><td>Terraform-проект обнаруживается по наличию <code>*.tf</code>.</td></tr>
-<tr><td><code>ACC-MVP-002</code></td><td>Глобальное сканирование определяет Terraform-проекты, а фоновый <code>project_discovery</code> определяет Git-связи проектов.</td></tr>
-<tr><td><code>ACC-MVP-003</code></td><td>После обнаружения проекта вложенные директории не сканируются как отдельные working directories.</td></tr>
-<tr><td><code>ACC-MVP-004</code></td><td>Ignore rules корректно исключают файлы и директории; <code>!pattern</code> сохраняется без потери данных и применяется после реализации full <code>.gitignore</code> semantics.</td></tr>
-<tr><td><code>ACC-MVP-005</code></td><td>Проекты сохраняются отдельными записями, а Git-связи проектов сохраняются без merge project records.</td></tr>
-<tr><td><code>ACC-MVP-006</code></td><td>Project-level scan определяет providers, required auth, syntax issues, deprecations и quality issues через <code>terraform validate</code> и <code>TFLint</code>, а security/validation scan сохраняет findings через <code>Trivy</code> как обязательный локальный scanner.</td></tr>
-<tr><td><code>ACC-MVP-007</code></td><td>Runtime-конфигурация хранится в БД.</td></tr>
-<tr><td><code>ACC-MVP-008</code></td><td><code>thelper-ctl -reconfigure</code> импортирует конфигурацию и ignore rules в БД.</td></tr>
-<tr><td><code>ACC-MVP-009</code></td><td><code>thelper-ctl -reload</code> применяет reloadable-конфигурацию.</td></tr>
-<tr><td><code>ACC-MVP-010</code></td><td><code>thelper-ctl -restart &lt;module&gt;</code> работает для любого отдельного модуля.</td></tr>
-<tr><td><code>ACC-MVP-011</code></td><td><code>GUI</code> и <code>Web UI</code> используют единый backend API и покрывают MVP read/operate сценарии.</td></tr>
-<tr><td><code>ACC-MVP-012</code></td><td><code>GUI</code> работает только локально.</td></tr>
-<tr><td><code>ACC-MVP-013</code></td><td><code>PostgreSQL</code> и <code>SQLite</code> поддерживаются через storage abstraction.</td></tr>
-<tr><td><code>ACC-MVP-014</code></td><td><code>clone</code>, <code>pull</code>, <code>sync</code> не приводят к неконсистентному состоянию и сериализуются через <code>job_locks</code>.</td></tr>
-<tr><td><code>ACC-MVP-015</code></td><td>Поддерживаются <code>environments</code> и <code>workspaces</code>.</td></tr>
-<tr><td><code>ACC-MVP-016</code></td><td><code>auth</code> реализован как отдельный модуль.</td></tr>
-<tr><td><code>ACC-MVP-017</code></td><td>Local auth и <code>RBAC</code> реализованы на backend/API уровне; SCIM endpoints могут быть contract/stub без полноценного sync workflow.</td></tr>
-<tr><td><code>ACC-MVP-018</code></td><td>Security stack работает локально и не передаёт код наружу.</td></tr>
-<tr><td><code>ACC-MVP-019</code></td><td>Security findings и rule sets хранятся внутри системы.</td></tr>
-<tr><td><code>ACC-MVP-020</code></td><td>Один project scan API создаёт <code>project_scans</code> и parent-child jobs workflow без отдельной сущности <code>security_scans</code>; security findings читаются через scoped или security endpoints.</td></tr>
-<tr><td><code>ACC-MVP-021</code></td><td>Backend API покрывает scan roots, repositories, jobs, environments, workspaces и module states для Frontend MVP.</td></tr>
-<tr><td><code>ACC-MVP-022</code></td><td>Clone workflow поддерживает <code>generic</code> Git и один managed provider из <code>gitlab</code> или <code>github</code>, выбор `https</td><td>ssh<code>, выбор root path и target directory, multi-host/multi-credential provider profiles, path safety и </code>job_locks`.</td></tr>
+<tr><td><code>ACC-MVP-001</code></td><td>A Terraform project is discovered by the presence of <code>*.tf</code>.</td></tr>
+<tr><td><code>ACC-MVP-002</code></td><td>Global scanning identifies Terraform projects, and background <code>project_discovery</code> identifies project Git relationships.</td></tr>
+<tr><td><code>ACC-MVP-003</code></td><td>After a project is discovered, nested directories are not scanned as separate working directories.</td></tr>
+<tr><td><code>ACC-MVP-004</code></td><td>Ignore rules correctly exclude files and directories; <code>!pattern</code> is preserved without data loss and applied after full <code>.gitignore</code> semantics are implemented.</td></tr>
+<tr><td><code>ACC-MVP-005</code></td><td>Projects are stored as separate records, and project Git relationships are stored without merging project records.</td></tr>
+<tr><td><code>ACC-MVP-006</code></td><td>Project-level scan identifies providers, required auth, syntax issues, deprecations and quality issues through <code>terraform validate</code> and <code>TFLint</code>, while security/validation scan stores findings through <code>Trivy</code> as the mandatory local scanner.</td></tr>
+<tr><td><code>ACC-MVP-007</code></td><td>Runtime configuration is stored in the database.</td></tr>
+<tr><td><code>ACC-MVP-008</code></td><td><code>thelper-ctl -reconfigure</code> imports configuration and ignore rules into the database.</td></tr>
+<tr><td><code>ACC-MVP-009</code></td><td><code>thelper-ctl -reload</code> applies reloadable configuration.</td></tr>
+<tr><td><code>ACC-MVP-010</code></td><td><code>thelper-ctl -restart &lt;module&gt;</code> works for any individual module.</td></tr>
+<tr><td><code>ACC-MVP-011</code></td><td><code>GUI</code> and <code>Web UI</code> use a unified backend API and cover MVP read/operate scenarios.</td></tr>
+<tr><td><code>ACC-MVP-012</code></td><td><code>GUI</code> works only locally.</td></tr>
+<tr><td><code>ACC-MVP-013</code></td><td><code>PostgreSQL</code> and <code>SQLite</code> are supported through storage abstraction.</td></tr>
+<tr><td><code>ACC-MVP-014</code></td><td><code>clone</code>, <code>pull</code>, <code>sync</code> do not lead to inconsistent state and are serialized through <code>job_locks</code>.</td></tr>
+<tr><td><code>ACC-MVP-015</code></td><td><code>environments</code> and <code>workspaces</code> are supported.</td></tr>
+<tr><td><code>ACC-MVP-016</code></td><td><code>auth</code> is implemented as a separate module.</td></tr>
+<tr><td><code>ACC-MVP-017</code></td><td>Local auth and <code>RBAC</code> are implemented at backend/API level; SCIM endpoints may be contract/stub without a full sync workflow.</td></tr>
+<tr><td><code>ACC-MVP-018</code></td><td>The security stack works locally and does not send code outside.</td></tr>
+<tr><td><code>ACC-MVP-019</code></td><td>Security findings and rule sets are stored inside the system.</td></tr>
+<tr><td><code>ACC-MVP-020</code></td><td>One project scan API creates <code>project_scans</code> and a parent-child jobs workflow without a separate <code>security_scans</code> entity; security findings are read through scoped or security endpoints.</td></tr>
+<tr><td><code>ACC-MVP-021</code></td><td>Backend API covers scan roots, repositories, jobs, environments, workspaces and module states for the Frontend MVP.</td></tr>
+<tr><td><code>ACC-MVP-022</code></td><td>Clone workflow supports <code>generic</code> Git and one managed provider from <code>gitlab</code> or <code>github</code>, `https</td><td>ssh<code> selection, root path and target directory selection, multi-host/multi-credential provider profiles, path safety and </code>job_locks`.</td></tr>
 </tbody></table>
 <h3 id="platform-acceptance">Platform acceptance</h3>
 <table>
 <thead><tr><th>ID</th><th>Criterion</th></tr></thead>
 <tbody>
-<tr><td><code>ACC-PLATFORM-001</code></td><td>Поддерживаются все целевые SQL/SQL-like БД по roadmap: <code>PostgreSQL</code>, <code>SQLite</code>, <code>MySQL</code>, <code>MSSQL</code> и дополнительные SQL-compatible adapters, если они утверждены для platform release.</td></tr>
-<tr><td><code>ACC-PLATFORM-002</code></td><td>Реализован полный administrative UI для auth, RBAC и <code>SCIM</code>.</td></tr>
-<tr><td><code>ACC-PLATFORM-003</code></td><td>Реализован UI для редактирования configuration и security rule sets.</td></tr>
-<tr><td><code>ACC-PLATFORM-004</code></td><td>Реализована full <code>.gitignore</code> semantics с отрицательными правилами <code>!pattern</code>.</td></tr>
-<tr><td><code>ACC-PLATFORM-005</code></td><td>Подготовлен distributed deployment для <code>global-scanner</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>repository-manager</code>, <code>auth</code>, <code>web</code>, <code>nginx</code> и БД.</td></tr>
-<tr><td><code>ACC-PLATFORM-006</code></td><td>Repository integrations расширены до <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>, recursive GitLab group clone, polling sync и webhook sync.</td></tr>
-<tr><td><code>ACC-PLATFORM-007</code></td><td>Security adapters расширены до <code>Trivy</code>, <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> и <code>Conftest</code> с baseline локальными rule sets/policy packs.</td></tr>
-<tr><td><code>ACC-PLATFORM-008</code></td><td>Полноценный SCIM sync workflow реализован поверх Stage 07 SCIM contract/stub.</td></tr>
+<tr><td><code>ACC-PLATFORM-001</code></td><td>All target SQL/SQL-like databases on the roadmap are supported: <code>PostgreSQL</code>, <code>SQLite</code>, <code>MySQL</code>, <code>MSSQL</code> and additional SQL-compatible adapters if approved for the platform release.</td></tr>
+<tr><td><code>ACC-PLATFORM-002</code></td><td>Full administrative UI is implemented for auth, RBAC and <code>SCIM</code>.</td></tr>
+<tr><td><code>ACC-PLATFORM-003</code></td><td>UI for editing configuration and security rule sets is implemented.</td></tr>
+<tr><td><code>ACC-PLATFORM-004</code></td><td>Full <code>.gitignore</code> semantics with negative <code>!pattern</code> rules are implemented.</td></tr>
+<tr><td><code>ACC-PLATFORM-005</code></td><td>Distributed deployment is prepared for <code>global-scanner</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>repository-manager</code>, <code>auth</code>, <code>web</code>, <code>nginx</code> and the database.</td></tr>
+<tr><td><code>ACC-PLATFORM-006</code></td><td>Repository integrations are expanded to <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>, recursive GitLab group clone, polling sync and webhook sync.</td></tr>
+<tr><td><code>ACC-PLATFORM-007</code></td><td>Security adapters are expanded to <code>Trivy</code>, <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code> with baseline local rule sets/policy packs.</td></tr>
+<tr><td><code>ACC-PLATFORM-008</code></td><td>A full SCIM sync workflow is implemented over the Stage 07 SCIM contract/stub.</td></tr>
 </tbody></table>
-<h2 id="статус-открытых-решений">Статус открытых решений</h2>
-<p>Канонический статус решений фиксируется в <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/implementation-specs/stage-00-delivery-contract.md</code></a> в разделе <code>Decision register</code>. Если roadmap и Stage 00 расходятся, для управления внедрением используется Stage 00 decision register как более точный delivery contract.</p>
+<h2 id="open-decision-status">Open Decision Status</h2>
+<p>The canonical decision status is recorded in <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/en/implementation-specs/stage-00-delivery-contract.md</code></a> in the <code>Decision register</code> section. If the roadmap and Stage 00 diverge, the Stage 00 decision register is used as the more precise delivery contract for implementation management.</p>
 <ul>
-<li>MVP breadth: accepted, MVP остаётся broad platform slice through Stage 08 и управляется stage ownership/test gates;</li>
-<li>bootstrap admin recovery model: accepted, строгая first-run recovery policy сохраняется без unauthenticated persistent recovery path;</li>
-<li><code>terragrunt.hcl</code> support: deferred, не входит в MVP;</li>
-<li>baseline local security rules and policy packs: deferred до Stage 11 unless approved earlier;</li>
-<li>minimal external auth providers: deferred, Stage 07 поставляет local auth и provider interface;</li>
-<li><code>project</code> / <code>environment</code> / <code>workspace</code> lifecycle: accepted for MVP в conservative mode;</li>
-<li>full <code>.gitignore</code> semantics: deferred до Stage 09, MVP matcher exclude-only с сохранением <code>!pattern</code>.</li>
+<li>MVP breadth: accepted, the MVP remains a broad platform slice through Stage 08 and is governed by stage ownership/test gates;</li>
+<li>bootstrap admin recovery model: accepted, strict first-run recovery policy remains without an unauthenticated persistent recovery path;</li>
+<li><code>terragrunt.hcl</code> support: deferred, not included in the MVP;</li>
+<li>baseline local security rules and policy packs: deferred until Stage 11 unless approved earlier;</li>
+<li>minimal external auth providers: deferred, Stage 07 delivers local auth and provider interface;</li>
+<li><code>project</code> / <code>environment</code> / <code>workspace</code> lifecycle: accepted for MVP in conservative mode;</li>
+<li>full <code>.gitignore</code> semantics: deferred until Stage 09, MVP matcher is exclude-only with preservation of <code>!pattern</code>.</li>
 </ul>
         </article>
 

@@ -58,20 +58,20 @@
 <h2 id="status">Status</h2>
 <p>Accepted.</p>
 <h2 id="decision">Decision</h2>
-<p>Backend runtime, CLI и worker components реализуются на <code>Go</code>.</p>
-<p>HTTP API реализуется на стандартном <code>net/http</code> с lightweight router/middleware stack. Recommended router: <code>chi</code>.</p>
+<p>The backend runtime, CLI, and worker components are implemented in <code>Go</code>.</p>
+<p>The HTTP API is implemented on the standard <code>net/http</code> package with a lightweight router/middleware stack. Recommended router: <code>chi</code>.</p>
 <h2 id="rationale">Rationale</h2>
 <ul>
-<li>Go подходит для single-binary on-premise delivery.</li>
-<li><code>net/http</code> сохраняет backend framework-neutral.</li>
-<li><code>chi</code> хорошо ложится на REST API, middleware и <code>httptest</code>.</li>
-<li>Router не должен протекать в доменную логику.</li>
+<li>Go is suitable for single-binary on-premise delivery.</li>
+<li><code>net/http</code> keeps the backend framework-neutral.</li>
+<li><code>chi</code> fits REST APIs, middleware, and <code>httptest</code> well.</li>
+<li>The router must not leak into domain logic.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
-<li>Handlers вызывают application services.</li>
-<li>API contracts остаются в <a href="../api.html"><code>docs/api.md</code></a>.</li>
-<li>Framework-specific code должен быть локализован в HTTP adapter layer.</li>
+<li>Handlers call application services.</li>
+<li>API contracts remain in <a href="../api.html"><code>docs/en/api.md</code></a>.</li>
+<li>Framework-specific code must be localized in the HTTP adapter layer.</li>
 </ul>
         </article>
 

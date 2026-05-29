@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-07-auth-rbac-scim-and-audit">Stage 07: Auth, RBAC, SCIM and Audit</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -53,50 +53,50 @@
 <a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
 <a class="toc-level-2" href="#deferred-non-blocking-decisions">Deferred non-blocking decisions</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-07-auth-rbac-scim-and-audit">Stage 07: Auth, RBAC, SCIM and Audit</h1>
-<h2 id="цель">Цель</h2>
-<p>Ввести отдельный модуль <code>auth</code>, обеспечивающий локальную аутентификацию, авторизацию, RBAC, SCIM contract/stub и аудит security-событий для backend API.</p>
+<h2 id="goal">Goal</h2>
+<p>Introduce a separate <code>auth</code> module that provides local authentication, authorization, RBAC, a SCIM contract/stub and audit logging for backend API security events.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../access-control.html"><code>docs/access-control.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="../adr/0014-local-password-hashing.html"><code>docs/adr/0014-local-password-hashing.md</code></a></li>
+<li><a href="../access-control.html"><code>docs/en/access-control.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="../adr/0014-local-password-hashing.html"><code>docs/en/adr/0014-local-password-hashing.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
-<li>модуль <code>auth</code>;</li>
-<li>локальная аутентификация;</li>
+<li><code>auth</code> module;</li>
+<li>local authentication;</li>
 <li>first-run bootstrap admin user flow;</li>
 <li>runtime auth session API: login, logout, current session, password reset and password change;</li>
-<li>каркас external auth providers;</li>
+<li>external auth provider skeleton;</li>
 <li>pluggable auth provider registry;</li>
 <li>users, groups, memberships;</li>
 <li>roles, permissions, role bindings;</li>
 <li>API authorization enforcement;</li>
-<li>SCIM contract/stub без полноценного sync workflow;</li>
-<li><code>audit_log</code> для security-событий.</li>
+<li>SCIM contract/stub without a full sync workflow;</li>
+<li><code>audit_log</code> for security events.</li>
 </ul>
 <h2 id="non-goals">Non-goals</h2>
 <ul>
 <li>frontend administrative UI;</li>
-<li>enterprise IAM integrations сверх согласованного минимального набора providers;</li>
+<li>enterprise IAM integrations beyond the agreed minimal provider set;</li>
 <li>detailed policy authoring UI.</li>
-<li>полноценный SCIM sync workflow.</li>
+<li>full SCIM sync workflow.</li>
 </ul>
 <h2 id="deliverables">Deliverables</h2>
 <ul>
 <li>auth module;</li>
 <li>auth provider libraries for local auth and future external providers;</li>
-<li>persistence model для RBAC и SCIM;</li>
+<li>persistence model for RBAC and SCIM;</li>
 <li>local credentials persistence with Argon2id PHC hashes;</li>
 <li><code>user_sessions</code> persistence with hash-only opaque session token storage;</li>
 <li><code>auth_bootstrap_credentials</code> persistence for one-time first-run bootstrap display and expiry tracking;</li>
@@ -107,13 +107,13 @@
 </ul>
 <h2 id="definition-of-done">Definition of Done</h2>
 <ul>
-<li>все API endpoints проверяют authorization matrix;</li>
-<li>wildcard permissions развёрнуты в concrete permissions на seed/migration уровне;</li>
-<li>runtime не использует wildcard string matching;</li>
-<li>object-scoped access не раскрывается через <code>system.runtime.read</code>;</li>
-<li>group inheritance работает;</li>
-<li>auth providers реализованы как подключаемые libraries за provider interface;</li>
-<li>unknown auth provider отклоняется controlled validation error;</li>
+<li>all API endpoints check the authorization matrix;</li>
+<li>wildcard permissions are expanded into concrete permissions at seed/migration level;</li>
+<li>runtime does not use wildcard string matching;</li>
+<li>object-scoped access is not exposed through <code>system.runtime.read</code>;</li>
+<li>group inheritance works;</li>
+<li>auth providers are implemented as pluggable libraries behind a provider interface;</li>
+<li>unknown auth provider is rejected with a controlled validation error;</li>
 <li>local password hashes use Argon2id PHC strings and are stored outside <code>users</code>;</li>
 <li>first-run bootstrap admin is created only for empty auth state, shown once in first UI and stdout, expires after 24 hours and is not recreated automatically;</li>
 <li>successful login creates a session without persisting raw session token material;</li>
@@ -126,7 +126,7 @@
 </ul>
 <h2 id="deferred-non-blocking-decisions">Deferred non-blocking decisions</h2>
 <ul>
-<li>минимальный набор external auth providers beyond local auth;</li>
+<li>minimal set of external auth providers beyond local auth;</li>
 <li>SCIM sync conflict policy and full sync handler.</li>
 </ul>
 <h2 id="traceability">Traceability</h2>
@@ -137,11 +137,11 @@
 <li>Data model: auth/RBAC/SCIM/audit entities, <code>local_user_credentials</code>, <code>password_reset_tokens</code>, <code>auth_bootstrap_credentials</code>.</li>
 <li>ADR: <code>0012</code>, <code>0014</code>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
-<li>слишком позднее RBAC enforcement приведёт к переделке early handlers;</li>
-<li>неоднозначность precedence system/object roles;</li>
-<li>provider abstraction может расшириться до enterprise IAM раньше MVP.</li>
+<li>late RBAC enforcement will require reworking early handlers;</li>
+<li>ambiguous precedence between system and object roles;</li>
+<li>provider abstraction may expand into enterprise IAM before MVP.</li>
 </ul>
         </article>
 

@@ -6,24 +6,24 @@ Accepted.
 
 ## Context
 
-После Stage 05 runtime содержит стабильный набор backend routes, jobs lifecycle
-paths и storage-backed stores. Предыдущая реализация `httpapi.New` принимала
-`optionalHandlers ...any` и регистрировала routes через `type-switch`. Такой
-подход позволял передать неподдержанный handler без compile-time ошибки: он
-молчаливо игнорировался.
+After Stage 05, the runtime contains a stable set of backend routes, jobs
+lifecycle paths, and storage-backed stores. The previous `httpapi.New`
+implementation accepted `optionalHandlers ...any` and registered routes through
+a `type-switch`. This approach allowed an unsupported handler to be passed
+without a compile-time error: it was silently ignored.
 
-Store-слой также содержит повторяющийся паттерн:
+The store layer also contains a repeated pattern:
 
 ```text
 BeginTx -> defer Rollback -> business writes -> Commit
 ```
 
-Паттерн корректен, но при росте store-файлов усложняет чтение изменяемых
-lifecycle paths.
+The pattern is correct, but as store files grow it makes mutable lifecycle paths
+harder to read.
 
 ## Decision
 
-HTTP route composition использует явный compile-time контракт:
+HTTP route composition uses an explicit compile-time contract:
 
 ```go
 type RouteRegistrar interface {
@@ -31,44 +31,44 @@ type RouteRegistrar interface {
 }
 ```
 
-Каждый HTTP handler регистрирует собственные routes рядом со своими методами.
-`httpapi.New` отвечает только за создание router, common middleware и вызов
+Each HTTP handler registers its own routes next to its methods. `httpapi.New`
+is responsible only for creating the router, common middleware, and calling
 `RegisterRoutes`.
 
-Для транзакций добавлен helper:
+A helper has been added for transactions:
 
 ```go
 func WithTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) error
 ```
 
-Он централизует rollback/commit поведение и оставляет возможность передавать
-`sql.TxOptions` для hot paths.
+It centralizes rollback/commit behavior and preserves the ability to pass
+`sql.TxOptions` for hot paths.
 
-Локальный quality gate зафиксирован в `Makefile`:
+The local quality gate is fixed in `Makefile`:
 
 - `make test`: `gofmt` check, `go vet ./...`, `go test ./...`;
 - `make race`: `go test -race ./...`.
 
-Performance work должен сопровождаться benchmarks или другим измеримым
-baseline. Первые benchmarks добавлены для `jobs.Store.ClaimNext` и
+Performance work must be accompanied by benchmarks or another measurable
+baseline. The first benchmarks were added for `jobs.Store.ClaimNext` and
 `jobs.Store.RefreshWorkflowStatus`.
 
 ## Consequences
 
-- Unsupported HTTP handler type больше нельзя передать в `httpapi.New` без
-  compile-time ошибки.
-- Route ownership виден локально в handler-файлах, а общий route smoke-test
-  защищает от случайной потери endpoint.
-- `storage.WithTx` используется в новых или сильно изменяемых местах; массовый
-  механический рефакторинг существующего store-кода не требуется.
-- `make test` становится рекомендуемой командой перед PR/commit.
-- Stage 09 optimization backlog должен ссылаться на измерения, а не только на
-  интуицию.
+- Unsupported HTTP handler types can no longer be passed to `httpapi.New`
+  without a compile-time error.
+- Route ownership is visible locally in handler files, and the shared route
+  smoke test protects against accidental endpoint loss.
+- `storage.WithTx` is used in new or heavily changed areas; a broad mechanical
+  refactor of existing store code is not required.
+- `make test` becomes the recommended command before a PR/commit.
+- The Stage 09 optimization backlog must reference measurements, not only
+  intuition.
 
 ## Non-goals
 
-- Полный SQL dialect abstraction не входит в это решение и остаётся отдельным
-  backlog item.
-- Разделение крупных store-файлов не выполняется механически без изменений
-  соответствующей области.
-- `WithTx` не скрывает domain-specific retry, isolation или lock strategy.
+- A full SQL dialect abstraction is outside this decision and remains a
+  separate backlog item.
+- Large store files are not split mechanically without changes in the
+  corresponding area.
+- `WithTx` does not hide domain-specific retry, isolation, or lock strategy.

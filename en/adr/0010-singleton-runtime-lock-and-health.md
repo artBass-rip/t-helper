@@ -45,7 +45,7 @@ GET /api/health
 The health response must include `instance_id`, `mode`, `database_fingerprint`, `started_at` and a basic readiness state. Tauri GUI and local tools use the lock file plus `/api/health` to discover and verify an existing runtime.
 
 Stage 01 must introduce the final `health_status.v1` response shape from
-`docs/api.md`. Stage 02 adds runtime lock acquisition, stale lock handling and
+`docs/en/api.md`. Stage 02 adds runtime lock acquisition, stale lock handling and
 lock/probe semantics to that endpoint without a breaking response schema change.
 
 `config_database_fingerprint` identifies the runtime database/config target without exposing credentials. A second runtime must not attach to a different local database while an active runtime lock exists.

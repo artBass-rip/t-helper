@@ -6,13 +6,13 @@
 
 ## Inputs
 
-- `docs/architecture.md`
-- `docs/roadmap.md`
-- `docs/technology-stack.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/access-control.md`
-- `docs/implementation-specs/stage-09-runtime-observability-hardening.md`
+- `docs/ru/architecture.md`
+- `docs/ru/roadmap.md`
+- `docs/ru/technology-stack.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/access-control.md`
+- `docs/ru/implementation-specs/stage-09-runtime-observability-hardening.md`
 
 ## Scope
 
@@ -73,7 +73,7 @@
 
 - Roadmap: Stage 15.
 - Acceptance: `ACC-PLATFORM-005`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/ru/roadmap.md`.
 
 ## Риски
 

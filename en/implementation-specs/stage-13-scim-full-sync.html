@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-13-scim-full-sync">Stage 13: SCIM Full Sync</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -53,22 +53,22 @@
 <a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
 <a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-13-scim-full-sync">Stage 13: SCIM Full Sync</h1>
-<h2 id="цель">Цель</h2>
-<p>Реализовать полноценный SCIM sync workflow поверх Stage 07 SCIM contract/stub без breaking API changes.</p>
+<h2 id="goal">Goal</h2>
+<p>Implement a full SCIM sync workflow on top of the Stage 07 SCIM contract/stub without breaking API changes.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../access-control.html"><code>docs/access-control.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
+<li><a href="../access-control.html"><code>docs/en/access-control.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -114,7 +114,7 @@
 <li>API: <code>GET /api/auth/scim/identities</code>, <code>POST /api/auth/scim/sync</code>.</li>
 <li>Data model: <code>scim_identities</code>, auth/RBAC entities, <code>jobs</code>, <code>job_events</code>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>ambiguous conflict handling changes user access unexpectedly;</li>
 <li>SCIM sync bypasses audit/RBAC invariants;</li>

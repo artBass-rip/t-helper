@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-10-storage-adapter-expansion">Stage 10: Storage Adapter Expansion</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -53,31 +53,31 @@
 <a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
 <a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-10-storage-adapter-expansion">Stage 10: Storage Adapter Expansion</h1>
-<h2 id="цель">Цель</h2>
-<p>Расширить storage stack platform release до <code>MySQL</code>, <code>MSSQL</code> и других утверждённых SQL-compatible adapters без изменения logical data model и API contracts.</p>
+<h2 id="goal">Goal</h2>
+<p>Expand the platform release storage stack to <code>MySQL</code>, <code>MSSQL</code> and other approved SQL-compatible adapters without changing the logical data model or API contracts.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../roadmap.html"><code>docs/roadmap.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="../development.html"><code>docs/development.md</code></a></li>
-<li><a href="../architecture.html"><code>docs/architecture.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/adr/0002-storage-and-migrations.md</code></a></li>
-<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
+<li><a href="../roadmap.html"><code>docs/en/roadmap.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="../development.html"><code>docs/en/development.md</code></a></li>
+<li><a href="../architecture.html"><code>docs/en/architecture.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/en/adr/0002-storage-and-migrations.md</code></a></li>
+<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/en/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
 <li><code>MySQL</code> adapter;</li>
 <li><code>MSSQL</code> adapter;</li>
-<li>дополнительные SQL-compatible adapters, если утверждены для platform release;</li>
+<li>additional SQL-compatible adapters if approved for the platform release;</li>
 <li>dialect-specific migrations with synchronized logical migration versions;</li>
 <li>storage provider registry extension;</li>
 <li>shared storage contract suite for all target adapters;</li>
@@ -114,9 +114,9 @@
 <ul>
 <li>Roadmap: Stage 10.</li>
 <li>Acceptance: <code>ACC-PLATFORM-001</code>.</li>
-<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/roadmap.md</code></a>.</li>
+<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/en/roadmap.md</code></a>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>SQL adapter behavior differences;</li>
 <li>migration drift between dialect directories;</li>

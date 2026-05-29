@@ -10,22 +10,22 @@ test harnesses. Those deliverables start in Stage 01.
 
 ## Canonical Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/roadmap.md`
-- `docs/traceability.md`
-- `docs/test-plan.md`
-- `docs/configuration.md`
-- `docs/development.md`
-- `docs/local-dev-environment.md`
-- `docs/implementation-specs/stage-00-delivery-contract.md`
-- `docs/adr/`
+- `docs/en/requirements.md`
+- `docs/en/architecture.md`
+- `docs/en/roadmap.md`
+- `docs/en/traceability.md`
+- `docs/en/test-plan.md`
+- `docs/en/configuration.md`
+- `docs/en/development.md`
+- `docs/en/local-dev-environment.md`
+- `docs/en/implementation-specs/stage-00-delivery-contract.md`
+- `docs/en/adr/`
 - `config.example.json`
 
 ## Accepted Delivery Decisions
 
 The canonical decision register is
-`docs/implementation-specs/stage-00-delivery-contract.md`.
+`docs/en/implementation-specs/stage-00-delivery-contract.md`.
 
 Stage 00 confirms these delivery rules for implementation:
 
@@ -47,7 +47,7 @@ Stage 00 confirms these delivery rules for implementation:
 
 Stage 00 is accepted when:
 
-- every open decision in `docs/roadmap.md` is classified as accepted, deferred,
+- every open decision in `docs/en/roadmap.md` is classified as accepted, deferred,
   platform blocker, stage-local blocker or out of scope in the Stage 00 decision
   register;
 - all ADRs required before scaffolding are accepted;
@@ -153,6 +153,6 @@ Stage 00 validation is documentation-only:
 - no legacy short repository relationship field contract should remain outside
   historical explanatory text;
 - no external config alias should be introduced for `scanning.global_scan`;
-- every ADR under `docs/adr/` must have `Status: Accepted`;
+- every ADR under `docs/en/adr/` must have `Status: Accepted`;
 - local environment files may exist, but product containers are not required
   until the relevant implementation stages create product code.

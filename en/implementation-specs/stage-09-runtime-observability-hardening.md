@@ -1,17 +1,17 @@
 # Stage 09: Runtime and Observability Hardening
 
-## Цель
+## Goal
 
-Довести runtime, scheduler, workers, module lifecycle и status-monitor до эксплуатационно устойчивого состояния, пригодного для дальнейших platform stages и distributed deployment.
+Bring the runtime, scheduler, workers, module lifecycle and status-monitor to an operationally resilient state suitable for later platform stages and distributed deployment.
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/data-model.md`
-- `docs/access-control.md`
-- `docs/technology-stack.md`
-- `docs/payload-schemas.md`
+- `docs/en/roadmap.md`
+- `docs/en/test-plan.md`
+- `docs/en/data-model.md`
+- `docs/en/access-control.md`
+- `docs/en/technology-stack.md`
+- `docs/en/payload-schemas.md`
 
 ## Scope
 
@@ -20,7 +20,7 @@
 - expanded observability/status-monitor;
 - runtime and scanner performance optimization backlog;
 - full `.gitignore` semantics with `!pattern`;
-- optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;
+- optional `follow_symlinks = true` hardening with cycle detection, root containment checks and traversal guards, if this mode is approved;
 - worker graceful shutdown/recovery;
 - retry, timeout and retention hardening;
 - operator diagnostics for jobs, locks, modules, workers and scans.
@@ -128,9 +128,9 @@ Recommended implementation order:
 
 - Roadmap: Stage 09.
 - Acceptance: `ACC-PLATFORM-004` and operational prerequisites for `ACC-PLATFORM-005`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/en/roadmap.md`.
 
-## Риски
+## Risks
 
 - hardening expands into feature work from later stages;
 - observability model grows without clear operator workflows.

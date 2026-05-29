@@ -6,12 +6,12 @@
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/interfaces.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
+- `docs/ru/requirements.md`
+- `docs/ru/interfaces.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/test-plan.md`
 
 ## Scope
 

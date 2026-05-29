@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#payload-schemas">Payload schemas</a>
-<a class="toc-level-2" href="#общие-правила">Общие правила</a>
+<a class="toc-level-2" href="#general-rules">General Rules</a>
 <a class="toc-level-2" href="#jobs-payloads">Jobs payloads</a>
 <a class="toc-level-3" href="#jobsglobalscanpayloadv1">jobs.global_scan.payload.v1</a>
 <a class="toc-level-3" href="#jobsglobalscanresultv1">jobs.global_scan.result.v1</a>
@@ -83,19 +83,19 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="payload-schemas">Payload schemas</h1>
-<p>Документ фиксирует минимальные JSON payload/result contracts для <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>project_scans.result_payload</code>, <code>module_states.details</code> и audit/config-related structured fields.</p>
-<h2 id="общие-правила">Общие правила</h2>
+<p>This document defines the minimum JSON payload/result contracts for <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>project_scans.result_payload</code>, <code>module_states.details</code> and audit/config-related structured fields.</p>
+<h2 id="general-rules">General Rules</h2>
 <ul>
-<li>Каждый structured payload должен содержать <code>schema_version</code>.</li>
-<li><code>schema_version</code> именуется как <code>&lt;domain&gt;.&lt;operation&gt;.v&lt;major&gt;</code>, например <code>jobs.global_scan.payload.v1</code>.</li>
-<li>Backward-compatible additions допускаются в рамках того же major version.</li>
-<li>Breaking changes требуют нового major version и миграции reader'ов.</li>
-<li>Payload не должен содержать секреты, tokens, приватные ключи или raw Terraform source.</li>
-<li>Payload не должен содержать raw passwords, password hashes, password reset tokens или reset token hashes.</li>
-<li>Поля <code>actor</code>, <code>correlation_id</code>, <code>idempotency_key</code> хранятся на уровне <code>jobs</code>, но могут дублироваться в payload только если это нужно для межмодульного сообщения.</li>
-<li>Worker execution metadata хранится на уровне <code>jobs</code> (<code>leased_by</code>, <code>attempt_count</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, <code>run_after</code>) и может дублироваться в <code>result_payload</code> только для диагностики без секретов.</li>
-<li>Result payload для failed jobs должен использовать <code>jobs.failure.result.v1</code>, если job-specific failed result schema явно не описана.</li>
-<li>Jobs должны публиковать status events/metrics в <code>job_events</code>; aggregate workflow status хранится в <code>workflow_statuses</code>. Runtime heartbeat freshness is stored on <code>jobs.heartbeat_at</code>; heartbeat events are bounded diagnostics and are not required for every heartbeat tick.</li>
+<li>Every structured payload must contain <code>schema_version</code>.</li>
+<li><code>schema_version</code> is named as <code>&lt;domain&gt;.&lt;operation&gt;.v&lt;major&gt;</code>, for example <code>jobs.global_scan.payload.v1</code>.</li>
+<li>Backward-compatible additions are allowed within the same major version.</li>
+<li>Breaking changes require a new major version and reader migrations.</li>
+<li>Payload must not contain secrets, tokens, private keys or raw Terraform source.</li>
+<li>Payload must not contain raw passwords, password hashes, password reset tokens or reset token hashes.</li>
+<li>The <code>actor</code>, <code>correlation_id</code> and <code>idempotency_key</code> fields are stored at the <code>jobs</code> level, but may be duplicated in payload only when needed for an inter-module message.</li>
+<li>Worker execution metadata is stored at the <code>jobs</code> level (<code>leased_by</code>, <code>attempt_count</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, <code>run_after</code>) and may be duplicated in <code>result_payload</code> only for diagnostics without secrets.</li>
+<li>Result payloads for failed jobs must use <code>jobs.failure.result.v1</code> unless a job-specific failed result schema is explicitly documented.</li>
+<li>Jobs must publish status events/metrics to <code>job_events</code>; aggregate workflow status is stored in <code>workflow_statuses</code>. Runtime heartbeat freshness is stored on <code>jobs.heartbeat_at</code>; heartbeat events are bounded diagnostics and are not required for every heartbeat tick.</li>
 </ul>
 <h2 id="jobs-payloads">Jobs payloads</h2>
 <h3 id="jobsglobalscanpayloadv1"><code>jobs.global_scan.payload.v1</code></h3>

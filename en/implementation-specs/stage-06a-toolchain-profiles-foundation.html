@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-06a-toolchain-profiles-foundation">Stage 06A: Toolchain Profiles Foundation</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -54,23 +54,23 @@
 <a class="toc-level-2" href="#certified-tool-profile-baseline">Certified Tool Profile Baseline</a>
 <a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP Blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-06a-toolchain-profiles-foundation">Stage 06A: Toolchain Profiles Foundation</h1>
-<h2 id="цель">Цель</h2>
-<p>Полностью реализовать ADR 0018 external toolchain profile runtime до scanner/security orchestration, чтобы Stage 06B не парсил CLI output напрямую и не зависел от hard-coded форматов Terraform, TFLint или Trivy.</p>
+<h2 id="goal">Goal</h2>
+<p>Fully implement the ADR 0018 external toolchain profile runtime before scanner/security orchestration, so Stage 06B does not parse CLI output directly and does not depend on hard-coded Terraform, TFLint or Trivy formats.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../adr/0018-external-toolchain-profiles.html"><code>docs/adr/0018-external-toolchain-profiles.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
-<li><a href="../configuration.html"><code>docs/configuration.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
+<li><a href="../adr/0018-external-toolchain-profiles.html"><code>docs/en/adr/0018-external-toolchain-profiles.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../configuration.html"><code>docs/en/configuration.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -152,7 +152,7 @@
 <li>Data model: <code>tool_profiles</code>, <code>tool_profile_validation_results</code>.</li>
 <li>ADR: <code>0018</code>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>overly flexible profile language may become an execution sandbox risk;</li>
 <li>generated profiles may drift fingerprint semantics if accepted without fixture validation;</li>

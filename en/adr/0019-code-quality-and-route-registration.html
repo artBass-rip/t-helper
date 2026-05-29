@@ -59,38 +59,38 @@
 <h2 id="status">Status</h2>
 <p>Accepted.</p>
 <h2 id="context">Context</h2>
-<p>После Stage 05 runtime содержит стабильный набор backend routes, jobs lifecycle paths и storage-backed stores. Предыдущая реализация <code>httpapi.New</code> принимала <code>optionalHandlers ...any</code> и регистрировала routes через <code>type-switch</code>. Такой подход позволял передать неподдержанный handler без compile-time ошибки: он молчаливо игнорировался.</p>
-<p>Store-слой также содержит повторяющийся паттерн:</p>
+<p>After Stage 05, the runtime contains a stable set of backend routes, jobs lifecycle paths, and storage-backed stores. The previous <code>httpapi.New</code> implementation accepted <code>optionalHandlers ...any</code> and registered routes through a <code>type-switch</code>. This approach allowed an unsupported handler to be passed without a compile-time error: it was silently ignored.</p>
+<p>The store layer also contains a repeated pattern:</p>
 <pre><code class="language-text">BeginTx -&gt; defer Rollback -&gt; business writes -&gt; Commit</code></pre>
-<p>Паттерн корректен, но при росте store-файлов усложняет чтение изменяемых lifecycle paths.</p>
+<p>The pattern is correct, but as store files grow it makes mutable lifecycle paths harder to read.</p>
 <h2 id="decision">Decision</h2>
-<p>HTTP route composition использует явный compile-time контракт:</p>
+<p>HTTP route composition uses an explicit compile-time contract:</p>
 <pre><code class="language-go">type RouteRegistrar interface {
 	RegisterRoutes(chi.Router)
 }</code></pre>
-<p>Каждый HTTP handler регистрирует собственные routes рядом со своими методами. <code>httpapi.New</code> отвечает только за создание router, common middleware и вызов <code>RegisterRoutes</code>.</p>
-<p>Для транзакций добавлен helper:</p>
+<p>Each HTTP handler registers its own routes next to its methods. <code>httpapi.New</code> is responsible only for creating the router, common middleware, and calling <code>RegisterRoutes</code>.</p>
+<p>A helper has been added for transactions:</p>
 <pre><code class="language-go">func WithTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) error</code></pre>
-<p>Он централизует rollback/commit поведение и оставляет возможность передавать <code>sql.TxOptions</code> для hot paths.</p>
-<p>Локальный quality gate зафиксирован в <code>Makefile</code>:</p>
+<p>It centralizes rollback/commit behavior and preserves the ability to pass <code>sql.TxOptions</code> for hot paths.</p>
+<p>The local quality gate is fixed in <code>Makefile</code>:</p>
 <ul>
 <li><code>make test</code>: <code>gofmt</code> check, <code>go vet ./...</code>, <code>go test ./...</code>;</li>
 <li><code>make race</code>: <code>go test -race ./...</code>.</li>
 </ul>
-<p>Performance work должен сопровождаться benchmarks или другим измеримым baseline. Первые benchmarks добавлены для <code>jobs.Store.ClaimNext</code> и <code>jobs.Store.RefreshWorkflowStatus</code>.</p>
+<p>Performance work must be accompanied by benchmarks or another measurable baseline. The first benchmarks were added for <code>jobs.Store.ClaimNext</code> and <code>jobs.Store.RefreshWorkflowStatus</code>.</p>
 <h2 id="consequences">Consequences</h2>
 <ul>
-<li>Unsupported HTTP handler type больше нельзя передать в <code>httpapi.New</code> без compile-time ошибки.</li>
-<li>Route ownership виден локально в handler-файлах, а общий route smoke-test защищает от случайной потери endpoint.</li>
-<li><code>storage.WithTx</code> используется в новых или сильно изменяемых местах; массовый механический рефакторинг существующего store-кода не требуется.</li>
-<li><code>make test</code> становится рекомендуемой командой перед PR/commit.</li>
-<li>Stage 09 optimization backlog должен ссылаться на измерения, а не только на интуицию.</li>
+<li>Unsupported HTTP handler types can no longer be passed to <code>httpapi.New</code> without a compile-time error.</li>
+<li>Route ownership is visible locally in handler files, and the shared route smoke test protects against accidental endpoint loss.</li>
+<li><code>storage.WithTx</code> is used in new or heavily changed areas; a broad mechanical refactor of existing store code is not required.</li>
+<li><code>make test</code> becomes the recommended command before a PR/commit.</li>
+<li>The Stage 09 optimization backlog must reference measurements, not only intuition.</li>
 </ul>
 <h2 id="non-goals">Non-goals</h2>
 <ul>
-<li>Полный SQL dialect abstraction не входит в это решение и остаётся отдельным backlog item.</li>
-<li>Разделение крупных store-файлов не выполняется механически без изменений соответствующей области.</li>
-<li><code>WithTx</code> не скрывает domain-specific retry, isolation или lock strategy.</li>
+<li>A full SQL dialect abstraction is outside this decision and remains a separate backlog item.</li>
+<li>Large store files are not split mechanically without changes in the corresponding area.</li>
+<li><code>WithTx</code> does not hide domain-specific retry, isolation, or lock strategy.</li>
 </ul>
         </article>
 

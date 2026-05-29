@@ -27,7 +27,7 @@
       <div class="lang-switch doc-source">
         <a class="is-active" href="stage-01-backend-storage-foundation.html" aria-current="page">RU</a>
         <a class="" href="../en/implementation-specs/stage-01-backend-storage-foundation.html">EN</a>
-        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-01-backend-storage-foundation.md">.md</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/implementation-specs/stage-01-backend-storage-foundation.md">.md</a>
       </div>
     </header>
 
@@ -75,14 +75,14 @@
 <p>Создать минимальный backend/runtime skeleton и storage foundation, на которые смогут опираться config, jobs и доменные модули.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../adr/0001-go-backend-http-stack.html"><code>docs/adr/0001-go-backend-http-stack.md</code></a></li>
-<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/adr/0002-storage-and-migrations.md</code></a></li>
-<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
-<li><a href="../development.html"><code>docs/development.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
-<li><a href="../configuration.html"><code>docs/configuration.md</code></a></li>
+<li><a href="../adr/0001-go-backend-http-stack.html"><code>docs/ru/adr/0001-go-backend-http-stack.md</code></a></li>
+<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/ru/adr/0002-storage-and-migrations.md</code></a></li>
+<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/ru/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
+<li><a href="../development.html"><code>docs/ru/development.md</code></a></li>
+<li><a href="../api.html"><code>docs/ru/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/ru/data-model.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/ru/technology-stack.md</code></a></li>
+<li><a href="../configuration.html"><code>docs/ru/configuration.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -123,7 +123,7 @@
 <li>storage abstraction не протекает в HTTP handlers - implemented via app wiring and storage provider registry;</li>
 <li>SQLite/PostgreSQL реализованы как подключаемые storage adapter libraries за общим interface - delivered;</li>
 <li>unknown storage provider отклоняется controlled validation error - covered by tests;</li>
-<li><code>GET /api/health</code> доступен и возвращает final <code>health_status.v1</code> DTO from <a href="../api.html"><code>docs/api.md</code></a> and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;</li>
+<li><code>GET /api/health</code> доступен и возвращает final <code>health_status.v1</code> DTO from <a href="../api.html"><code>docs/ru/api.md</code></a> and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;</li>
 <li>Stage 01 health response includes <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code> - covered by tests;</li>
 <li>Stage 01 health endpoint is unauthenticated and safe: it must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details - implemented with safe <code>database_fingerprint</code>;</li>
 <li>storage tests проходят на обоих MVP adapters - verified by local tests and Docker <code>offline</code> profile with PostgreSQL.</li>
@@ -153,7 +153,7 @@ docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 </ul>
 <h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
 <ul>
-<li>нет Stage 01 blockers после ADR 0007 и <a href="../development.html"><code>docs/development.md</code></a>;</li>
+<li>нет Stage 01 blockers после ADR 0007 и <a href="../development.html"><code>docs/ru/development.md</code></a>;</li>
 <li>конкретный migration framework остаётся recommendation из ADR 0002 (<code>goose</code>) и может быть заменён только отдельным ADR.</li>
 </ul>
 <h2 id="traceability">Traceability</h2>
@@ -283,7 +283,7 @@ docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
       <span>T-Helper</span>
       <a href="stage-01-backend-storage-foundation.html">Русская страница</a>
       <a href="../en/implementation-specs/stage-01-backend-storage-foundation.html">English page</a>
-      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-01-backend-storage-foundation.md">Исходный Markdown</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/implementation-specs/stage-01-backend-storage-foundation.md">Исходный Markdown</a>
     </footer>
 
     <script src="../pages.js"></script>

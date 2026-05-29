@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Пакет ТЗ по stage внедрения - T-Helper documentation.">
-    <title>Пакет ТЗ по stage внедрения - T-Helper Docs</title>
+    <meta name="description" content="Implementation Stage Specification Package - T-Helper documentation.">
+    <title>Implementation Stage Specification Package - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../../implementation-specs/README.html">
     <link rel="alternate" hreflang="en" href="README.html">
     <link rel="stylesheet" href="../../pages.css">
@@ -44,26 +44,26 @@
           <a href="../traceability.html">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          <a class="toc-level-1" href="#пакет-тз-по-stage-внедрения">Пакет ТЗ по stage внедрения</a>
+          <a class="toc-level-1" href="#implementation-stage-specification-package">Implementation Stage Specification Package</a>
 <a class="toc-level-2" href="#stage-index">Stage index</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
-          <h1 id="пакет-тз-по-stage-внедрения">Пакет ТЗ по stage внедрения</h1>
-<p>Этот каталог содержит primary implementation specs для актуального roadmap из <a href="../roadmap.html"><code>docs/roadmap.md</code></a>.</p>
-<p>Каждый <code>stage-*</code> файл является самостоятельным delivery package с единым набором секций:</p>
+          <h1 id="implementation-stage-specification-package">Implementation Stage Specification Package</h1>
+<p>This directory contains the primary implementation specs for the current roadmap in <a href="../roadmap.html"><code>docs/en/roadmap.md</code></a>.</p>
+<p>Each <code>stage-*</code> file is a standalone delivery package with a shared section set:</p>
 <ul>
 <li><code>Inputs</code></li>
 <li><code>Deliverables</code></li>
 <li><code>Definition of Done</code></li>
-<li>секции решений по taxonomy из Stage 00: <code>Remaining MVP blockers</code>, <code>Stage-local blockers</code>, <code>Platform blockers</code> или <code>Deferred / platform decisions</code></li>
+<li>decision sections using the Stage 00 taxonomy: <code>Remaining MVP blockers</code>, <code>Stage-local blockers</code>, <code>Platform blockers</code> or <code>Deferred / platform decisions</code></li>
 <li><code>Traceability</code></li>
 <li><code>Non-goals</code></li>
 </ul>
-<p>Implementation-level решения, обязательные для этих ТЗ, зафиксированы в <code>docs/adr/</code>.</p>
-<p>Stage 00 является каноническим владельцем классов решений. <code>Remaining MVP blockers: none</code> означает, что Stage 01 и MVP scaffolding sequence могут начинаться без дополнительных архитектурных решений; это не означает, что все stage-local или platform decisions для последующих этапов уже закрыты.</p>
+<p>Implementation-level decisions required by these specs are recorded in <code>docs/en/adr/</code>.</p>
+<p>Stage 00 is the canonical owner of decision classes. <code>Remaining MVP blockers: none</code> means that Stage 01 and the MVP scaffolding sequence can start without additional architectural decisions; it does not mean that all stage-local or platform decisions for later stages are already closed.</p>
 <h2 id="stage-index">Stage index</h2>
 <ul>
 <li><a href="../stage-00-delivery-contract.html"><code>stage-00-delivery-contract.md</code></a></li>
@@ -84,13 +84,13 @@
 <li><a href="stage-14-repository-webhook-sync.html"><code>stage-14-repository-webhook-sync.md</code></a></li>
 <li><a href="stage-15-distributed-deployment.html"><code>stage-15-distributed-deployment.md</code></a></li>
 </ul>
-<p>Общий аналитический обзор ведётся через Stage 00 decision register, roadmap и traceability.</p>
-<p>Accepted Stage 00 entry/exit summary, Stage 01 scaffolding checklist and Stage 01-03 backlog are consolidated in <a href="../stage-00-delivery-contract.html"><code>docs/stage-00-delivery-contract.md</code></a>.</p>
-<p>Repository identity для Stage 05 и последующих этапов зафиксирован в <a href="../adr/0013-repository-identity.html"><code>docs/adr/0013-repository-identity.md</code></a>: <code>provider + provider_host + full_path</code>.</p>
-<p>Repository provider integration UX для Stage 05/08 зафиксирован в <a href="../adr/0015-repository-provider-integration-profiles.html"><code>docs/adr/0015-repository-provider-integration-profiles.md</code></a>: multi-host provider profiles и multi-credential per host.</p>
-<p>Repository provider URL parsing для Stage 05 зафиксирован в <a href="../adr/0016-repository-provider-url-parsing.html"><code>docs/adr/0016-repository-provider-url-parsing.md</code></a>.</p>
-<p>Security finding fingerprint для Stage 06 зафиксирован в <a href="../adr/0017-security-finding-fingerprint.html"><code>docs/adr/0017-security-finding-fingerprint.md</code></a>.</p>
-<p>External toolchain compatibility поставляется отдельным Stage 06A и зафиксирована в <a href="../adr/0018-external-toolchain-profiles.html"><code>docs/adr/0018-external-toolchain-profiles.md</code></a>: versioned tool profiles, certified compatibility, profile validation and optional profile analyzer. Stage 06B project/security scanning depends on Stage 06A and must not parse external CLI output directly.</p>
+<p>The overall analytical overview is maintained through the Stage 00 decision register, roadmap and traceability.</p>
+<p>Accepted Stage 00 entry/exit summary, Stage 01 scaffolding checklist and Stage 01-03 backlog are consolidated in <a href="../stage-00-delivery-contract.html"><code>docs/en/stage-00-delivery-contract.md</code></a>.</p>
+<p>Repository identity for Stage 05 and later stages is fixed in <a href="../adr/0013-repository-identity.html"><code>docs/en/adr/0013-repository-identity.md</code></a>: <code>provider + provider_host + full_path</code>.</p>
+<p>Repository provider integration UX for Stage 05/08 is fixed in <a href="../adr/0015-repository-provider-integration-profiles.html"><code>docs/en/adr/0015-repository-provider-integration-profiles.md</code></a>: multi-host provider profiles and multi-credential per host.</p>
+<p>Repository provider URL parsing for Stage 05 is fixed in <a href="../adr/0016-repository-provider-url-parsing.html"><code>docs/en/adr/0016-repository-provider-url-parsing.md</code></a>.</p>
+<p>Security finding fingerprint for Stage 06 is fixed in <a href="../adr/0017-security-finding-fingerprint.html"><code>docs/en/adr/0017-security-finding-fingerprint.md</code></a>.</p>
+<p>External toolchain compatibility is delivered by a separate Stage 06A and fixed in <a href="../adr/0018-external-toolchain-profiles.html"><code>docs/en/adr/0018-external-toolchain-profiles.md</code></a>: versioned tool profiles, certified compatibility, profile validation and optional profile analyzer. Stage 06B project/security scanning depends on Stage 06A and must not parse external CLI output directly.</p>
         </article>
 
         <section class="doc-relations" aria-label="Cross references">

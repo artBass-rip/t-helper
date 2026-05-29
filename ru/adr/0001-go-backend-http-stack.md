@@ -20,5 +20,5 @@ HTTP API реализуется на стандартном `net/http` с lightw
 ## Consequences
 
 - Handlers вызывают application services.
-- API contracts остаются в `docs/api.md`.
+- API contracts остаются в `docs/ru/api.md`.
 - Framework-specific code должен быть локализован в HTTP adapter layer.

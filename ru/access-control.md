@@ -11,7 +11,7 @@
 
 ## Local password policy
 
-Local auth uses Argon2id PHC password hashes as defined in `docs/adr/0014-local-password-hashing.md`.
+Local auth uses Argon2id PHC password hashes as defined in `docs/ru/adr/0014-local-password-hashing.md`.
 
 API responses, logs, job payloads, workflow payloads and audit payloads must never expose raw passwords, password hashes, reset tokens or reset token hashes. Authentication failures must use generic errors and must not reveal whether a username exists.
 

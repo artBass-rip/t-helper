@@ -6,12 +6,12 @@
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/roadmap.md`
-- `docs/traceability.md`
-- `docs/test-plan.md`
-- `docs/adr/`
+- `docs/ru/requirements.md`
+- `docs/ru/architecture.md`
+- `docs/ru/roadmap.md`
+- `docs/ru/traceability.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/adr/`
 - `config.example.json`
 
 ## Scope
@@ -48,13 +48,13 @@ implementation are owned by Stage 01.
 
 ## Definition of Done
 
-- все открытые решения из `docs/roadmap.md` имеют статус: accepted, deferred или explicitly out of scope;
+- все открытые решения из `docs/ru/roadmap.md` имеют статус: accepted, deferred или explicitly out of scope;
 - `projects.repository_id` используется как единое имя связи проекта с репозиторием в storage/API/payload контрактах;
 - `scanning.global_scan` зафиксирован как единый внешний config key и мапится во внутренние `root_paths`;
 - package layout и migration naming/versioning зафиксированы отдельным ADR;
 - secret resolver contract зафиксирован отдельным ADR;
-- локальный PostgreSQL dev/test setup описан в `docs/development.md`;
-- `docs/traceability.md` покрывает каждый MVP capability;
+- локальный PostgreSQL dev/test setup описан в `docs/ru/development.md`;
+- `docs/ru/traceability.md` покрывает каждый MVP capability;
 - `config.example.json` валиден и не содержит literal-секретов;
 - implementation specs используют `ACC-MVP-*` и `ACC-PLATFORM-*` identifiers;
 - команда может начать Stage 01 без неявных архитектурных решений.
@@ -77,7 +77,7 @@ implementation are owned by Stage 01.
 | Package layout and migration naming | Accepted | См. ADR 0007. |
 | Dialect-specific SQL migrations | Accepted | Shared logical migration versions with dialect-specific SQL for `sqlite`, `postgres`, `mysql`, `mssql`; Stage 01 implements SQLite/PostgreSQL, Stage 10 adds MySQL/MSSQL. |
 | Secret resolver contract | Accepted | См. ADR 0009; MVP resolver - `secretref://env/...`. |
-| Local PostgreSQL development environment | Accepted | См. `docs/development.md`. |
+| Local PostgreSQL development environment | Accepted | См. `docs/ru/development.md`. |
 | Singleton runtime lock/health | Accepted | См. ADR 0010. |
 | Health endpoint exposure | Accepted | Confirmed delivery decision: `GET /api/health` is unauthenticated safe metadata for local runtime discovery; detailed runtime state remains authenticated under `/api/status`. |
 | Runtime auth session API | Accepted | Stage 07 includes login, logout, current session, password reset and password change endpoints in addition to administrative auth/RBAC APIs. |
@@ -96,7 +96,7 @@ implementation are owned by Stage 01.
 | Stage 06 split | Accepted | Stage 06A delivers the full ADR 0018 toolchain profile runtime, registry, validator, certified profiles and optional analyzer; Stage 06B delivers project/security scanner orchestration on top of Stage 06A. |
 | Stage 06 certified tool profiles | Accepted | Stage 06A uses ADR 0018 `certified_only` profiles for `terraform`, `TFLint` and `Trivy`; initial validation fixtures must cover success, failure, unsupported/missing tools, malformed output and secret redaction cases before Stage 06B acceptance. |
 | Storage migration profiles | Accepted | Storage config хранится в profile slots `current` и `migration`; active DB switches only through successful `thelper-ctl -migrate-db`, preserving old DB metadata and leaving old DB deletion manual. This must be implemented fully, not as a temporary simplified MVP behavior. |
-| Stage-owned migrations | Accepted | `docs/data-model.md` is the target model; physical migrations are introduced strictly by stage, and a table appears only when that stage ships code, API/worker behavior and tests for its invariants. |
+| Stage-owned migrations | Accepted | `docs/ru/data-model.md` is the target model; physical migrations are introduced strictly by stage, and a table appears only when that stage ships code, API/worker behavior and tests for its invariants. |
 | SQLite worker limits | Accepted | Worker settings are provider/profile-specific; SQLite MVP requires one worker process, concurrency `1`, WAL, foreign keys and busy timeout without affecting PostgreSQL settings. |
 | Worker identity, backoff and retention defaults | Accepted | См. ADR 0011. |
 | Initial module registry contents | Accepted | Seed includes `core`, `worker-runtime`, `config-manager`, `module-runtime`, `status-monitor`, `global-scanner`, `repository-manager`, `project-scanner`, `security-validator`, `auth`, `web`. |
@@ -108,7 +108,7 @@ implementation are owned by Stage 01.
 | Security finding fingerprint | Accepted | Findings use `fp:v1:<sha256 canonical_json>` over stable identity components. См. ADR 0017. |
 | External toolchain profiles | Accepted | Stage 06A external CLI compatibility uses versioned tool profiles, certified compatibility, explicit activation and optional profile analyzer. См. ADR 0018. |
 | Stage 08 admin UI scope | Accepted | Stage 08 includes full MVP administrative screens for auth/RBAC/configuration/security rule sets in both Web UI and local GUI. Stage 12 is hardening/extension scope, not the first full admin UI delivery. |
-| Stage 08 UI delivery contract | Accepted | `docs/frontend-ui-contract.md` is the accepted Stage 08 entry contract for route map, navigation model, operational density and local Tauri runtime discovery/start policy. Packaging/signing/update channel decisions remain exit decisions before release artifact publication. |
+| Stage 08 UI delivery contract | Accepted | `docs/ru/frontend-ui-contract.md` is the accepted Stage 08 entry contract for route map, navigation model, operational density and local Tauri runtime discovery/start policy. Packaging/signing/update channel decisions remain exit decisions before release artifact publication. |
 
 ## Decision classes
 

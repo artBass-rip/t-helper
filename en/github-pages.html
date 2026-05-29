@@ -75,7 +75,7 @@
 <li>English to Russian: <code>index.html</code>.</li>
 </ul>
 <p>Generated document pages also include a static RU/EN switcher for the same document path. This keeps the published site usable even when JavaScript is unavailable.</p>
-<p>Markdown documents under <code>docs/**/*.md</code> are the canonical sources. During publication, <code>docs/build-pages.js</code> generates Russian and English HTML shells for every Markdown file, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw <code>.md</code> sources remain available from each generated document page.</p>
+<p>Markdown documents under <code>docs/ru/**/*.md</code> and <code>docs/en/**/*.md</code> are the canonical language sources. During publication, <code>docs/build-pages.js</code> uses <code>docs/ru</code> as the path catalog, generates Russian pages at the Pages root and English pages under <code>en/</code>, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/en/api.md</code></a> or <a href="api.html"><code>docs/ru/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw same-language <code>.md</code> source remains available from each generated document page.</p>
 <h2 id="deployment">Deployment</h2>
 <p>The <code>github-pages</code> workflow publishes the <code>docs</code> directory to the <code>gh-pages</code> branch on pushes to <code>master</code> and on manual <code>workflow_dispatch</code> runs.</p>
 <p>Repository settings must use:</p>
@@ -91,12 +91,12 @@
 </ul>
 <h2 id="maintenance-contract">Maintenance contract</h2>
 <ul>
-<li>Keep Russian and English content aligned when updating page copy.</li>
+<li>Keep Russian and English Markdown sources aligned when updating documentation or page copy.</li>
 <li>Keep the AI-only implementation notice visible before the hero content in both language variants.</li>
 <li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
 <li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
-<li>Keep cross-document references as relative Markdown links or inline <code>docs/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>
-<li>Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI contracts remain in <a href="frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a>.</li>
+<li>Keep cross-document references as relative Markdown links or inline <code>docs/en/...md</code> / <code>docs/ru/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>
+<li>Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI contracts remain in <a href="frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a>.</li>
 </ul>
         </article>
 

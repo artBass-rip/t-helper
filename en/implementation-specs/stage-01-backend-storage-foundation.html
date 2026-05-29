@@ -46,7 +46,7 @@
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-01-backend-storage-foundation">Stage 01: Backend Storage Foundation</a>
 <a class="toc-level-2" href="#status">Status</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -55,7 +55,7 @@
 <a class="toc-level-2" href="#verification">Verification</a>
 <a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
 <a class="toc-level-2" href="#notes-for-stage-02">Notes for Stage 02</a>
         </nav>
       </aside>
@@ -71,30 +71,30 @@
 <li><code>e0f8f70</code> - CLI/server refactor, storage fixes and tests.</li>
 </ul>
 <p>GitHub Actions checks passed for <code>ci / go</code> on both <code>push</code> and <code>pull_request</code>.</p>
-<h2 id="цель">Цель</h2>
-<p>Создать минимальный backend/runtime skeleton и storage foundation, на которые смогут опираться config, jobs и доменные модули.</p>
+<h2 id="goal">Goal</h2>
+<p>Create a minimal backend/runtime skeleton and storage foundation that config, jobs and domain modules can rely on.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../adr/0001-go-backend-http-stack.html"><code>docs/adr/0001-go-backend-http-stack.md</code></a></li>
-<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/adr/0002-storage-and-migrations.md</code></a></li>
-<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
-<li><a href="../development.html"><code>docs/development.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
-<li><a href="../configuration.html"><code>docs/configuration.md</code></a></li>
+<li><a href="../adr/0001-go-backend-http-stack.html"><code>docs/en/adr/0001-go-backend-http-stack.md</code></a></li>
+<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/en/adr/0002-storage-and-migrations.md</code></a></li>
+<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/en/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
+<li><a href="../development.html"><code>docs/en/development.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
+<li><a href="../configuration.html"><code>docs/en/configuration.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
-<li>Go module и базовая структура пакетов;</li>
-<li>исполняемые entrypoints <code>thelper</code>, <code>thelper-worker</code>, <code>thelper-ctl</code>;</li>
-<li>HTTP skeleton на <code>net/http</code>/<code>chi</code>;</li>
+<li>Go module and base package structure;</li>
+<li>executable entrypoints <code>thelper</code>, <code>thelper-worker</code>, <code>thelper-ctl</code>;</li>
+<li>HTTP skeleton on <code>net/http</code>/<code>chi</code>;</li>
 <li>storage abstraction;</li>
 <li>migrations framework;</li>
-<li>adapters для <code>SQLite</code> и <code>PostgreSQL</code>;</li>
-<li>pluggable storage provider registry для database adapters;</li>
-<li>stage-owned минимальные системные таблицы для backend skeleton;</li>
-<li>базовое логирование, correlation IDs и health endpoint.</li>
+<li>adapters for <code>SQLite</code> and <code>PostgreSQL</code>;</li>
+<li>pluggable storage provider registry for database adapters;</li>
+<li>stage-owned minimal system tables for the backend skeleton;</li>
+<li>basic logging, correlation IDs and health endpoint.</li>
 </ul>
 <h2 id="non-goals">Non-goals</h2>
 <ul>
@@ -102,7 +102,7 @@
 <li>module lifecycle;</li>
 <li>worker job execution;</li>
 <li>singleton runtime lock enforcement; Stage 01 returns the final safe health DTO shape, while Stage 02 adds lock/probe semantics;</li>
-<li>scanner/repository/security/auth доменная логика;</li>
+<li>scanner/repository/security/auth domain logic;</li>
 <li>frontend.</li>
 </ul>
 <h2 id="deliverables">Deliverables</h2>
@@ -110,23 +110,23 @@
 <li>buildable Go skeleton - delivered;</li>
 <li><code>cmd/thelper</code>, <code>cmd/thelper-worker</code>, <code>cmd/thelper-ctl</code> - delivered;</li>
 <li>storage interfaces - delivered;</li>
-<li>SQLite/PostgreSQL connection и migration bootstrap - delivered;</li>
+<li>SQLite/PostgreSQL connection and migration bootstrap - delivered;</li>
 <li>storage provider registry with SQLite/PostgreSQL adapters - delivered;</li>
-<li>базовый HTTP server и <code>GET /api/health</code> endpoint returning final <code>health_status.v1</code> DTO - delivered;</li>
+<li>basic HTTP server and <code>GET /api/health</code> endpoint returning final <code>health_status.v1</code> DTO - delivered;</li>
 <li>storage compatibility test skeleton - delivered and exercised for SQLite/PostgreSQL.</li>
 </ul>
 <h2 id="definition-of-done">Definition of Done</h2>
 <ul>
-<li><code>thelper</code>, <code>thelper-worker</code> и <code>thelper-ctl</code> собираются - verified by <code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
-<li>миграции применяются к SQLite и PostgreSQL - verified by storage contract tests and Docker test runner;</li>
+<li><code>thelper</code>, <code>thelper-worker</code> and <code>thelper-ctl</code> build - verified by <code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
+<li>migrations apply to SQLite and PostgreSQL - verified by storage contract tests and Docker test runner;</li>
 <li>Stage 01 migrations do not pre-create target tables owned by later stages - verified by storage contract tests;</li>
-<li>storage abstraction не протекает в HTTP handlers - implemented via app wiring and storage provider registry;</li>
-<li>SQLite/PostgreSQL реализованы как подключаемые storage adapter libraries за общим interface - delivered;</li>
-<li>unknown storage provider отклоняется controlled validation error - covered by tests;</li>
-<li><code>GET /api/health</code> доступен и возвращает final <code>health_status.v1</code> DTO from <a href="../api.html"><code>docs/api.md</code></a> and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;</li>
+<li>storage abstraction does not leak into HTTP handlers - implemented via app wiring and storage provider registry;</li>
+<li>SQLite/PostgreSQL are implemented as pluggable storage adapter libraries behind a shared interface - delivered;</li>
+<li>unknown storage provider is rejected with a controlled validation error - covered by tests;</li>
+<li><code>GET /api/health</code> is available and returns the final <code>health_status.v1</code> DTO from <a href="../api.html"><code>docs/en/api.md</code></a> and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;</li>
 <li>Stage 01 health response includes <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code> - covered by tests;</li>
 <li>Stage 01 health endpoint is unauthenticated and safe: it must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details - implemented with safe <code>database_fingerprint</code>;</li>
-<li>storage tests проходят на обоих MVP adapters - verified by local tests and Docker <code>offline</code> profile with PostgreSQL.</li>
+<li>storage tests pass on both MVP adapters - verified by local tests and Docker <code>offline</code> profile with PostgreSQL.</li>
 </ul>
 <h2 id="verification">Verification</h2>
 <p>Stage 01 baseline commands:</p>
@@ -153,21 +153,21 @@ docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
 </ul>
 <h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
 <ul>
-<li>нет Stage 01 blockers после ADR 0007 и <a href="../development.html"><code>docs/development.md</code></a>;</li>
-<li>конкретный migration framework остаётся recommendation из ADR 0002 (<code>goose</code>) и может быть заменён только отдельным ADR.</li>
+<li>no Stage 01 blockers remain after ADR 0007 and <a href="../development.html"><code>docs/en/development.md</code></a>;</li>
+<li>the specific migration framework remains the recommendation from ADR 0002 (<code>goose</code>) and can be replaced only by a separate ADR.</li>
 </ul>
 <h2 id="traceability">Traceability</h2>
 <ul>
 <li>Roadmap: Stage 01.</li>
 <li>Acceptance: <code>ACC-MVP-013</code>.</li>
-<li>Data model: базовый migration framework для persistent entities.</li>
+<li>Data model: basic migration framework for persistent entities.</li>
 <li>ADR: <code>0001</code>, <code>0002</code>, <code>0003</code>, <code>0007</code>, <code>0012</code>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
-<li>ранняя привязка доменной логики к конкретному SQL dialect - mitigated by storage registry and adapter packages;</li>
-<li>расхождение SQLite/PostgreSQL constraints - mitigated by shared contract tests;</li>
-<li>чрезмерный framework layer вокруг <code>net/http</code> - avoided by lightweight <code>chi</code> router and isolated HTTP adapter.</li>
+<li>early binding of domain logic to a specific SQL dialect - mitigated by storage registry and adapter packages;</li>
+<li>divergence between SQLite/PostgreSQL constraints - mitigated by shared contract tests;</li>
+<li>excessive framework layer around <code>net/http</code> - avoided by lightweight <code>chi</code> router and isolated HTTP adapter.</li>
 </ul>
 <h2 id="notes-for-stage-02">Notes for Stage 02</h2>
 <ul>

@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Технологический стек - T-Helper documentation.">
-    <title>Технологический стек - T-Helper Docs</title>
+    <meta name="description" content="Technology Stack - T-Helper documentation.">
+    <title>Technology Stack - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../technology-stack.html">
     <link rel="alternate" hreflang="en" href="technology-stack.html">
     <link rel="stylesheet" href="../pages.css">
@@ -44,10 +44,10 @@
           <a href="traceability.html">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          <a class="toc-level-1" href="#технологический-стек">Технологический стек</a>
+          <a class="toc-level-1" href="#technology-stack">Technology Stack</a>
 <a class="toc-level-2" href="#backend">Backend</a>
 <a class="toc-level-2" href="#storage">Storage</a>
-<a class="toc-level-2" href="#jobs-и-workers">Jobs и Workers</a>
+<a class="toc-level-2" href="#jobs-and-workers">Jobs and Workers</a>
 <a class="toc-level-2" href="#frontend">Frontend</a>
 <a class="toc-level-2" href="#desktop-gui">Desktop GUI</a>
 <a class="toc-level-2" href="#singleton-runtime-policy">Singleton Runtime Policy</a>
@@ -57,29 +57,29 @@
 
       <div class="doc-content">
         <article class="markdown-body">
-          <h1 id="технологический-стек">Технологический стек</h1>
-<p>Документ фиксирует базовый стек реализации <code>t-helper</code> для code scaffolding и последующих этапов roadmap.</p>
+          <h1 id="technology-stack">Technology Stack</h1>
+<p>This document records the baseline implementation stack for <code>t-helper</code> code scaffolding and later roadmap stages.</p>
 <h2 id="backend">Backend</h2>
-<p>Backend реализуется на <code>Go</code>.</p>
-<p>Область применения:</p>
+<p>The backend is implemented in <code>Go</code>.</p>
+<p>Scope:</p>
 <ul>
 <li>runtime service <code>thelper</code>;</li>
 <li>worker process <code>thelper-worker</code>;</li>
 <li>administrative CLI <code>thelper-ctl</code>;</li>
 <li>backend HTTP API;</li>
-<li>module lifecycle и jobs framework;</li>
-<li>status-monitor и aggregate status read models;</li>
-<li>storage abstraction и adapters;</li>
-<li>orchestration локальных toolchain-команд для scanning и repository operations.</li>
+<li>module lifecycle and jobs framework;</li>
+<li>status-monitor and aggregate status read models;</li>
+<li>storage abstraction and adapters;</li>
+<li>orchestration of local toolchain commands for scanning and repository operations.</li>
 </ul>
-<p>Требования к backend-реализации:</p>
+<p>Backend implementation requirements:</p>
 <ul>
-<li>доменная логика не должна зависеть от конкретного storage backend;</li>
+<li>domain logic must not depend on a specific storage backend;</li>
 <li>provider-specific integrations must be isolated in pluggable modules/libraries behind internal interfaces;</li>
-<li>API contracts должны соответствовать <a href="api.html"><code>docs/api.md</code></a>;</li>
-<li>CLI contracts должны соответствовать <a href="interfaces.html"><code>docs/interfaces.md</code></a>;</li>
-<li>background jobs должны использовать documented payload schemas из <a href="payload-schemas.html"><code>docs/payload-schemas.md</code></a>;</li>
-<li>outbound calls для security stack не допускаются, кроме явно настроенных repository/provider integrations.</li>
+<li>API contracts must match <a href="api.html"><code>docs/en/api.md</code></a>;</li>
+<li>CLI contracts must match <a href="interfaces.html"><code>docs/en/interfaces.md</code></a>;</li>
+<li>background jobs must use documented payload schemas from <a href="payload-schemas.html"><code>docs/en/payload-schemas.md</code></a>;</li>
+<li>outbound calls for the security stack are not allowed, except for explicitly configured repository/provider integrations.</li>
 </ul>
 <h2 id="storage">Storage</h2>
 <p>MVP storage stack:</p>
@@ -100,36 +100,36 @@
 <li>Aurora MySQL through the MySQL adapter;</li>
 <li>Babelfish for Aurora PostgreSQL is not a substitute for the native MSSQL adapter.</li>
 </ul>
-<p>Требования:</p>
+<p>Requirements:</p>
 <ul>
-<li>оба MVP storage backend используют SQL-like модель и поддерживают миграции;</li>
-<li>логическая модель данных и storage interfaces едины для всех supported adapters;</li>
-<li>SQL migrations используют dialect-specific SQL при синхронизированных logical migration versions;</li>
-<li><code>MySQL</code> и <code>MSSQL</code> добавляются на Stage 10 Storage Adapter Expansion как first-class SQL adapters.</li>
+<li>both MVP storage backends use a SQL-like model and support migrations;</li>
+<li>the logical data model and storage interfaces are the same for all supported adapters;</li>
+<li>SQL migrations use dialect-specific SQL with synchronized logical migration versions;</li>
+<li><code>MySQL</code> and <code>MSSQL</code> are added in Stage 10 Storage Adapter Expansion as first-class SQL adapters.</li>
 </ul>
 <p>Database providers are implemented as pluggable storage adapter libraries selected by configuration. Provider-specific SQL, connection handling and health checks must not leak into domain services or HTTP handlers.</p>
-<h2 id="jobs-и-workers">Jobs и Workers</h2>
-<p>Background jobs выполняются отдельными worker-процессами.</p>
-<p>Базовые компоненты:</p>
+<h2 id="jobs-and-workers">Jobs and Workers</h2>
+<p>Background jobs are executed by separate worker processes.</p>
+<p>Base components:</p>
 <ul>
-<li><code>thelper</code> - API/runtime process, создаёт jobs, управляет конфигурацией, module states и HTTP API;</li>
-<li><code>thelper-worker</code> - отдельный worker process, atomically claims queued jobs through storage-level leases, выполняет job handlers и сохраняет result payload;</li>
-<li><code>thelper-ctl</code> - administrative CLI, создаёт lifecycle/config jobs или вызывает documented backend API.</li>
+<li><code>thelper</code> - API/runtime process; creates jobs and manages configuration, module states and HTTP API;</li>
+<li><code>thelper-worker</code> - separate worker process; atomically claims queued jobs through storage-level leases, executes job handlers and stores result payloads;</li>
+<li><code>thelper-ctl</code> - administrative CLI; creates lifecycle/config jobs or calls the documented backend API.</li>
 </ul>
-<p>Инварианты:</p>
+<p>Invariants:</p>
 <ul>
-<li>API/CLI не выполняют long-running jobs inline;</li>
-<li>jobs persisted в БД и имеют documented payload/result schemas;</li>
-<li>job leases определяют ownership конкретного job worker-процессом;</li>
-<li><code>job_locks</code> сериализуют конфликтующие бизнес-операции между worker-процессами;</li>
-<li>workers поддерживают heartbeat, lease expiry recovery и retry/backoff;</li>
-<li>jobs публикуют status events/metrics, которые агрегирует <code>status-monitor</code>;</li>
-<li>UI и внутренние сервисы читают aggregate status из status-monitor read models;</li>
-<li>несколько worker-процессов могут работать параллельно, если их lock keys не конфликтуют;</li>
-<li>distributed deployment расширяет эту модель, но не меняет storage contracts jobs.</li>
+<li>API/CLI do not execute long-running jobs inline;</li>
+<li>jobs are persisted in the database and have documented payload/result schemas;</li>
+<li>job leases define ownership of a specific job by a worker process;</li>
+<li><code>job_locks</code> serialize conflicting business operations across worker processes;</li>
+<li>workers support heartbeat, lease expiry recovery and retry/backoff;</li>
+<li>jobs publish status events/metrics aggregated by <code>status-monitor</code>;</li>
+<li>UI and internal services read aggregate status from status-monitor read models;</li>
+<li>multiple worker processes can run in parallel when their lock keys do not conflict;</li>
+<li>distributed deployment extends this model but does not change jobs storage contracts.</li>
 </ul>
 <h2 id="frontend">Frontend</h2>
-<p>Единый frontend-контур реализуется на:</p>
+<p>The unified frontend surface is implemented with:</p>
 <ul>
 <li><code>React</code>;</li>
 <li><code>TypeScript</code>;</li>
@@ -140,40 +140,40 @@
 <li><code>React Hook Form</code>;</li>
 <li><code>Ant Design</code>.</li>
 </ul>
-<p>Область применения:</p>
+<p>Scope:</p>
 <ul>
 <li><code>Web UI</code>;</li>
-<li>shared UI codebase для локального <code>GUI</code>;</li>
-<li>read/operate сценарии MVP;</li>
+<li>shared UI codebase for the local <code>GUI</code>;</li>
+<li>MVP read/operate scenarios;</li>
 <li>full MVP administrative UI delivered in Stage 08, with Stage 12 reserved for admin hardening and platform-only administrative extensions.</li>
 </ul>
-<p>Требования к frontend-реализации:</p>
+<p>Frontend implementation requirements:</p>
 <ul>
-<li><code>Web UI</code> и <code>GUI</code> используют один documented backend API;</li>
-<li>frontend не вводит и не требует frontend-only backend endpoints;</li>
-<li>API DTO валидируются на границе клиента через typed schemas;</li>
-<li>long-running operations отображаются через <code>jobs</code> и documented job references;</li>
-<li>UI должен быть пригоден для плотных operational сценариев: таблицы, фильтры, формы, статусы, findings, RBAC и audit views.</li>
+<li><code>Web UI</code> and <code>GUI</code> use one documented backend API;</li>
+<li>the frontend does not introduce or require frontend-only backend endpoints;</li>
+<li>API DTOs are validated at the client boundary through typed schemas;</li>
+<li>long-running operations are displayed through <code>jobs</code> and documented job references;</li>
+<li>UI must be suitable for dense operational scenarios: tables, filters, forms, statuses, findings, RBAC and audit views.</li>
 <li>route map, navigation model and operational density rules must follow <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
 </ul>
 <h2 id="desktop-gui">Desktop GUI</h2>
-<p>Локальный desktop GUI реализуется на <code>Tauri</code> с использованием той же React/TypeScript codebase.</p>
-<p>Требования к GUI:</p>
+<p>The local desktop GUI is implemented with <code>Tauri</code> using the same React/TypeScript codebase.</p>
+<p>GUI requirements:</p>
 <ul>
-<li><code>GUI</code> работает только локально;</li>
-<li>удалённый доступ к <code>GUI</code> не поддерживается;</li>
-<li>взаимодействие с системой идёт через тот же backend API, что и <code>Web UI</code>;</li>
-<li>GUI-specific поведение не должно менять backend contracts;</li>
+<li><code>GUI</code> works only locally;</li>
+<li>remote access to <code>GUI</code> is unsupported;</li>
+<li>system interaction goes through the same backend API as <code>Web UI</code>;</li>
+<li>GUI-specific behavior must not change backend contracts;</li>
 <li>Tauri packaging/signing and local runtime discovery policy must follow <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
 </ul>
 <h2 id="singleton-runtime-policy">Singleton Runtime Policy</h2>
-<p>В одной локальной установке может быть запущен только один экземпляр <code>t-helper</code> runtime.</p>
-<p>Правила:</p>
+<p>Only one <code>t-helper</code> runtime instance may run in a single local installation.</p>
+<p>Rules:</p>
 <ul>
-<li>если <code>thelper</code> уже запущен для <code>Web UI</code>, Tauri GUI подключается к существующему local runtime;</li>
-<li>если <code>thelper</code> ещё не запущен, Tauri GUI запускает local <code>thelper</code>, после чего <code>Web UI</code> подключается к этому же runtime;</li>
-<li>повторный запуск <code>thelper</code> должен обнаруживать существующий runtime через lock/health mechanism и завершаться без создания второго активного процесса;</li>
-<li><code>Web UI</code> и <code>GUI</code> всегда работают с одним backend API и одной runtime БД.</li>
+<li>if <code>thelper</code> is already running for the <code>Web UI</code>, the Tauri GUI connects to the existing local runtime;</li>
+<li>if <code>thelper</code> is not running yet, the Tauri GUI starts a local <code>thelper</code>, after which the <code>Web UI</code> connects to the same runtime;</li>
+<li>a repeated <code>thelper</code> start must discover the existing runtime through the lock/health mechanism and exit without creating a second active process;</li>
+<li><code>Web UI</code> and <code>GUI</code> always work with one backend API and one runtime database.</li>
 </ul>
 <h2 id="stack-invariants">Stack Invariants</h2>
 <ul>

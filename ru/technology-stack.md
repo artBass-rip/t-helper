@@ -21,9 +21,9 @@ Backend реализуется на `Go`.
 
 - доменная логика не должна зависеть от конкретного storage backend;
 - provider-specific integrations must be isolated in pluggable modules/libraries behind internal interfaces;
-- API contracts должны соответствовать `docs/api.md`;
-- CLI contracts должны соответствовать `docs/interfaces.md`;
-- background jobs должны использовать documented payload schemas из `docs/payload-schemas.md`;
+- API contracts должны соответствовать `docs/ru/api.md`;
+- CLI contracts должны соответствовать `docs/ru/interfaces.md`;
+- background jobs должны использовать documented payload schemas из `docs/ru/payload-schemas.md`;
 - outbound calls для security stack не допускаются, кроме явно настроенных repository/provider integrations.
 
 ## Storage

@@ -27,7 +27,7 @@
       <div class="lang-switch doc-source">
         <a class="is-active" href="stage-00-delivery-contract.html" aria-current="page">RU</a>
         <a class="" href="../en/implementation-specs/stage-00-delivery-contract.html">EN</a>
-        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-00-delivery-contract.md">.md</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/implementation-specs/stage-00-delivery-contract.md">.md</a>
       </div>
     </header>
 
@@ -68,12 +68,12 @@
 <p>Закрыть продуктовые и engineering-развилки до начала code scaffolding, чтобы последующие stages выполнялись по согласованному Definition of Done.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../requirements.html"><code>docs/requirements.md</code></a></li>
-<li><a href="../architecture.html"><code>docs/architecture.md</code></a></li>
-<li><a href="../roadmap.html"><code>docs/roadmap.md</code></a></li>
-<li><a href="../traceability.html"><code>docs/traceability.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><code>docs/adr/</code></li>
+<li><a href="../requirements.html"><code>docs/ru/requirements.md</code></a></li>
+<li><a href="../architecture.html"><code>docs/ru/architecture.md</code></a></li>
+<li><a href="../roadmap.html"><code>docs/ru/roadmap.md</code></a></li>
+<li><a href="../traceability.html"><code>docs/ru/traceability.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/ru/test-plan.md</code></a></li>
+<li><code>docs/ru/adr/</code></li>
 <li><code>config.example.json</code></li>
 </ul>
 <h2 id="scope">Scope</h2>
@@ -107,13 +107,13 @@
 <p>Stage 00 deliverables are documentation and decision deliverables. Executable repository scaffolding, CI files, Go module creation and migration/test harness implementation are owned by Stage 01.</p>
 <h2 id="definition-of-done">Definition of Done</h2>
 <ul>
-<li>все открытые решения из <a href="../roadmap.html"><code>docs/roadmap.md</code></a> имеют статус: accepted, deferred или explicitly out of scope;</li>
+<li>все открытые решения из <a href="../roadmap.html"><code>docs/ru/roadmap.md</code></a> имеют статус: accepted, deferred или explicitly out of scope;</li>
 <li><code>projects.repository_id</code> используется как единое имя связи проекта с репозиторием в storage/API/payload контрактах;</li>
 <li><code>scanning.global_scan</code> зафиксирован как единый внешний config key и мапится во внутренние <code>root_paths</code>;</li>
 <li>package layout и migration naming/versioning зафиксированы отдельным ADR;</li>
 <li>secret resolver contract зафиксирован отдельным ADR;</li>
-<li>локальный PostgreSQL dev/test setup описан в <a href="../development.html"><code>docs/development.md</code></a>;</li>
-<li><a href="../traceability.html"><code>docs/traceability.md</code></a> покрывает каждый MVP capability;</li>
+<li>локальный PostgreSQL dev/test setup описан в <a href="../development.html"><code>docs/ru/development.md</code></a>;</li>
+<li><a href="../traceability.html"><code>docs/ru/traceability.md</code></a> покрывает каждый MVP capability;</li>
 <li><code>config.example.json</code> валиден и не содержит literal-секретов;</li>
 <li>implementation specs используют <code>ACC-MVP-*</code> и <code>ACC-PLATFORM-*</code> identifiers;</li>
 <li>команда может начать Stage 01 без неявных архитектурных решений.</li>
@@ -136,7 +136,7 @@
 <tr><td>Package layout and migration naming</td><td>Accepted</td><td>См. ADR 0007.</td></tr>
 <tr><td>Dialect-specific SQL migrations</td><td>Accepted</td><td>Shared logical migration versions with dialect-specific SQL for <code>sqlite</code>, <code>postgres</code>, <code>mysql</code>, <code>mssql</code>; Stage 01 implements SQLite/PostgreSQL, Stage 10 adds MySQL/MSSQL.</td></tr>
 <tr><td>Secret resolver contract</td><td>Accepted</td><td>См. ADR 0009; MVP resolver - <code>secretref://env/...</code>.</td></tr>
-<tr><td>Local PostgreSQL development environment</td><td>Accepted</td><td>См. <a href="../development.html"><code>docs/development.md</code></a>.</td></tr>
+<tr><td>Local PostgreSQL development environment</td><td>Accepted</td><td>См. <a href="../development.html"><code>docs/ru/development.md</code></a>.</td></tr>
 <tr><td>Singleton runtime lock/health</td><td>Accepted</td><td>См. ADR 0010.</td></tr>
 <tr><td>Health endpoint exposure</td><td>Accepted</td><td>Confirmed delivery decision: <code>GET /api/health</code> is unauthenticated safe metadata for local runtime discovery; detailed runtime state remains authenticated under <code>/api/status</code>.</td></tr>
 <tr><td>Runtime auth session API</td><td>Accepted</td><td>Stage 07 includes login, logout, current session, password reset and password change endpoints in addition to administrative auth/RBAC APIs.</td></tr>
@@ -155,7 +155,7 @@
 <tr><td>Stage 06 split</td><td>Accepted</td><td>Stage 06A delivers the full ADR 0018 toolchain profile runtime, registry, validator, certified profiles and optional analyzer; Stage 06B delivers project/security scanner orchestration on top of Stage 06A.</td></tr>
 <tr><td>Stage 06 certified tool profiles</td><td>Accepted</td><td>Stage 06A uses ADR 0018 <code>certified_only</code> profiles for <code>terraform</code>, <code>TFLint</code> and <code>Trivy</code>; initial validation fixtures must cover success, failure, unsupported/missing tools, malformed output and secret redaction cases before Stage 06B acceptance.</td></tr>
 <tr><td>Storage migration profiles</td><td>Accepted</td><td>Storage config хранится в profile slots <code>current</code> и <code>migration</code>; active DB switches only through successful <code>thelper-ctl -migrate-db</code>, preserving old DB metadata and leaving old DB deletion manual. This must be implemented fully, not as a temporary simplified MVP behavior.</td></tr>
-<tr><td>Stage-owned migrations</td><td>Accepted</td><td><a href="../data-model.html"><code>docs/data-model.md</code></a> is the target model; physical migrations are introduced strictly by stage, and a table appears only when that stage ships code, API/worker behavior and tests for its invariants.</td></tr>
+<tr><td>Stage-owned migrations</td><td>Accepted</td><td><a href="../data-model.html"><code>docs/ru/data-model.md</code></a> is the target model; physical migrations are introduced strictly by stage, and a table appears only when that stage ships code, API/worker behavior and tests for its invariants.</td></tr>
 <tr><td>SQLite worker limits</td><td>Accepted</td><td>Worker settings are provider/profile-specific; SQLite MVP requires one worker process, concurrency <code>1</code>, WAL, foreign keys and busy timeout without affecting PostgreSQL settings.</td></tr>
 <tr><td>Worker identity, backoff and retention defaults</td><td>Accepted</td><td>См. ADR 0011.</td></tr>
 <tr><td>Initial module registry contents</td><td>Accepted</td><td>Seed includes <code>core</code>, <code>worker-runtime</code>, <code>config-manager</code>, <code>module-runtime</code>, <code>status-monitor</code>, <code>global-scanner</code>, <code>repository-manager</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>auth</code>, <code>web</code>.</td></tr>
@@ -167,7 +167,7 @@
 <tr><td>Security finding fingerprint</td><td>Accepted</td><td>Findings use <code>fp:v1:&lt;sha256 canonical_json&gt;</code> over stable identity components. См. ADR 0017.</td></tr>
 <tr><td>External toolchain profiles</td><td>Accepted</td><td>Stage 06A external CLI compatibility uses versioned tool profiles, certified compatibility, explicit activation and optional profile analyzer. См. ADR 0018.</td></tr>
 <tr><td>Stage 08 admin UI scope</td><td>Accepted</td><td>Stage 08 includes full MVP administrative screens for auth/RBAC/configuration/security rule sets in both Web UI and local GUI. Stage 12 is hardening/extension scope, not the first full admin UI delivery.</td></tr>
-<tr><td>Stage 08 UI delivery contract</td><td>Accepted</td><td><a href="../frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a> is the accepted Stage 08 entry contract for route map, navigation model, operational density and local Tauri runtime discovery/start policy. Packaging/signing/update channel decisions remain exit decisions before release artifact publication.</td></tr>
+<tr><td>Stage 08 UI delivery contract</td><td>Accepted</td><td><a href="../frontend-ui-contract.html"><code>docs/ru/frontend-ui-contract.md</code></a> is the accepted Stage 08 entry contract for route map, navigation model, operational density and local Tauri runtime discovery/start policy. Packaging/signing/update channel decisions remain exit decisions before release artifact publication.</td></tr>
 </tbody></table>
 <h2 id="decision-classes">Decision classes</h2>
 <p>Stage 00 owns the delivery decision taxonomy. The statement that no remaining blocked decisions exist means there are no unresolved decisions that block the start of Stage 01 or the MVP scaffolding sequence. Later stages may still have stage-local or platform decisions that must be resolved before that stage starts, before that stage reaches DoD, or before the platform release is declared.</p>
@@ -323,7 +323,7 @@
       <span>T-Helper</span>
       <a href="stage-00-delivery-contract.html">Русская страница</a>
       <a href="../en/implementation-specs/stage-00-delivery-contract.html">English page</a>
-      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-00-delivery-contract.md">Исходный Markdown</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/implementation-specs/stage-00-delivery-contract.md">Исходный Markdown</a>
     </footer>
 
     <script src="../pages.js"></script>

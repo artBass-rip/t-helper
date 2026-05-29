@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-09-runtime-and-observability-hardening">Stage 09: Runtime and Observability Hardening</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -54,23 +54,23 @@
 <a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
 <a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-09-runtime-and-observability-hardening">Stage 09: Runtime and Observability Hardening</h1>
-<h2 id="цель">Цель</h2>
-<p>Довести runtime, scheduler, workers, module lifecycle и status-monitor до эксплуатационно устойчивого состояния, пригодного для дальнейших platform stages и distributed deployment.</p>
+<h2 id="goal">Goal</h2>
+<p>Bring the runtime, scheduler, workers, module lifecycle and status-monitor to an operationally resilient state suitable for later platform stages and distributed deployment.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../roadmap.html"><code>docs/roadmap.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../access-control.html"><code>docs/access-control.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
+<li><a href="../roadmap.html"><code>docs/en/roadmap.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../access-control.html"><code>docs/en/access-control.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -79,7 +79,7 @@
 <li>expanded observability/status-monitor;</li>
 <li>runtime and scanner performance optimization backlog;</li>
 <li>full <code>.gitignore</code> semantics with <code>!pattern</code>;</li>
-<li>optional <code>follow_symlinks = true</code> hardening with cycle detection, root containment checks and traversal guards, если этот режим утверждён;</li>
+<li>optional <code>follow_symlinks = true</code> hardening with cycle detection, root containment checks and traversal guards, if this mode is approved;</li>
 <li>worker graceful shutdown/recovery;</li>
 <li>retry, timeout and retention hardening;</li>
 <li>operator diagnostics for jobs, locks, modules, workers and scans.</li>
@@ -157,9 +157,9 @@
 <ul>
 <li>Roadmap: Stage 09.</li>
 <li>Acceptance: <code>ACC-PLATFORM-004</code> and operational prerequisites for <code>ACC-PLATFORM-005</code>.</li>
-<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/roadmap.md</code></a>.</li>
+<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/en/roadmap.md</code></a>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>hardening expands into feature work from later stages;</li>
 <li>observability model grows without clear operator workflows.</li>

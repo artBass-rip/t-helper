@@ -6,11 +6,11 @@
 
 ## Inputs
 
-- `docs/frontend-ui-contract.md`
-- `docs/api.md`
-- `docs/access-control.md`
-- `docs/test-plan.md`
-- `docs/technology-stack.md`
+- `docs/ru/frontend-ui-contract.md`
+- `docs/ru/api.md`
+- `docs/ru/access-control.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/technology-stack.md`
 
 ## Scope
 
@@ -38,7 +38,7 @@
 
 - admin screens available in `Web UI` are available in local `GUI` for the same release scope;
 - admin UI uses only documented backend API endpoints;
-- UI follows `docs/frontend-ui-contract.md`;
+- UI follows `docs/ru/frontend-ui-contract.md`;
 - permissions are enforced by backend and represented clearly in UI states;
 - configuration and rule set changes show resulting jobs/status where applicable.
 
@@ -52,7 +52,7 @@
 - Roadmap: Stage 12.
 - Acceptance: `ACC-PLATFORM-002`, `ACC-PLATFORM-003`.
 - API: auth/RBAC, config, security rule sets, tool profiles, audit.
-- UI contract: `docs/frontend-ui-contract.md`.
+- UI contract: `docs/ru/frontend-ui-contract.md`.
 
 ## Риски
 

@@ -30,14 +30,16 @@ Generated document pages also include a static RU/EN switcher for the same
 document path. This keeps the published site usable even when JavaScript is
 unavailable.
 
-Markdown documents under `docs/**/*.md` are the canonical sources. During
-publication, `docs/build-pages.js` generates Russian and English HTML shells
-for every Markdown file, rewrites internal Markdown links to the generated
+Markdown documents under `docs/ru/**/*.md` and `docs/en/**/*.md` are the
+canonical language sources. During publication, `docs/build-pages.js` uses
+`docs/ru` as the path catalog, generates Russian pages at the Pages root and
+English pages under `en/`, rewrites internal Markdown links to the generated
 same-language HTML pages and links inline document references such as
-`docs/api.md` when the target exists. The published Pages site therefore shows
-documentation as complete styled pages with common navigation, local table of
-contents, related documents, backlinks and a full documentation catalog. The
-raw `.md` sources remain available from each generated document page.
+`docs/en/api.md` or `docs/ru/api.md` when the target exists. The published
+Pages site therefore shows documentation as complete styled pages with common
+navigation, local table of contents, related documents, backlinks and a full
+documentation catalog. The raw same-language `.md` source remains available
+from each generated document page.
 
 ## Deployment
 
@@ -62,7 +64,8 @@ The workflow permissions are intentionally limited to:
 
 ## Maintenance contract
 
-- Keep Russian and English content aligned when updating page copy.
+- Keep Russian and English Markdown sources aligned when updating
+  documentation or page copy.
 - Keep the AI-only implementation notice visible before the hero content in
   both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target
@@ -70,7 +73,7 @@ The workflow permissions are intentionally limited to:
 - Keep generated document pages buildable with the repository-local Node.js
   script; do not require package installation for Pages publication.
 - Keep cross-document references as relative Markdown links or inline
-  `docs/...md` references so the Pages generator can produce HTML links and
-  backlinks.
+  `docs/en/...md` / `docs/ru/...md` references so the Pages generator can
+  produce HTML links and backlinks.
 - Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI
-  contracts remain in `docs/frontend-ui-contract.md`.
+  contracts remain in `docs/en/frontend-ui-contract.md`.

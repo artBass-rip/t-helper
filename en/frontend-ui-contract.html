@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#frontend-ui-delivery-contract">Frontend UI Delivery Contract</a>
-<a class="toc-level-2" href="#назначение">Назначение</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
 <a class="toc-level-2" href="#route-map">Route Map</a>
 <a class="toc-level-2" href="#navigation-model">Navigation Model</a>
 <a class="toc-level-2" href="#operational-density">Operational Density</a>
@@ -58,11 +58,11 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="frontend-ui-delivery-contract">Frontend UI Delivery Contract</h1>
-<h2 id="назначение">Назначение</h2>
-<p>Этот документ фиксирует Stage 08 UI contract для единого <code>Web UI</code> и локального <code>GUI</code>. Цель - не допустить расхождения route tree, navigation model, density и runtime assumptions между браузерной и Tauri-оболочкой.</p>
-<p><code>Web UI</code> и <code>GUI</code> используют одну React/TypeScript codebase, один typed API client и один documented backend API. Различия допускаются только там, где локальность <code>GUI</code> явно влияет на runtime discovery/startup.</p>
+<h2 id="purpose">Purpose</h2>
+<p>This document records the Stage 08 UI contract for the unified <code>Web UI</code> and local <code>GUI</code>. The goal is to prevent divergence in route tree, navigation model, density and runtime assumptions between the browser UI and the Tauri shell.</p>
+<p><code>Web UI</code> and <code>GUI</code> use one React/TypeScript codebase, one typed API client and one documented backend API. Differences are allowed only where the local nature of the <code>GUI</code> explicitly affects runtime discovery/startup.</p>
 <h2 id="route-map">Route Map</h2>
-<p>Top-level route tree для Stage 08 MVP:</p>
+<p>Top-level route tree for the Stage 08 MVP:</p>
 <pre><code class="language-text">/projects
 /projects/:id
 /repositories
@@ -81,9 +81,9 @@
 <p>Stage 08 includes full MVP administrative screens for auth, RBAC, configuration and security rule sets when their backend APIs are part of the MVP release. Stage 12 hardens and extends these administrative surfaces for platform-only capabilities such as full SCIM sync management, advanced tool profile administration and additional release-scope controls.</p>
 <p>Route rules:</p>
 <ul>
-<li><code>Web UI</code> и <code>GUI</code> используют один route tree;</li>
-<li>route, доступный в <code>Web UI</code>, должен быть доступен в <code>GUI</code> для того же release scope, unless explicitly marked local-only or unavailable by backend API scope;</li>
-<li>frontend-only backend routes запрещены;</li>
+<li><code>Web UI</code> and <code>GUI</code> use one route tree;</li>
+<li>a route available in the <code>Web UI</code> must be available in the <code>GUI</code> for the same release scope, unless explicitly marked local-only or unavailable by backend API scope;</li>
+<li>frontend-only backend routes are forbidden;</li>
 <li>object detail routes use tabs for subviews instead of separate unrelated page shells;</li>
 <li>query parameters may hold filters, sorting, pagination cursors and selected tabs when this improves shareability/debugging.</li>
 </ul>
@@ -131,7 +131,7 @@
 <li>operational density rules;</li>
 <li>Tauri local runtime discovery/start policy for supported local OS targets.</li>
 </ul>
-<p>Changes to these decisions require updating this document together with <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/implementation-specs/stage-00-delivery-contract.md</code></a>, <a href="roadmap.html"><code>docs/roadmap.md</code></a> and <a href="traceability.html"><code>docs/traceability.md</code></a> where affected.</p>
+<p>Changes to these decisions require updating this document together with <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/en/implementation-specs/stage-00-delivery-contract.md</code></a>, <a href="roadmap.html"><code>docs/en/roadmap.md</code></a> and <a href="traceability.html"><code>docs/en/traceability.md</code></a> where affected.</p>
 <h2 id="stage-08-exit-decisions">Stage 08 Exit Decisions</h2>
 <p>Release artifact publication requires:</p>
 <ul>

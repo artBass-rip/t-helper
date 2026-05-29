@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Архитектура T-Helper - T-Helper documentation.">
-    <title>Архитектура T-Helper - T-Helper Docs</title>
+    <meta name="description" content="T-Helper Architecture - T-Helper documentation.">
+    <title>T-Helper Architecture - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../architecture.html">
     <link rel="alternate" hreflang="en" href="architecture.html">
     <link rel="stylesheet" href="../pages.css">
@@ -44,91 +44,91 @@
           <a href="traceability.html">Traceability</a>
         </nav>
         <nav class="doc-toc">
-          <a class="toc-level-1" href="#архитектура-t-helper">Архитектура T-Helper</a>
-<a class="toc-level-2" href="#назначение">Назначение</a>
-<a class="toc-level-2" href="#архитектурные-принципы">Архитектурные принципы</a>
-<a class="toc-level-2" href="#технологический-стек">Технологический стек</a>
-<a class="toc-level-2" href="#terraform-проект-в-mvp">Terraform-проект в MVP</a>
-<a class="toc-level-2" href="#project-discovery-и-git-marker-allowlist-в-mvp">Project discovery и Git marker allowlist в MVP</a>
-<a class="toc-level-2" href="#логические-модули">Логические модули</a>
+          <a class="toc-level-1" href="#t-helper-architecture">T-Helper Architecture</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#architectural-principles">Architectural Principles</a>
+<a class="toc-level-2" href="#technology-stack">Technology Stack</a>
+<a class="toc-level-2" href="#terraform-project-in-the-mvp">Terraform Project in the MVP</a>
+<a class="toc-level-2" href="#project-discovery-and-git-marker-allowlist-in-the-mvp">Project Discovery and Git Marker Allowlist in the MVP</a>
+<a class="toc-level-2" href="#logical-modules">Logical Modules</a>
 <a class="toc-level-2" href="#provider-adapters">Provider adapters</a>
 <a class="toc-level-2" href="#http-api-composition">HTTP API composition</a>
-<a class="toc-level-2" href="#сценарии-развёртывания">Сценарии развёртывания</a>
-<a class="toc-level-3" href="#монолитный-режим">Монолитный режим</a>
-<a class="toc-level-3" href="#разнесённый-режим">Разнесённый режим</a>
+<a class="toc-level-2" href="#deployment-scenarios">Deployment Scenarios</a>
+<a class="toc-level-3" href="#monolithic-mode">Monolithic Mode</a>
+<a class="toc-level-3" href="#distributed-mode">Distributed Mode</a>
 <a class="toc-level-2" href="#storage-strategy">Storage strategy</a>
-<a class="toc-level-2" href="#jobs-и-worker-execution">Jobs и worker execution</a>
-<a class="toc-level-2" href="#status-monitoring-и-aggregation">Status monitoring и aggregation</a>
+<a class="toc-level-2" href="#jobs-and-worker-execution">Jobs and Worker Execution</a>
+<a class="toc-level-2" href="#status-monitoring-and-aggregation">Status Monitoring and Aggregation</a>
 <a class="toc-level-3" href="#repo-storage-strategy">Repo storage strategy</a>
-<a class="toc-level-2" href="#базовый-runtime-flow">Базовый runtime flow</a>
-<a class="toc-level-2" href="#ключевые-архитектурные-риски-устранённые-рефакторингом-документации">Ключевые архитектурные риски, устранённые рефакторингом документации</a>
+<a class="toc-level-2" href="#basic-runtime-flow">Basic Runtime Flow</a>
+<a class="toc-level-2" href="#key-architectural-risks-removed-by-documentation-refactoring">Key Architectural Risks Removed by Documentation Refactoring</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
-          <h1 id="архитектура-t-helper">Архитектура T-Helper</h1>
-<h2 id="назначение">Назначение</h2>
-<p><code>t-helper</code> - модульная on-premise система для:</p>
+          <h1 id="t-helper-architecture">T-Helper Architecture</h1>
+<h2 id="purpose">Purpose</h2>
+<p><code>t-helper</code> is a modular on-premise system for:</p>
 <ul>
-<li>обнаружения Terraform working directories по файловой системе;</li>
-<li>регистрации проектов и Git-репозиториев в persistent storage;</li>
-<li>локального анализа Terraform-кода без SaaS и без передачи исходников наружу;</li>
-<li>управления конфигурацией, пользователями, доступом и модулями через <code>GUI</code>, <code>Web UI</code> и <code>thelper-ctl</code>.</li>
+<li>discovering Terraform working directories in the filesystem;</li>
+<li>registering projects and Git repositories in persistent storage;</li>
+<li>local analysis of Terraform code without SaaS and without sending source code outside the installation;</li>
+<li>managing configuration, users, access and modules through the <code>GUI</code>, <code>Web UI</code> and <code>thelper-ctl</code>.</li>
 </ul>
-<h2 id="архитектурные-принципы">Архитектурные принципы</h2>
+<h2 id="architectural-principles">Architectural Principles</h2>
 <ul>
-<li>source of truth для runtime-конфигурации и рабочих сущностей - БД;</li>
-<li>файлы <code>config.json</code> и <code>.t-helper.ignore</code> используются только для первичного импорта через <code>thelper-ctl -reconfigure</code>;</li>
-<li><code>GUI</code> и <code>Web UI</code> используют единый backend API; feature parity требуется только для read/operate сценариев, включённых в конкретный релиз;</li>
-<li>Frontend MVP покрывает основные read/operate сценарии и full MVP administrative screens; Stage 12 отвечает за hardening and platform-only administrative extensions where in release scope;</li>
-<li>любой модуль должен иметь чёткий lifecycle и поддерживать независимый restart;</li>
-<li>все внешние providers, включая database/storage и auth providers, реализуются как отдельные подключаемые модули или библиотеки за стабильными internal interfaces;</li>
-<li>монолитный и распределённый режимы должны использовать совместимую модель взаимодействия;</li>
-<li>Terraform-код, findings и security rules не покидают периметр установки.</li>
+<li>the database is the source of truth for runtime configuration and working entities;</li>
+<li><code>config.json</code> and <code>.t-helper.ignore</code> are used only for initial import through <code>thelper-ctl -reconfigure</code>;</li>
+<li><code>GUI</code> and <code>Web UI</code> use a single backend API; feature parity is required only for read/operate scenarios included in a specific release;</li>
+<li>the Frontend MVP covers the main read/operate scenarios and full MVP administrative screens; Stage 12 is responsible for hardening and platform-only administrative extensions where they are in release scope;</li>
+<li>every module must have a clear lifecycle and support independent restart;</li>
+<li>all external providers, including database/storage and auth providers, are implemented as separate pluggable modules or libraries behind stable internal interfaces;</li>
+<li>monolithic and distributed modes must use a compatible interaction model;</li>
+<li>Terraform code, findings and security rules do not leave the installation perimeter.</li>
 </ul>
-<h2 id="технологический-стек">Технологический стек</h2>
-<p>Канонический стек реализации описан в <a href="technology-stack.html"><code>technology-stack.md</code></a>.</p>
+<h2 id="technology-stack">Technology Stack</h2>
+<p>The canonical implementation stack is described in <a href="technology-stack.html"><code>technology-stack.md</code></a>.</p>
 <ul>
-<li>Backend runtime, CLI, API, module lifecycle, jobs framework и storage adapters реализуются на <code>Go</code>.</li>
-<li><code>Web UI</code> реализуется на <code>React</code>, <code>TypeScript</code>, <code>Vite</code>, <code>TanStack Router</code>, <code>TanStack Query</code>, <code>Zod</code>, <code>React Hook Form</code> и <code>Ant Design</code>.</li>
-<li>Локальный <code>GUI</code> реализуется на <code>Tauri</code> и использует ту же React/TypeScript codebase, что и <code>Web UI</code>.</li>
+<li>Backend runtime, CLI, API, module lifecycle, jobs framework and storage adapters are implemented in <code>Go</code>.</li>
+<li><code>Web UI</code> is implemented with <code>React</code>, <code>TypeScript</code>, <code>Vite</code>, <code>TanStack Router</code>, <code>TanStack Query</code>, <code>Zod</code>, <code>React Hook Form</code> and <code>Ant Design</code>.</li>
+<li>The local <code>GUI</code> is implemented with <code>Tauri</code> and uses the same React/TypeScript codebase as the <code>Web UI</code>.</li>
 <li>Stage 08 route map, navigation model, operational density and Tauri delivery policy are defined in <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
 </ul>
-<h2 id="terraform-проект-в-mvp">Terraform-проект в MVP</h2>
-<p>Terraform-проектом считается директория, содержащая хотя бы один файл <code>*.tf</code>.</p>
-<p>Ограничения MVP:</p>
+<h2 id="terraform-project-in-the-mvp">Terraform Project in the MVP</h2>
+<p>A Terraform project is a directory that contains at least one <code>*.tf</code> file.</p>
+<p>MVP constraints:</p>
 <ul>
-<li>директории только с <code>.terraform</code>, <code>*.tfstate</code>, <code>*.tfvars</code> без <code>*.tf</code> проектом не считаются;</li>
-<li>после обнаружения Terraform-проекта обход ниже этой директории прекращается;</li>
-<li>поддержка <code>terragrunt.hcl</code> рассматривается как расширение следующих версий.</li>
+<li>directories that contain only <code>.terraform</code>, <code>*.tfstate</code>, or <code>*.tfvars</code> without <code>*.tf</code> are not considered projects;</li>
+<li>after a Terraform project is discovered, traversal below that directory stops;</li>
+<li><code>terragrunt.hcl</code> support is considered an extension for later versions.</li>
 </ul>
-<h2 id="project-discovery-и-git-marker-allowlist-в-mvp">Project discovery и Git marker allowlist в MVP</h2>
-<p><code>global-scanner</code> в blocking traversal path обнаруживает только Terraform working directories и регистрирует отдельные <code>projects</code> rows. Для каждого созданного или обновлённого проекта он ставит фоновый <code>project_discovery</code> job и продолжает scan без ожидания результата.</p>
-<p><code>project_discovery</code> считает директорию Git working tree только при наличии одного из разрешённых markers:</p>
+<h2 id="project-discovery-and-git-marker-allowlist-in-the-mvp">Project Discovery and Git Marker Allowlist in the MVP</h2>
+<p><code>global-scanner</code> discovers only Terraform working directories in the blocking traversal path and registers separate <code>projects</code> rows. For each created or updated project it enqueues a background <code>project_discovery</code> job and continues the scan without waiting for the result.</p>
+<p><code>project_discovery</code> treats a directory as a Git working tree only when one of the allowed markers is present:</p>
 <ul>
 <li><code>.git/</code> directory;</li>
-<li><code>.git</code> regular file для worktree/submodule, если первая непустая строка начинается с <code>gitdir:</code>.</li>
+<li><code>.git</code> regular file for a worktree/submodule when the first non-empty line starts with <code>gitdir:</code>.</li>
 </ul>
-<p>Файлы и директории <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> и другие похожие convention/config files не являются Git markers в MVP.</p>
-<p><code>global-scanner</code> не читает <code>.git</code> metadata и не выполняет shell-out в <code>git</code>. <code>project_discovery</code> может читать <code>.git</code> file только как Git metadata, не Terraform source. MVP ограничивает размер читаемого <code>.git</code> file до <code>4 KiB</code> и не обязан разрешать путь после <code>gitdir:</code>.</p>
-<p>Если несколько локальных Terraform projects относятся к одному Git repository, project records не merge'ятся. Они остаются отдельными <code>projects</code> rows и связываются через общий <code>repository_id</code> и <code>project_links.link_type = same_repository</code>.</p>
-<h2 id="логические-модули">Логические модули</h2>
+<p>Files and directories such as <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> and similar convention/config files are not Git markers in the MVP.</p>
+<p><code>global-scanner</code> does not read <code>.git</code> metadata and does not shell out to <code>git</code>. <code>project_discovery</code> may read a <code>.git</code> file only as Git metadata, not as Terraform source. The MVP limits the readable <code>.git</code> file size to <code>4 KiB</code> and is not required to resolve the path after <code>gitdir:</code>.</p>
+<p>If several local Terraform projects belong to one Git repository, project records are not merged. They remain separate <code>projects</code> rows and are linked through a shared <code>repository_id</code> and <code>project_links.link_type = same_repository</code>.</p>
+<h2 id="logical-modules">Logical Modules</h2>
 <ul>
-<li><code>core</code> - оркестрация, API, lifecycle, журналирование, jobs framework</li>
-<li><code>worker-runtime</code> - отдельные worker-процессы <code>thelper-worker</code>, выполняющие queued jobs из persistent storage</li>
-<li><code>status-monitor</code> - логический модуль агрегации job events, workflow statuses, worker health, module health и runtime metrics</li>
-<li><code>global-scanner</code> - обход глобальных <code>root_path</code> из <code>scanning.global_scan</code>, ignore matcher, обнаружение Terraform-проектов и enqueue фоновых <code>project_discovery</code> jobs</li>
-<li><code>project-scanner</code> - project-level Terraform scan по настройкам отдельного проекта; baseline toolchain: <code>terraform validate</code>, <code>TFLint</code></li>
-<li><code>security-validator</code> - security/validation scan по настройкам отдельного проекта и доступным модулям из <code>scanning.security_scan.modules</code>; MVP requires <code>Trivy</code> as the mandatory local scanner; other tools are adapter extensions</li>
+<li><code>core</code> - orchestration, API, lifecycle, logging, jobs framework</li>
+<li><code>worker-runtime</code> - separate <code>thelper-worker</code> worker processes that execute queued jobs from persistent storage</li>
+<li><code>status-monitor</code> - logical module for aggregating job events, workflow statuses, worker health, module health and runtime metrics</li>
+<li><code>global-scanner</code> - traversal of global <code>root_path</code> entries from <code>scanning.global_scan</code>, ignore matcher, Terraform project discovery and enqueueing background <code>project_discovery</code> jobs</li>
+<li><code>project-scanner</code> - project-level Terraform scan using a specific project's settings; baseline toolchain: <code>terraform validate</code>, <code>TFLint</code></li>
+<li><code>security-validator</code> - security/validation scan using a specific project's settings and available modules from <code>scanning.security_scan.modules</code>; MVP requires <code>Trivy</code> as the mandatory local scanner; other tools are adapter extensions</li>
 <li><code>tool-profile-runtime</code> - shared execution/compatibility layer for external CLI tools; performs version discovery, profile selection, command execution, output parsing and normalized DTO mapping according to ADR 0018</li>
 <li><code>tool-profile-analyzer</code> - optional maintainer/operator tool for generating candidate profile versions from captured external tool outputs and validation fixtures; generated profiles require explicit validation and activation</li>
-<li><code>repository-manager</code> - <code>clone</code>, <code>pull</code>, <code>sync</code>, защита от конфликтующих операций; webhook/polling operations поставляются как later extensions</li>
-<li><code>config-manager</code> - импорт, валидация и применение конфигурации из БД</li>
+<li><code>repository-manager</code> - <code>clone</code>, <code>pull</code>, <code>sync</code>, protection from conflicting operations; webhook/polling operations are delivered as later extensions</li>
+<li><code>config-manager</code> - import, validation and application of configuration from the database</li>
 <li><code>auth</code> - authentication providers, <code>SCIM</code>, <code>RBAC</code>, users, groups, roles, bindings</li>
-<li><code>module-runtime</code> - состояния модулей, <code>reload</code>, <code>restart</code></li>
-<li><code>web</code> - поставка <code>Web UI</code></li>
-<li><code>gui</code> - desktop-клиент для локального использования</li>
+<li><code>module-runtime</code> - module states, <code>reload</code>, <code>restart</code></li>
+<li><code>web</code> - <code>Web UI</code> delivery</li>
+<li><code>gui</code> - desktop client for local use</li>
 <li><code>nginx</code> - reverse proxy, TLS termination, static delivery</li>
 </ul>
 <h2 id="provider-adapters">Provider adapters</h2>
@@ -145,9 +145,9 @@
 <p>Executable HTTP routes are registered through a compile-time <code>httpapi.RouteRegistrar</code> contract. Each handler owns its route declarations via <code>RegisterRoutes(chi.Router)</code>, while <code>httpapi.New</code> owns only router creation, common middleware and composition.</p>
 <p>This keeps route ownership close to handler behavior and prevents unsupported handler types from being silently ignored. The current route surface is guarded by <code>internal/httpapi/router_test.go</code>.</p>
 <p>The accepted decision is documented in <a href="adr/0019-code-quality-and-route-registration.html"><code>adr/0019-code-quality-and-route-registration.md</code></a>.</p>
-<h2 id="сценарии-развёртывания">Сценарии развёртывания</h2>
-<h3 id="монолитный-режим">Монолитный режим</h3>
-<p>На одном хосте работают:</p>
+<h2 id="deployment-scenarios">Deployment Scenarios</h2>
+<h3 id="monolithic-mode">Monolithic Mode</h3>
+<p>The following run on one host:</p>
 <ul>
 <li><code>core</code></li>
 <li><code>worker-runtime</code> / <code>thelper-worker</code></li>
@@ -162,15 +162,15 @@
 <li><code>web</code></li>
 <li><code>nginx</code></li>
 </ul>
-<p><code>GUI</code> запускается локально на рабочем месте администратора или пользователя.</p>
-<p>В одной локальной установке активен только один экземпляр <code>t-helper</code> runtime:</p>
+<p><code>GUI</code> runs locally on an administrator or user workstation.</p>
+<p>Only one <code>t-helper</code> runtime instance is active in a single local installation:</p>
 <ul>
-<li>если <code>thelper</code> уже запущен для <code>Web UI</code>, Tauri GUI подключается к существующему local runtime;</li>
-<li>если <code>thelper</code> ещё не запущен, Tauri GUI запускает local <code>thelper</code>, после чего <code>Web UI</code> подключается к этому же runtime;</li>
-<li>повторный запуск <code>thelper</code> должен обнаруживать существующий runtime через lock/health mechanism и не создавать второй активный процесс.</li>
+<li>if <code>thelper</code> is already running for the <code>Web UI</code>, the Tauri GUI connects to the existing local runtime;</li>
+<li>if <code>thelper</code> is not running yet, the Tauri GUI starts a local <code>thelper</code>, after which the <code>Web UI</code> connects to the same runtime;</li>
+<li>a repeated <code>thelper</code> start must discover the existing runtime through the lock/health mechanism and must not create a second active process.</li>
 </ul>
-<h3 id="разнесённый-режим">Разнесённый режим</h3>
-<p>Отдельно могут быть вынесены:</p>
+<h3 id="distributed-mode">Distributed Mode</h3>
+<p>The following can be moved out separately:</p>
 <ul>
 <li><code>global-scanner</code></li>
 <li><code>project-scanner</code></li>
@@ -181,17 +181,17 @@
 <li><code>auth</code></li>
 <li><code>web</code></li>
 <li><code>nginx</code></li>
-<li>БД</li>
+<li>database</li>
 </ul>
 <h2 id="storage-strategy">Storage strategy</h2>
-<p>Целевые хранилища по roadmap:</p>
+<p>Target storage engines on the roadmap:</p>
 <ul>
 <li><code>SQLite</code></li>
 <li><code>PostgreSQL</code></li>
 <li><code>MySQL</code></li>
 <li><code>MSSQL</code></li>
 </ul>
-<p>Базовые значения:</p>
+<p>Default values:</p>
 <ul>
 <li><code>SQLite</code> - default internal SQL-like storage for local setup</li>
 <li><code>PostgreSQL</code> - default external storage for server setup</li>
@@ -204,87 +204,87 @@
 <li>Aurora MySQL uses the <code>MySQL</code> storage adapter and migration dialect.</li>
 <li>Babelfish for Aurora PostgreSQL is not treated as the <code>MSSQL</code> adapter target unless a separate compatibility decision is accepted.</li>
 </ul>
-<p>Требования к слою хранения:</p>
+<p>Storage layer requirements:</p>
 <ul>
-<li>логическая модель данных едина для всех backends;</li>
-<li>backend использует storage abstraction;</li>
-<li>SQL-хранилища поддерживают dialect-specific миграции с синхронизированными logical migration versions;</li>
-<li>внутренняя БД выбирается через <code>database.database_type</code> и <code>database.database_path</code>;</li>
-<li>если <code>external_databases.enabled = true</code>, runtime использует <code>external_databases</code> и не использует внутреннюю БД для рабочих данных;</li>
-<li><code>SQLite</code> и <code>PostgreSQL</code> входят в первый обязательный этап реализации;</li>
-<li><code>MySQL</code>, <code>MSSQL</code> и другие SQL-compatible adapters поставляются отдельными adapters на Stage 10 Storage Adapter Expansion.</li>
+<li>the logical data model is the same for all backends;</li>
+<li>the backend uses a storage abstraction;</li>
+<li>SQL storage engines support dialect-specific migrations with synchronized logical migration versions;</li>
+<li>the internal database is selected through <code>database.database_type</code> and <code>database.database_path</code>;</li>
+<li>if <code>external_databases.enabled = true</code>, the runtime uses <code>external_databases</code> and does not use the internal database for working data;</li>
+<li><code>SQLite</code> and <code>PostgreSQL</code> are included in the first mandatory implementation stage;</li>
+<li><code>MySQL</code>, <code>MSSQL</code> and other SQL-compatible adapters are delivered as separate adapters in Stage 10 Storage Adapter Expansion.</li>
 <li>transaction boilerplate should be centralized with <code>storage.WithTx</code> in new or materially changed store paths, while domain-specific retry/isolation remains explicit in the store code;</li>
 <li>shared SQL dialect helpers are a documented optimization backlog item before Stage 10 expands storage adapters.</li>
 </ul>
-<h2 id="jobs-и-worker-execution">Jobs и worker execution</h2>
-<p>Background jobs выполняются отдельными worker-процессами.</p>
-<p>Правила:</p>
+<h2 id="jobs-and-worker-execution">Jobs and Worker Execution</h2>
+<p>Background jobs are executed by separate worker processes.</p>
+<p>Rules:</p>
 <ul>
-<li><code>thelper</code> создаёт jobs, валидирует requests, управляет API/config/module state и не выполняет long-running jobs inline;</li>
-<li><code>thelper-worker</code> атомарно claims eligible queued job через storage-level lease, переводит его в <code>running</code>, выполняет job handler, сохраняет <code>result_payload</code> и завершает job;</li>
-<li>worker-процессы обновляют <code>heartbeat_at</code> и <code>lease_expires_at</code> для long-running jobs;</li>
-<li>истёкшие leases восстанавливаются worker-процессами через retry/backoff или перевод job в <code>failed</code> после исчерпания попыток;</li>
-<li><code>job_locks</code> используются для сериализации конфликтующих бизнес-операций между несколькими worker-процессами;</li>
-<li>job lease определяет владельца конкретного job, а <code>job_locks</code> защищают бизнес-ресурсы;</li>
-<li><code>global-scanner</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>repository-manager</code> и <code>scim_sync</code> выполняются через worker execution model;</li>
-<li>worker-процессы могут масштабироваться горизонтально при сохранении единых storage contracts.</li>
+<li><code>thelper</code> creates jobs, validates requests, manages API/config/module state and does not execute long-running jobs inline;</li>
+<li><code>thelper-worker</code> atomically claims an eligible queued job through a storage-level lease, moves it to <code>running</code>, executes the job handler, stores <code>result_payload</code> and completes the job;</li>
+<li>worker processes update <code>heartbeat_at</code> and <code>lease_expires_at</code> for long-running jobs;</li>
+<li>expired leases are recovered by worker processes through retry/backoff or by moving the job to <code>failed</code> after attempts are exhausted;</li>
+<li><code>job_locks</code> are used to serialize conflicting business operations across multiple worker processes;</li>
+<li>the job lease identifies the owner of a specific job, while <code>job_locks</code> protect business resources;</li>
+<li><code>global-scanner</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>repository-manager</code> and <code>scim_sync</code> run through the worker execution model;</li>
+<li>worker processes can scale horizontally while preserving unified storage contracts.</li>
 </ul>
-<h2 id="status-monitoring-и-aggregation">Status monitoring и aggregation</h2>
-<p>Все jobs должны публиковать status events и runtime metrics в persistent <code>job_events</code>.</p>
+<h2 id="status-monitoring-and-aggregation">Status Monitoring and Aggregation</h2>
+<p>All jobs must publish status events and runtime metrics to persistent <code>job_events</code>.</p>
 <p><code>status-monitor</code>:</p>
 <ul>
-<li>агрегирует <code>job_events</code>, <code>jobs</code>, <code>module_states</code> и worker heartbeat data;</li>
-<li>владеет aggregate read models <code>workflow_statuses</code>;</li>
-<li>обновляет aggregate <code>project_scans.status</code> и <code>project_scans.result_payload</code>;</li>
-<li>отдаёт единый источник статусов для UI, backend API и внутренних служб;</li>
-<li>в MVP может быть логическим модулем внутри <code>thelper</code>, но должен иметь отдельную границу ответственности;</li>
-<li>в distributed mode может быть вынесен в отдельный процесс или узел.</li>
+<li>aggregates <code>job_events</code>, <code>jobs</code>, <code>module_states</code> and worker heartbeat data;</li>
+<li>owns aggregate read models <code>workflow_statuses</code>;</li>
+<li>updates aggregate <code>project_scans.status</code> and <code>project_scans.result_payload</code>;</li>
+<li>provides the single source of status information for the UI, backend API and internal services;</li>
+<li>in the MVP, may be a logical module inside <code>thelper</code>, but must have a separate responsibility boundary;</li>
+<li>in distributed mode, may be moved to a separate process or node.</li>
 </ul>
-<p>Правило владения состоянием:</p>
+<p>State ownership rule:</p>
 <ul>
-<li>workers пишут факты выполнения и domain results;</li>
-<li><code>status-monitor</code> пишет aggregate statuses;</li>
-<li>UI и внутренние сервисы не должны самостоятельно агрегировать workflow status из child jobs.</li>
+<li>workers write execution facts and domain results;</li>
+<li><code>status-monitor</code> writes aggregate statuses;</li>
+<li>UI and internal services must not aggregate workflow status from child jobs on their own.</li>
 </ul>
 <h3 id="repo-storage-strategy">Repo storage strategy</h3>
-<p>Для локального размещения клонированных репозиториев используется тот же materialized набор <code>root_paths</code>, что и для глобального сканирования. <code>scanning.global_scan</code> остаётся внешним config source для <code>source = config</code> rows; root paths, созданные через clone/API, сохраняются как <code>source = api</code> и не переписывают config.</p>
-<p>Правила:</p>
+<p>The same materialized set of <code>root_paths</code> used for global scanning is used for local placement of cloned repositories. <code>scanning.global_scan</code> remains the external config source for <code>source = config</code> rows; root paths created through clone/API are stored as <code>source = api</code> and do not rewrite config.</p>
+<p>Rules:</p>
 <ul>
-<li>при clone пользователь выбирает существующий <code>root_path</code> или создаёт новый root path;</li>
-<li>внутри выбранного root path пользователь выбирает существующую target directory или создаёт новую;</li>
-<li>clone workflow использует provider-aware adapters для <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>;</li>
+<li>during clone, the user selects an existing <code>root_path</code> or creates a new root path;</li>
+<li>inside the selected root path, the user selects an existing target directory or creates a new one;</li>
+<li>the clone workflow uses provider-aware adapters for <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>;</li>
 <li>provider integrations use GitKraken-like profiles: one provider can have multiple configured hosts/provider instances, and one host can have multiple credentials with different usages;</li>
-<li>protocol <code>https|ssh</code> выбирается на уровне clone request и влияет на итоговый clone URL;</li>
-<li>repository identity строится как <code>provider + provider_host + full_path</code>, где <code>provider_host</code> различает self-hosted provider instances;</li>
+<li>protocol <code>https|ssh</code> is selected at clone request level and affects the final clone URL;</li>
+<li>repository identity is built as <code>provider + provider_host + full_path</code>, where <code>provider_host</code> distinguishes self-hosted provider instances;</li>
 <li>provider URL parsing follows ADR 0016 and must normalize equivalent HTTPS/SSH/scp-like URLs into the same identity;</li>
-<li><code>clone_url</code> хранится только как nullable non-unique transport metadata без credentials/userinfo и не участвует в deduplication;</li>
+<li><code>clone_url</code> is stored only as nullable non-unique transport metadata without credentials/userinfo and does not participate in deduplication;</li>
 <li>credentials are selected by <code>credential_id</code>; workers resolve <code>secretref://...</code> values at use time and never receive raw secrets in job payloads;</li>
 <li>recursive GitLab group clone is a later repository operations extension after single-repository clone;</li>
-<li>если clone выполняется в новый path, <code>repository-manager</code> добавляет его в список <code>root_paths</code> с <code>source = api</code>;</li>
-<li>локальный путь репозитория строится внутри выбранного <code>root_path</code>;</li>
-<li><code>provider_host</code>, <code>full_path</code> и итоговый <code>local_path</code> должны быть нормализованы; <code>local_path</code> не должен позволять выход за пределы выбранного <code>root_path</code>;</li>
-<li>если каталог уже содержит корректный Git-репозиторий с ожидаемым remote, <code>clone</code> заменяется на <code>pull</code>;</li>
-<li>операции <code>clone</code>, <code>pull</code> и <code>sync</code> по одному <code>repository.id</code> сериализуются через <code>job_locks</code>.</li>
+<li>if clone runs into a new path, <code>repository-manager</code> adds it to the <code>root_paths</code> list with <code>source = api</code>;</li>
+<li>the local repository path is built inside the selected <code>root_path</code>;</li>
+<li><code>provider_host</code>, <code>full_path</code> and the resulting <code>local_path</code> must be normalized; <code>local_path</code> must not allow escaping the selected <code>root_path</code>;</li>
+<li>if the directory already contains a valid Git repository with the expected remote, <code>clone</code> is replaced with <code>pull</code>;</li>
+<li><code>clone</code>, <code>pull</code> and <code>sync</code> operations for the same <code>repository.id</code> are serialized through <code>job_locks</code>.</li>
 </ul>
-<h2 id="базовый-runtime-flow">Базовый runtime flow</h2>
+<h2 id="basic-runtime-flow">Basic Runtime Flow</h2>
 <ol>
-<li><code>thelper-ctl -reconfigure</code> импортирует конфигурацию и ignore rules в БД.</li>
-<li><code>thelper</code> поднимает runtime и читает активную конфигурацию из БД.</li>
-<li><code>global-scanner</code> запускает глобальное сканирование по <code>root_path</code> из <code>scanning.global_scan</code>.</li>
-<li>Обнаруженные Terraform-проекты регистрируются отдельными <code>projects</code> rows; для каждого созданного или обновлённого проекта создаётся фоновый <code>project_discovery</code> job.</li>
-<li><code>project_discovery</code> определяет локальные Git-связи проекта, создаёт/обновляет repository card при наличии Git marker и связывает отдельные project records через <code>project_links</code>, если они относятся к одному Git repository.</li>
-<li><code>repository-manager</code> поддерживает <code>clone</code>, <code>pull</code>, <code>sync</code>; при clone в новый path он добавляет этот path в <code>root_paths</code>.</li>
+<li><code>thelper-ctl -reconfigure</code> imports configuration and ignore rules into the database.</li>
+<li><code>thelper</code> starts the runtime and reads the active configuration from the database.</li>
+<li><code>global-scanner</code> starts a global scan over <code>root_path</code> entries from <code>scanning.global_scan</code>.</li>
+<li>Discovered Terraform projects are registered as separate <code>projects</code> rows; a background <code>project_discovery</code> job is created for each created or updated project.</li>
+<li><code>project_discovery</code> determines the project's local Git relationships, creates/updates a repository card when a Git marker exists, and links separate project records through <code>project_links</code> if they belong to one Git repository.</li>
+<li><code>repository-manager</code> supports <code>clone</code>, <code>pull</code>, <code>sync</code>; when cloning into a new path it adds that path to <code>root_paths</code>.</li>
 <li>Stage 06A provides <code>tool-profile-runtime</code>, certified profiles, profile validation and optional analyzer for external CLI compatibility.</li>
-<li><code>project-scanner</code> выполняет project-level Terraform scan по настройкам конкретного проекта с использованием <code>terraform validate</code> и <code>TFLint</code> через <code>tool-profile-runtime</code>.</li>
-<li><code>security-validator</code> выполняет security/validation scan по настройкам конкретного проекта с использованием <code>Trivy</code> через <code>tool-profile-runtime</code>, затем сохраняет normalized findings. <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> и <code>Conftest</code> подключаются как adapter extensions.</li>
-<li><code>module-runtime</code> обеспечивает <code>reload</code>, <code>restart</code> и статусы модулей.</li>
+<li><code>project-scanner</code> performs a project-level Terraform scan using a specific project's settings and <code>terraform validate</code> and <code>TFLint</code> through <code>tool-profile-runtime</code>.</li>
+<li><code>security-validator</code> performs a security/validation scan using a specific project's settings and <code>Trivy</code> through <code>tool-profile-runtime</code>, then stores normalized findings. <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code> are connected as adapter extensions.</li>
+<li><code>module-runtime</code> provides <code>reload</code>, <code>restart</code> and module statuses.</li>
 </ol>
-<h2 id="ключевые-архитектурные-риски-устранённые-рефакторингом-документации">Ключевые архитектурные риски, устранённые рефакторингом документации</h2>
+<h2 id="key-architectural-risks-removed-by-documentation-refactoring">Key Architectural Risks Removed by Documentation Refactoring</h2>
 <ul>
-<li>убрана зависимость от ссылок на номера строк в другом документе;</li>
-<li>продуктовые требования и технические механики разведены по отдельным документам;</li>
-<li>дубли и несовпадающие формулировки сведены к одному источнику истины;</li>
-<li>репозиторий получил устойчивую структуру для последующего code scaffolding.</li>
+<li>dependency on line-number references in another document was removed;</li>
+<li>product requirements and technical mechanics were separated into different documents;</li>
+<li>duplicates and inconsistent wording were consolidated into a single source of truth;</li>
+<li>the repository received a stable structure for subsequent code scaffolding.</li>
 </ul>
         </article>
 

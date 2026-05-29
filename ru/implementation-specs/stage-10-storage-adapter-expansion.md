@@ -6,14 +6,14 @@
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/development.md`
-- `docs/architecture.md`
-- `docs/technology-stack.md`
-- `docs/data-model.md`
-- `docs/adr/0002-storage-and-migrations.md`
-- `docs/adr/0007-implementation-repository-layout-and-migrations.md`
+- `docs/ru/roadmap.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/development.md`
+- `docs/ru/architecture.md`
+- `docs/ru/technology-stack.md`
+- `docs/ru/data-model.md`
+- `docs/ru/adr/0002-storage-and-migrations.md`
+- `docs/ru/adr/0007-implementation-repository-layout-and-migrations.md`
 
 ## Scope
 
@@ -56,7 +56,7 @@
 
 - Roadmap: Stage 10.
 - Acceptance: `ACC-PLATFORM-001`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/ru/roadmap.md`.
 
 ## Риски
 

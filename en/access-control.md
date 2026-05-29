@@ -1,25 +1,25 @@
-# Auth, SCIM и RBAC
+# Auth, SCIM and RBAC
 
-## Обязательные возможности модуля `auth`
+## Required capabilities of the `auth` module
 
-- локальная аутентификация;
-- расширяемая модель внешних authentication providers;
+- local authentication;
+- extensible model for external authentication providers;
 - `SCIM`;
 - `RBAC`;
-- управление users, groups, roles и role bindings;
-- audit security-событий.
+- management of users, groups, roles and role bindings;
+- auditing of security events.
 
 ## Local password policy
 
-Local auth uses Argon2id PHC password hashes as defined in `docs/adr/0014-local-password-hashing.md`.
+Local auth uses Argon2id PHC password hashes as defined in `docs/en/adr/0014-local-password-hashing.md`.
 
 API responses, logs, job payloads, workflow payloads and audit payloads must never expose raw passwords, password hashes, reset tokens or reset token hashes. Authentication failures must use generic errors and must not reveal whether a username exists.
 
 Runtime auth endpoints are separate from administrative auth endpoints. Login, logout, session, password reset and password change flows operate on session/local credential state; users/groups/roles/role-bindings/SCIM endpoints remain administrative APIs.
 
-## Scope-модель
+## Scope Model
 
-Поддерживаемые scope:
+Supported scopes:
 
 - `system`
 - `project`
@@ -27,50 +27,50 @@ Runtime auth endpoints are separate from administrative auth endpoints. Login, l
 - `workspace`
 - `repository`
 
-Субъекты назначения ролей:
+Role assignment subjects:
 
 - `user`
 - `group`
 
-Правила разрешения:
+Resolution rules:
 
-- системная роль имеет приоритет над объектной;
-- permissions нескольких ролей объединяются;
-- базовая модель строится на `allow` без явного `deny`;
-- права группы наследуются её участниками.
+- a system role takes precedence over an object role;
+- permissions from multiple roles are merged;
+- the base model is built on `allow` without an explicit `deny`;
+- group permissions are inherited by group members.
 
-## Системные роли
+## System Roles
 
-- `system_admin` - полный доступ ко всей системе
+- `system_admin` - full access to the entire system
 - `platform_operator` - scan, runtime, config, module operations, repo sync, security scan
-- `security_admin` - auth, RBAC, `SCIM`, security rule sets и findings
-- `auditor` - расширенный read-only по объектам, config, jobs, audit и findings
-- `viewer` - базовый глобальный read-only
+- `security_admin` - auth, RBAC, `SCIM`, security rule sets and findings
+- `auditor` - extended read-only access to objects, config, jobs, audit and findings
+- `viewer` - basic global read-only access
 
-## Объектные роли
+## Object Roles
 
-- `owner` - полный доступ к объекту, delete, role binding management
-- `maintainer` - operational access без управления RBAC
-- `editor` - изменение метаданных без delete и без RBAC management
-- `viewer` - read-only доступ
+- `owner` - full access to the object, delete and role binding management
+- `maintainer` - operational access without RBAC management
+- `editor` - metadata changes without delete or RBAC management
+- `viewer` - read-only access
 
 ## Role-to-permission matrix
 
-Wildcard permissions вида `project.*` используются в документации как сокращение. В persistent storage и seed/migration они должны разворачиваться в конкретные permissions из раздела "Machine-readable permissions"; runtime authorization не должен полагаться на строковое сопоставление wildcard.
+Wildcard permissions such as `project.*` are used in the documentation as shorthand. In persistent storage and seed/migration data they must be expanded into concrete permissions from the "Machine-readable permissions" section; runtime authorization must not rely on wildcard string matching.
 
-### Системные роли
+### System Roles
 
 | Role | Permissions |
 | --- | --- |
-| `system_admin` | все `system.*`, `auth.*`, `security.*`, `project.*`, `environment.*`, `workspace.*`, `repository.*` |
+| `system_admin` | all `system.*`, `auth.*`, `security.*`, `project.*`, `environment.*`, `workspace.*`, `repository.*` |
 | `platform_operator` | `system.config.read`, `system.globalscan.run`, `system.rootpath.*`, `system.ignore.*`, `system.module.*`, `system.job.read`, `system.status.read`, `system.audit.read`, `system.runtime.*`, `security.scan.*`, `security.finding.read`, `project.read`, `project.job.read`, `project.scan.*`, `environment.read`, `workspace.read`, `repository.read`, `repository.job.read`, `repository.provider.*`, `repository.credential.*`, `repository.clone`, `repository.pull`, `repository.sync`, `repository.webhook.write`, `repository.polling.write` |
 | `security_admin` | `system.audit.read`, `system.job.read`, `auth.*`, `security.*`, `project.read`, `project.scan.read`, `environment.read`, `workspace.read`, `repository.read` |
 | `auditor` | `system.config.read`, `system.security.read`, `system.module.read`, `system.job.read`, `system.status.read`, `system.audit.read`, `system.runtime.read`, `auth.user.read`, `auth.group.read`, `auth.role.read`, `auth.rolebind.read`, `auth.provider.read`, `auth.scim.read`, `security.ruleset.read`, `security.toolprofile.read`, `security.finding.read`, `security.scan.read`, `security.exception.read`, `project.read`, `project.job.read`, `project.log.read`, `project.scan.read`, `environment.read`, `environment.job.read`, `environment.log.read`, `workspace.read`, `workspace.job.read`, `workspace.log.read`, `repository.read`, `repository.job.read`, `repository.log.read` |
 | `viewer` | `system.runtime.read`, `project.read`, `environment.read`, `workspace.read`, `repository.read` |
 
-### Объектные роли
+### Object Roles
 
-Permissions объектных ролей применяются только внутри scope, к которому привязан role binding. Например, `maintainer` на `repository:<id>` выдаёт перечисленные repository permissions только для этого репозитория.
+Object-role permissions apply only within the scope to which the role binding is attached. For example, `maintainer` on `repository:<id>` grants the listed repository permissions only for that repository.
 
 | Scope | `owner` | `maintainer` | `editor` | `viewer` |
 | --- | --- | --- | --- | --- |
@@ -200,16 +200,16 @@ repository.webhook.write
 repository.polling.write
 ```
 
-## Минимальные правила авторизации API
+## Minimum API Authorization Rules
 
-- чтение требует `viewer` и выше в системном или объектном scope;
-- изменение требует `editor` и выше либо соответствующий system permission;
-- hard delete требует `owner` или `system_admin` only after a future endpoint explicitly implements delete semantics;
-- управление role bindings требует `security_admin`, `system_admin` или `owner` в объектном scope;
-- runtime-операции требуют `platform_operator` или `system_admin`;
-- `SCIM`-операции требуют `security_admin` или `system_admin`.
-- `system.runtime.read` разрешает читать runtime summary и списочные metadata, но не должен автоматически раскрывать все object-scoped детали без соответствующего object permission или отдельного системного read permission.
-- Confirmed MVP behavior: `GET /api/health` доступен без аутентификации только как safe readiness/discovery endpoint и не раскрывает config, filesystem paths, DSN, users, secrets или object-scoped details.
+- reads require `viewer` or higher in a system or object scope;
+- changes require `editor` or higher, or the corresponding system permission;
+- hard delete requires `owner` or `system_admin` only after a future endpoint explicitly implements delete semantics;
+- role binding management requires `security_admin`, `system_admin` or `owner` in the object scope;
+- runtime operations require `platform_operator` or `system_admin`;
+- `SCIM` operations require `security_admin` or `system_admin`.
+- `system.runtime.read` allows reading runtime summaries and list metadata, but must not automatically expose all object-scoped details without the corresponding object permission or a separate system read permission.
+- Confirmed MVP behavior: `GET /api/health` is available without authentication only as a safe readiness/discovery endpoint and does not expose config, filesystem paths, DSNs, users, secrets or object-scoped details.
 - Confirmed MVP behavior: public `DELETE` endpoints are out of scope; seeded `*.delete` permissions are reserved for future lifecycle endpoints.
 - Confirmed MVP lifecycle behavior: disable/deactivate/mark-missing/supersede operations are write operations controlled by the corresponding `*.write`, runtime or specialized operation permissions, not by reserved `*.delete` permissions.
 
@@ -306,18 +306,18 @@ Examples:
 | `POST /api/auth/scim/sync` | `auth.scim.write` |
 | `GET /api/audit` | `system.audit.read` |
 
-## SQL-ориентированные инварианты
+## SQL-Oriented Invariants
 
-Для SQL-реализации должны соблюдаться ограничения:
+SQL implementations must enforce these constraints:
 
-- `subject_type` принимает только `user` или `group`;
-- `scope_type` принимает только `system`, `project`, `environment`, `workspace`, `repository`;
-- для `system` scope `scope_id = NULL`;
-- для объектных scope `scope_id` обязателен;
-- `scim_identities` ссылается либо на `user_id`, либо на `group_id`.
+- `subject_type` accepts only `user` or `group`;
+- `scope_type` accepts only `system`, `project`, `environment`, `workspace`, `repository`;
+- for the `system` scope, `scope_id = NULL`;
+- for object scopes, `scope_id` is required;
+- `scim_identities` references either `user_id` or `group_id`.
 
-Рекомендации:
+Recommendations:
 
-- в `PostgreSQL` использовать `CHECK CONSTRAINT`;
-- в `MySQL`, `MSSQL` и `SQLite` дублировать критичную валидацию на уровне приложения, если конкретный constraint нельзя надёжно выразить средствами dialect;
-- effective permissions кэшировать после объединения системных и объектных bindings.
+- use `CHECK CONSTRAINT` in `PostgreSQL`;
+- in `MySQL`, `MSSQL` and `SQLite`, duplicate critical validation at the application level if a specific constraint cannot be expressed reliably by the dialect;
+- cache effective permissions after merging system and object bindings.

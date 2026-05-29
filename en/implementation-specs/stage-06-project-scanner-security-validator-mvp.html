@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-06b-project-scanner-and-security-validator-mvp">Stage 06B: Project Scanner and Security Validator MVP</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -54,32 +54,32 @@
 <a class="toc-level-2" href="#stage-local-blockers">Stage-local blockers</a>
 <a class="toc-level-2" href="#deferred-platform-decisions">Deferred / platform decisions</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-06b-project-scanner-and-security-validator-mvp">Stage 06B: Project Scanner and Security Validator MVP</h1>
-<h2 id="цель">Цель</h2>
-<p>Реализовать локальный анализ Terraform-проектов и security/validation checks как orchestration layer над локальными CLI-инструментами, используя только Stage 06A tool profile runtime.</p>
+<h2 id="goal">Goal</h2>
+<p>Implement local Terraform project analysis and security/validation checks as an orchestration layer over local CLI tools, using only the Stage 06A tool profile runtime.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../requirements.html"><code>docs/requirements.md</code></a></li>
-<li><a href="../architecture.html"><code>docs/architecture.md</code></a></li>
-<li><a href="../api.html"><code>docs/api.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
-<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="../adr/0006-project-scan-workflow-and-status-aggregation.html"><code>docs/adr/0006-project-scan-workflow-and-status-aggregation.md</code></a></li>
-<li><a href="../adr/0017-security-finding-fingerprint.html"><code>docs/adr/0017-security-finding-fingerprint.md</code></a></li>
-<li><a href="../adr/0018-external-toolchain-profiles.html"><code>docs/adr/0018-external-toolchain-profiles.md</code></a></li>
-<li><a href="stage-06a-toolchain-profiles-foundation.html"><code>docs/implementation-specs/stage-06a-toolchain-profiles-foundation.md</code></a></li>
+<li><a href="../requirements.html"><code>docs/en/requirements.md</code></a></li>
+<li><a href="../architecture.html"><code>docs/en/architecture.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="../adr/0006-project-scan-workflow-and-status-aggregation.html"><code>docs/en/adr/0006-project-scan-workflow-and-status-aggregation.md</code></a></li>
+<li><a href="../adr/0017-security-finding-fingerprint.html"><code>docs/en/adr/0017-security-finding-fingerprint.md</code></a></li>
+<li><a href="../adr/0018-external-toolchain-profiles.html"><code>docs/en/adr/0018-external-toolchain-profiles.md</code></a></li>
+<li><a href="stage-06a-toolchain-profiles-foundation.html"><code>docs/en/implementation-specs/stage-06a-toolchain-profiles-foundation.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
-<li>модуль <code>project-scanner</code>;</li>
-<li>модуль <code>security-validator</code>;</li>
+<li><code>project-scanner</code> module;</li>
+<li><code>security-validator</code> module;</li>
 <li><code>project_scan_settings</code>;</li>
 <li><code>project_security_scan_settings</code>;</li>
 <li><code>project_scans</code>;</li>
@@ -87,45 +87,45 @@
 <li><code>security_findings</code>;</li>
 <li>parent-child workflow <code>project_scan</code> -&gt; <code>security_validation_scan</code>;</li>
 <li><code>terraform validate</code>, <code>TFLint</code>;</li>
-<li><code>Trivy</code> как обязательный MVP security scanner;</li>
+<li><code>Trivy</code> as the mandatory MVP security scanner;</li>
 <li>integration with Stage 06A profile-based compatibility layer for external CLI tools;</li>
-<li>adapter extension points для <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> и <code>Conftest</code>;</li>
-<li>scoped и global findings API.</li>
+<li>adapter extension points for <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code>;</li>
+<li>scoped and global findings API.</li>
 </ul>
 <h2 id="non-goals">Non-goals</h2>
 <ul>
-<li>administrative UI для rule sets;</li>
+<li>administrative UI for rule sets;</li>
 <li>external findings transfer;</li>
-<li>отдельная сущность/API <code>security_scans</code>;</li>
+<li>separate <code>security_scans</code> entity/API;</li>
 <li>distributed scanner execution.</li>
-<li>обязательная MVP-приёмка для всех security tools сразу;</li>
-<li>bundled policy packs для OPA/Conftest.</li>
+<li>mandatory MVP acceptance for all security tools at once;</li>
+<li>bundled policy packs for OPA/Conftest.</li>
 </ul>
 <h2 id="deliverables">Deliverables</h2>
 <ul>
 <li>project scanner module;</li>
 <li>security validator module;</li>
 <li>scan settings API;</li>
-<li>finding storage и rule set registry;</li>
+<li>finding storage and rule set registry;</li>
 <li>normalized scan DTO mapping from tool profiles;</li>
 <li>local toolchain test harness;</li>
 <li>aggregate status integration.</li>
 </ul>
 <h2 id="definition-of-done">Definition of Done</h2>
 <ul>
-<li><code>POST /api/project-scans</code> создаёт <code>project_scans</code> и parent job;</li>
-<li>child <code>security_validation_scan</code> jobs используют тот же <code>job_group_id</code>;</li>
-<li>parent job не ждёт child jobs;</li>
-<li><code>status-monitor</code> обновляет aggregate <code>project_scans.status/result_payload</code>;</li>
-<li>security modules запускаются только если включены в project settings;</li>
-<li>обязательная MVP-приёмка требует успешной интеграции <code>Trivy</code>;</li>
+<li><code>POST /api/project-scans</code> creates <code>project_scans</code> and a parent job;</li>
+<li>child <code>security_validation_scan</code> jobs use the same <code>job_group_id</code>;</li>
+<li>parent job does not wait for child jobs;</li>
+<li><code>status-monitor</code> updates aggregate <code>project_scans.status/result_payload</code>;</li>
+<li>security modules run only if enabled in project settings;</li>
+<li>mandatory MVP acceptance requires successful <code>Trivy</code> integration;</li>
 <li>external tool output is parsed only through approved tool profiles from ADR 0018;</li>
 <li>certified tool versions and profiles from Stage 06A are used for Stage 06B acceptance tests;</li>
 <li>unsupported, missing or uncertified tools return controlled machine-readable errors according to configured version policy;</li>
 <li>findings use ADR 0017 fingerprints and repeated scans update existing finding rows by fingerprint;</li>
 <li><code>security_findings.fingerprint</code> is unique and <code>first_seen_at</code>/<code>last_seen_at</code> are maintained;</li>
-<li>payload/result не содержит raw Terraform source или secrets;</li>
-<li>network-restricted scan не делает outbound calls.</li>
+<li>payload/result does not contain raw Terraform source or secrets;</li>
+<li>network-restricted scan does not make outbound calls.</li>
 </ul>
 <h2 id="stage-local-blockers">Stage-local blockers</h2>
 <ul>
@@ -134,7 +134,7 @@
 <h2 id="deferred-platform-decisions">Deferred / platform decisions</h2>
 <ul>
 <li>baseline bundled rule sets;</li>
-<li>policy pack format для OPA/Conftest.</li>
+<li>policy pack format for OPA/Conftest.</li>
 </ul>
 <h2 id="traceability">Traceability</h2>
 <ul>
@@ -144,12 +144,12 @@
 <li>Data model: <code>project_scans</code>, scan settings, <code>security_findings</code>, <code>security_rule_sets</code>, <code>tool_profiles</code>, jobs.</li>
 <li>ADR: <code>0006</code>, <code>0017</code>, <code>0018</code>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
-<li>смешение summary results и detailed findings;</li>
-<li>нестабильность external CLI output formats;</li>
-<li>автоматическая генерация профилей без явной валидации может изменить fingerprint semantics;</li>
-<li>рост времени выполнения без отдельной очереди security jobs.</li>
+<li>mixing summary results and detailed findings;</li>
+<li>unstable external CLI output formats;</li>
+<li>automatic profile generation without explicit validation can change fingerprint semantics;</li>
+<li>runtime growth without a separate security jobs queue.</li>
 </ul>
         </article>
 

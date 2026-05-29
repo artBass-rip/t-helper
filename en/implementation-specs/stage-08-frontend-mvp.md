@@ -1,17 +1,17 @@
 # Stage 08: Frontend MVP and Local GUI
 
-## Цель
+## Goal
 
-Поставить единый frontend-контур из `Web UI` и локального `GUI`, работающих поверх одного backend API и покрывающих MVP read/operate сценарии и full MVP administrative screens.
+Deliver a unified frontend surface consisting of `Web UI` and local `GUI`, both running on top of one backend API and covering MVP read/operate scenarios and full MVP administrative screens.
 
 ## Inputs
 
-- `docs/api.md`
-- `docs/access-control.md`
-- `docs/technology-stack.md`
-- `docs/frontend-ui-contract.md`
-- `docs/test-plan.md`
-- `docs/adr/0004-frontend-and-tauri-runtime-policy.md`
+- `docs/en/api.md`
+- `docs/en/access-control.md`
+- `docs/en/technology-stack.md`
+- `docs/en/frontend-ui-contract.md`
+- `docs/en/test-plan.md`
+- `docs/en/adr/0004-frontend-and-tauri-runtime-policy.md`
 
 ## Scope
 
@@ -19,11 +19,11 @@
 - local `GUI`;
 - shared React/TypeScript codebase;
 - Vite, TanStack Router, TanStack Query, Zod, React Hook Form, Ant Design;
-- screens и flows для MVP read/operate scenarios;
+- screens and flows for MVP read/operate scenarios;
 - full administrative UI screens for auth/RBAC/configuration/security rule sets in both `GUI` and `Web UI`;
-- login/logout/current session/password flows через documented runtime auth API;
+- login/logout/current session/password flows through the documented runtime auth API;
 - Tauri local runtime discovery/startup;
-- shared route tree, navigation model and operational density from `docs/frontend-ui-contract.md`;
+- shared route tree, navigation model and operational density from `docs/en/frontend-ui-contract.md`;
 - integration only with documented backend API.
 
 ## Non-goals
@@ -42,14 +42,14 @@
 - e2e and contract tests;
 - singleton runtime UI integration.
 - auth session UI and access-denied states.
-- route map/navigation/density implementation according to `docs/frontend-ui-contract.md`.
+- route map/navigation/density implementation according to `docs/en/frontend-ui-contract.md`.
 
 ## Definition of Done
 
 - frontend uses only documented API endpoints;
 - Web UI and GUI share one codebase;
-- Web UI and GUI use the same route tree from `docs/frontend-ui-contract.md` unless a route is explicitly marked local-only or unavailable by target backend API scope;
-- list-heavy operational screens follow compact, table-first density rules from `docs/frontend-ui-contract.md`;
+- Web UI and GUI use the same route tree from `docs/en/frontend-ui-contract.md` unless a route is explicitly marked local-only or unavailable by target backend API scope;
+- list-heavy operational screens follow compact, table-first density rules from `docs/en/frontend-ui-contract.md`;
 - GUI works only locally;
 - long-running operations display job/status/result;
 - clone workflow includes protocol selector near URL field;
@@ -76,10 +76,10 @@
 - Roadmap: Stage 08.
 - Acceptance: `ACC-MVP-011`, `ACC-MVP-012`, `ACC-MVP-015`, `ACC-MVP-021`, `ACC-PLATFORM-002`, `ACC-PLATFORM-003` where the corresponding backend APIs are part of the MVP release.
 - API: all MVP read/operate endpoints.
-- UI contract: `docs/frontend-ui-contract.md`.
+- UI contract: `docs/en/frontend-ui-contract.md`.
 - ADR: `0004`.
 
-## Риски
+## Risks
 
 - frontend compensates for backend contract gaps;
 - GUI and Web UI diverge;

@@ -277,7 +277,7 @@ Implemented baseline coverage:
 
 ### Frontend UI contract
 
-- Проверить, что `Web UI` и `GUI` используют route tree из `docs/frontend-ui-contract.md`.
+- Проверить, что `Web UI` и `GUI` используют route tree из `docs/ru/frontend-ui-contract.md`.
 - Проверить, что route, доступный в `Web UI`, доступен в `GUI` для того же release scope, unless explicitly marked local-only or unavailable by backend API scope.
 - Проверить, что frontend clients используют один typed API client and documented backend API only.
 - Проверить, что list-heavy screens are compact and table-first: projects, repositories, findings, jobs, modules, audit and auth administration lists.

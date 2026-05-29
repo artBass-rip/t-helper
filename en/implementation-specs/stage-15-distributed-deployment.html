@@ -45,7 +45,7 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-15-distributed-deployment">Stage 15: Distributed Deployment</a>
-<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#goal">Goal</a>
 <a class="toc-level-2" href="#inputs">Inputs</a>
 <a class="toc-level-2" href="#scope">Scope</a>
 <a class="toc-level-2" href="#non-goals">Non-goals</a>
@@ -55,41 +55,41 @@
 <a class="toc-level-2" href="#conditional-dependencies">Conditional dependencies</a>
 <a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
 <a class="toc-level-2" href="#traceability">Traceability</a>
-<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#risks">Risks</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="stage-15-distributed-deployment">Stage 15: Distributed Deployment</h1>
-<h2 id="цель">Цель</h2>
-<p>Подготовить систему к multi-node и HA deployment без ломки доменных контрактов и без расхождения с монолитным режимом.</p>
+<h2 id="goal">Goal</h2>
+<p>Prepare the system for multi-node and HA deployment without breaking domain contracts and without diverging from monolithic mode.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><a href="../architecture.html"><code>docs/architecture.md</code></a></li>
-<li><a href="../roadmap.html"><code>docs/roadmap.md</code></a></li>
-<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
-<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
-<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
-<li><a href="../access-control.html"><code>docs/access-control.md</code></a></li>
-<li><a href="stage-09-runtime-observability-hardening.html"><code>docs/implementation-specs/stage-09-runtime-observability-hardening.md</code></a></li>
+<li><a href="../architecture.html"><code>docs/en/architecture.md</code></a></li>
+<li><a href="../roadmap.html"><code>docs/en/roadmap.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../access-control.html"><code>docs/en/access-control.md</code></a></li>
+<li><a href="stage-09-runtime-observability-hardening.html"><code>docs/en/implementation-specs/stage-09-runtime-observability-hardening.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
-<li>вынос <code>global-scanner</code>;</li>
-<li>вынос <code>project-scanner</code>;</li>
-<li>вынос <code>repository-manager</code>;</li>
-<li>вынос <code>security-validator</code>;</li>
-<li>вынос <code>auth</code>;</li>
-<li>optional вынос <code>status-monitor</code>;</li>
-<li>межмодульные contracts;</li>
-<li>service discovery и health model;</li>
+<li>extracting <code>global-scanner</code>;</li>
+<li>extracting <code>project-scanner</code>;</li>
+<li>extracting <code>repository-manager</code>;</li>
+<li>extracting <code>security-validator</code>;</li>
+<li>extracting <code>auth</code>;</li>
+<li>optional extraction of <code>status-monitor</code>;</li>
+<li>inter-module contracts;</li>
+<li>service discovery and health model;</li>
 <li>worker groups, queues, locks ownership;</li>
 <li>HA topology.</li>
 </ul>
 <h2 id="non-goals">Non-goals</h2>
 <ul>
-<li>изменение MVP product scenarios;</li>
+<li>changing MVP product scenarios;</li>
 <li>distributed-only user API;</li>
 <li>second configuration source of truth;</li>
 <li>incompatible payload schema changes.</li>
@@ -133,9 +133,9 @@
 <ul>
 <li>Roadmap: Stage 15.</li>
 <li>Acceptance: <code>ACC-PLATFORM-005</code>.</li>
-<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/roadmap.md</code></a>.</li>
+<li>Platform criteria are defined in <a href="../roadmap.html"><code>docs/en/roadmap.md</code></a>.</li>
 </ul>
-<h2 id="риски">Риски</h2>
+<h2 id="risks">Risks</h2>
 <ul>
 <li>distributed extraction before runtime hardening multiplies runtime complexity;</li>
 <li>informal inter-module contracts diverge from monolith;</li>

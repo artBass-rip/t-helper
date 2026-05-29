@@ -68,20 +68,20 @@
 <p>Stage 00 is complete as a documentation and decision stage. It does not create executable product scaffolding, Go modules, CI workflows, database migrations or test harnesses. Those deliverables start in Stage 01.</p>
 <h2 id="canonical-inputs">Canonical Inputs</h2>
 <ul>
-<li><a href="requirements.html"><code>docs/requirements.md</code></a></li>
-<li><a href="architecture.html"><code>docs/architecture.md</code></a></li>
-<li><a href="roadmap.html"><code>docs/roadmap.md</code></a></li>
-<li><a href="traceability.html"><code>docs/traceability.md</code></a></li>
-<li><a href="test-plan.html"><code>docs/test-plan.md</code></a></li>
-<li><a href="configuration.html"><code>docs/configuration.md</code></a></li>
-<li><a href="development.html"><code>docs/development.md</code></a></li>
-<li><a href="local-dev-environment.html"><code>docs/local-dev-environment.md</code></a></li>
-<li><a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/implementation-specs/stage-00-delivery-contract.md</code></a></li>
-<li><code>docs/adr/</code></li>
+<li><a href="requirements.html"><code>docs/en/requirements.md</code></a></li>
+<li><a href="architecture.html"><code>docs/en/architecture.md</code></a></li>
+<li><a href="roadmap.html"><code>docs/en/roadmap.md</code></a></li>
+<li><a href="traceability.html"><code>docs/en/traceability.md</code></a></li>
+<li><a href="test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+<li><a href="configuration.html"><code>docs/en/configuration.md</code></a></li>
+<li><a href="development.html"><code>docs/en/development.md</code></a></li>
+<li><a href="local-dev-environment.html"><code>docs/en/local-dev-environment.md</code></a></li>
+<li><a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/en/implementation-specs/stage-00-delivery-contract.md</code></a></li>
+<li><code>docs/en/adr/</code></li>
 <li><code>config.example.json</code></li>
 </ul>
 <h2 id="accepted-delivery-decisions">Accepted Delivery Decisions</h2>
-<p>The canonical decision register is <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/implementation-specs/stage-00-delivery-contract.md</code></a>.</p>
+<p>The canonical decision register is <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/en/implementation-specs/stage-00-delivery-contract.md</code></a>.</p>
 <p>Stage 00 confirms these delivery rules for implementation:</p>
 <ul>
 <li>Stage 01 may start with no remaining MVP blockers.</li>
@@ -96,7 +96,7 @@
 <h2 id="definition-of-done">Definition of Done</h2>
 <p>Stage 00 is accepted when:</p>
 <ul>
-<li>every open decision in <a href="roadmap.html"><code>docs/roadmap.md</code></a> is classified as accepted, deferred, platform blocker, stage-local blocker or out of scope in the Stage 00 decision register;</li>
+<li>every open decision in <a href="roadmap.html"><code>docs/en/roadmap.md</code></a> is classified as accepted, deferred, platform blocker, stage-local blocker or out of scope in the Stage 00 decision register;</li>
 <li>all ADRs required before scaffolding are accepted;</li>
 <li>the Stage 01 repository layout and migration naming contract is fixed in ADR 0007;</li>
 <li>config key compatibility is fixed in ADR 0008;</li>
@@ -183,7 +183,7 @@
 <li><code>config.example.json</code> must parse as JSON;</li>
 <li>no legacy short repository relationship field contract should remain outside historical explanatory text;</li>
 <li>no external config alias should be introduced for <code>scanning.global_scan</code>;</li>
-<li>every ADR under <code>docs/adr/</code> must have <code>Status: Accepted</code>;</li>
+<li>every ADR under <code>docs/en/adr/</code> must have <code>Status: Accepted</code>;</li>
 <li>local environment files may exist, but product containers are not required until the relevant implementation stages create product code.</li>
 </ul>
         </article>
