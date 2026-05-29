@@ -186,6 +186,68 @@ func TestStage05CloneRejectsBusyTargetPathForDifferentRepository(t *testing.T) {
 	}
 }
 
+func TestStage05CloneRejectsBusyTargetPathAfterReservationExpiry(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	root := upsertHTTPRepositoryRoot(t, ctx, scannerStore)
+	firstBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/repo.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(firstBody)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first clone status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var first jobs.JobRef
+	if err := json.NewDecoder(rec.Body).Decode(&first); err != nil {
+		t.Fatalf("decode first job ref: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `UPDATE repository_operation_reservations SET expires_at = ? WHERE status = 'held'`, "2000-01-01T00:00:00Z"); err != nil {
+		t.Fatalf("expire reservations: %v", err)
+	}
+
+	secondBody, _ := json.Marshal(map[string]any{
+		"provider":         "github",
+		"protocol":         "https",
+		"clone_url":        "https://github.com/example/other.git",
+		"root_path_id":     root.ID,
+		"target_directory": "repo",
+	})
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/repos/clone", bytes.NewReader(secondBody)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("busy target after expiry status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode busy target after expiry error: %v", err)
+	}
+	if apiErr.Error.Code != "repository_target_path_busy" {
+		t.Fatalf("busy target after expiry code = %q", apiErr.Error.Code)
+	}
+	if apiErr.Error.Details["active_job_id"] != first.JobID {
+		t.Fatalf("busy target details = %+v, want active job %q", apiErr.Error.Details, first.JobID)
+	}
+}
+
 func TestStage05CloneConflictDoesNotCreateNewRootPath(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

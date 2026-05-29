@@ -392,6 +392,14 @@ func resolvePathWithExistingPrefix(path string) (string, error) {
 }
 
 func TargetReservationKey(rootPath, rootPathID, targetDirectory string) (string, error) {
+	keyTarget, err := TargetReservationPath(rootPath, targetDirectory)
+	if err != nil {
+		return "", err
+	}
+	return "repository-path:" + rootPathID + ":" + keyTarget, nil
+}
+
+func TargetReservationPath(rootPath, targetDirectory string) (string, error) {
 	normalizedTarget, _, err := NormalizeTarget(rootPath, targetDirectory)
 	if err != nil {
 		return "", err
@@ -400,7 +408,7 @@ func TargetReservationKey(rootPath, rootPathID, targetDirectory string) (string,
 	if filesystemCaseInsensitive(rootPath) {
 		keyTarget = strings.ToLower(keyTarget)
 	}
-	return "repository-path:" + rootPathID + ":" + keyTarget, nil
+	return keyTarget, nil
 }
 
 func containedTargetPath(root, slashTarget string) (string, error) {

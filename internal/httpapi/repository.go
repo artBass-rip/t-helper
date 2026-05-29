@@ -281,6 +281,17 @@ func (h *RepositoryHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		writeRepositoryError(w, r, err)
 		return
 	}
+	if active, err := h.activeCloneTargetPath(r, root, targetDirectory); err == nil {
+		writeErrorDetails(w, r, http.StatusConflict, "repository_target_path_busy", "repository clone conflict", map[string]any{
+			"lock_key":        pathReservationKey,
+			"active_job_id":   active.ID,
+			"active_job_type": active.JobType,
+		})
+		return
+	} else if !errors.Is(err, jobs.ErrNotFound) {
+		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
 	repo, repositoryCreated, err := h.store.UpsertRepositoryForClone(r.Context(), identity, root, targetDirectory, localPath, req.ProviderInstanceID, req.CredentialID)
 	if err != nil {
 		writeRepositoryError(w, r, err)
@@ -403,6 +414,43 @@ func (h *RepositoryHandler) activeReservationConflict(r *http.Request, owner str
 	}
 	_ = json.Unmarshal(active.Payload, &payload)
 	return active, payload.RepositoryID, nil
+}
+
+func (h *RepositoryHandler) activeCloneTargetPath(r *http.Request, root scanner.RootPath, targetDirectory string) (jobs.Job, error) {
+	targetKey, err := repository.TargetReservationPath(root.Path, targetDirectory)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	for _, status := range []string{jobs.StatusQueued, jobs.StatusRunning} {
+		cursor := ""
+		for {
+			page, err := h.jobStore.ListPage(r.Context(), jobs.ListFilters{JobType: "repo_clone", Status: status, Limit: 200, Cursor: cursor})
+			if err != nil {
+				return jobs.Job{}, err
+			}
+			for _, active := range page.Items {
+				var payload repository.RepoClonePayload
+				if err := json.Unmarshal(active.Payload, &payload); err != nil {
+					continue
+				}
+				if payload.RootPathID != root.ID {
+					continue
+				}
+				activeTargetKey, err := repository.TargetReservationPath(root.Path, payload.TargetDirectory)
+				if err != nil {
+					continue
+				}
+				if activeTargetKey == targetKey {
+					return active, nil
+				}
+			}
+			if page.NextCursor == "" {
+				break
+			}
+			cursor = page.NextCursor
+		}
+	}
+	return jobs.Job{}, jobs.ErrNotFound
 }
 
 func (h *RepositoryHandler) Pull(w http.ResponseWriter, r *http.Request) {

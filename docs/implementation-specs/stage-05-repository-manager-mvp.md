@@ -47,6 +47,10 @@ Closed Stage 05 gaps in the implementation:
 - `repository_provider_instances`, `repository_credentials` and
   `repository_operation_reservations` exist for provider profiles, credentials
   and clone pre-create identity/path reservations;
+- Stage 05 credential usages are executable for `git_transport`; `provider_api`
+  and `webhook` usages are persisted and validated as profile metadata for
+  Stage 05A/Stage 14 workflows, not invoked by Stage 05 single-repository
+  clone/pull/sync operations;
 - Stage 05 hardening migration adds repository/provider and
   repository/default credential FK parity plus credential lookup indexes across
   SQLite and Postgres;
@@ -239,6 +243,10 @@ lock keys, multiple held `job_locks`, transactional conflict rows or an
 equivalent repository-manager storage primitive. They must expire or be released
 safely when enqueue or execution fails so a failed clone request cannot
 permanently block later operations.
+If a repository-manager reservation expires while the owning `repo_clone` job is
+still queued or running, the API must still reject a second clone into the same
+normalized target path by inspecting active clone jobs before creating/updating a
+second repository card.
 
 Conflict errors from pre-create locking use machine-readable codes:
 
@@ -312,6 +320,7 @@ following checklist:
 | HTTP clone rejects credentials embedded in URLs and exact `Idempotency-Key` replay returns the existing `job_ref`. | `internal/httpapi/repository.go` clone normalization and `cloneIdempotentReplay`. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`. |
 | Active `repo_clone`, `repo_pull` and `repo_sync` conflict checks are cross-operation for `repository:<id>`. | `internal/jobs/store.go` `ActiveRepositoryOperation` and `EnqueueRepositoryOperation`; `jobs_active_repository_operation_lock_uidx`; repository operation enqueue paths. | `TestEnqueueRepositoryOperationRejectsActiveCrossOperationLock`, `TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes`, `TestStage05ConcurrentPullRequestsCreateSingleActiveRepositoryJob`, `TestStage05CloneConflictWithActivePullDoesNotMutateRepository`. |
 | Clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects. | `repository_operation_reservations`, `IdentityReservationKey`, `TargetReservationKey`, clone API reservation flow. | `TestStage05RepositoryCloneValidationCodeAndIdempotentReplay`, `TestStage05CloneRejectsBusyTargetPathForDifferentRepository`, `TestStage05CloneConflictDoesNotCreateNewRootPath`. |
+| Active clone jobs keep target paths busy even after a pre-create reservation expires before worker start. | `internal/httpapi/repository.go` active clone target-path lookup before repository upsert. | `TestStage05CloneRejectsBusyTargetPathAfterReservationExpiry`. |
 | Released/expired clone pre-create reservations can be explicitly cleaned after retention. | `internal/repository/store.go` `CleanupOperationReservations`; migration cleanup indexes. | `TestCleanupOperationReservationsPrunesWithoutNewReservation`, `TestReserveOperationKeysPrunesOldReleasedReservations`. |
 | Worker repeats target containment checks and rejects symlink escapes that appear after enqueue. | `internal/repository/handlers.go` `handleClone`; `internal/repository/domain.go` `NormalizeTarget`. | `TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue`, `TestNormalizeTargetRejectsSymlinkEscapeInExistingParent`. |
 | Existing empty target directories are accepted, non-empty non-Git directories are rejected, matching Git remotes degrade clone to pull, and mismatched remotes are rejected. | `internal/repository/handlers.go` clone worker filesystem and remote checks. | `TestOperationHandlerCloneUsesExistingEmptyTargetDirectory`, `TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError`, `TestOperationHandlerCloneExistingExpectedRemoteRunsPull`, `TestOperationHandlerCloneExistingDifferentRemoteRejects`. |
