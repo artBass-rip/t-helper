@@ -12,6 +12,10 @@ const outRoot =
     : docsRoot;
 
 const markdownFiles = [];
+let renderContext = {
+  currentDir: "",
+  docsByRel: new Map(),
+};
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -117,23 +121,90 @@ function markdownHrefToHtml(href) {
   return `${base.slice(0, -3)}.html${suffix}`;
 }
 
-function renderInline(value) {
-  const codeParts = [];
-  let text = escapeHtml(value).replace(/`([^`]+)`/g, (_, code) => {
-    const marker = `@@CODE${codeParts.length}@@`;
-    codeParts.push(`<code>${code}</code>`);
+function toPosix(value) {
+  return value.split(path.sep).join("/");
+}
+
+function normalizeDocRef(value, currentDir = "") {
+  const cleanValue = value.replace(/^["'`]+|["'`.,;:!?]+$/g, "");
+
+  if (!cleanValue.endsWith(".md")) {
+    return "";
+  }
+
+  if (cleanValue.startsWith("docs/")) {
+    return path.posix.normalize(cleanValue.slice("docs/".length));
+  }
+
+  if (cleanValue.startsWith("./") || cleanValue.startsWith("../")) {
+    return path.posix.normalize(path.posix.join(currentDir || ".", cleanValue));
+  }
+
+  if (renderContext.docsByRel.has(cleanValue)) {
+    return cleanValue;
+  }
+
+  const relativeCandidate = path.posix.normalize(path.posix.join(currentDir || ".", cleanValue));
+  if (renderContext.docsByRel.has(relativeCandidate)) {
+    return relativeCandidate;
+  }
+
+  return cleanValue;
+}
+
+function relativeHtmlHref(fromMdPath, toMdPath) {
+  const fromDir = path.posix.dirname(toPosix(fromMdPath));
+  const normalizedFromDir = fromDir === "." ? "" : fromDir;
+  const targetHtml = toPosix(toMdPath).replace(/\.md$/, ".html");
+  let href = path.posix.relative(normalizedFromDir || ".", targetHtml);
+
+  if (!href.startsWith(".") && !href.startsWith("/")) {
+    return href;
+  }
+
+  return href || path.posix.basename(targetHtml);
+}
+
+function docHrefFromCurrent(targetMdPath) {
+  return relativeHtmlHref(renderContext.currentMdPath || "", targetMdPath);
+}
+
+function renderInline(value, options = {}) {
+  const linkParts = [];
+  const linkPattern = /\[([^\]]+)]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let text = value.replace(linkPattern, (_, label, href) => {
+    const marker = `@@LINK${linkParts.length}@@`;
+    const { base, suffix } = splitLink(href);
+    const normalizedDoc = normalizeDocRef(base, renderContext.currentDir);
+    const safeHref = renderContext.docsByRel.has(normalizedDoc)
+      ? escapeHtml(`${docHrefFromCurrent(normalizedDoc)}${suffix}`)
+      : escapeHtml(markdownHrefToHtml(href));
+
+    linkParts.push(`<a href="${safeHref}">${renderInline(label, { suppressDocLinks: true })}</a>`);
     return marker;
   });
 
-  text = text.replace(/\[([^\]]+)]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_, label, href) => {
-    const safeHref = escapeHtml(markdownHrefToHtml(href));
-    return `<a href="${safeHref}">${renderInline(label)}</a>`;
+  const codeParts = [];
+  text = escapeHtml(text).replace(/`([^`]+)`/g, (_, code) => {
+    const marker = `@@CODE${codeParts.length}@@`;
+    const targetDoc = normalizeDocRef(code, renderContext.currentDir);
+
+    if (!options.suppressDocLinks && renderContext.docsByRel.has(targetDoc)) {
+      codeParts.push(`<a href="${escapeHtml(docHrefFromCurrent(targetDoc))}"><code>${code}</code></a>`);
+    } else {
+      codeParts.push(`<code>${code}</code>`);
+    }
+    return marker;
   });
+
   text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
 
   codeParts.forEach((part, index) => {
     text = text.replace(`@@CODE${index}@@`, part);
+  });
+  linkParts.forEach((part, index) => {
+    text = text.replace(`@@LINK${index}@@`, part);
   });
 
   return text;
@@ -342,7 +413,113 @@ function readableTitle(relativePath) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function docShell({ relativeMdPath, title, body, headings }) {
+function extractTitle(markdown, relativePath) {
+  const heading = markdown.match(/^#\s+(.+)$/m);
+
+  if (!heading) {
+    return readableTitle(relativePath);
+  }
+
+  return heading[1].replace(/\s+#+\s*$/, "").replace(/`([^`]+)`/g, "$1");
+}
+
+function docGroup(relativeMdPath) {
+  if (relativeMdPath.startsWith("adr/")) {
+    return "ADR";
+  }
+
+  if (relativeMdPath.startsWith("implementation-specs/")) {
+    return "Implementation Specs";
+  }
+
+  return "Core Docs";
+}
+
+function extractReferencedDocs(markdown, relativeMdPath, docsByRel) {
+  const currentDir = path.posix.dirname(toPosix(relativeMdPath));
+  const normalizedDir = currentDir === "." ? "" : currentDir;
+  const references = new Set();
+  const withoutCodeBlocks = markdown.replace(/```[\s\S]*?```/g, "");
+  const patterns = [
+    /\[[^\]]+]\(([^)\s]+\.md(?:#[^)]+)?)\)/g,
+    /`([^`]+\.md(?:#[^`]*)?)`/g,
+    /\b((?:docs\/)?(?:adr\/|implementation-specs\/)?[A-Za-z0-9][A-Za-z0-9._/-]*\.md(?:#[A-Za-z0-9._-]+)?)\b/g,
+  ];
+  const previousContext = renderContext;
+
+  renderContext = {
+    currentDir: normalizedDir,
+    currentMdPath: relativeMdPath,
+    docsByRel,
+  };
+
+  for (const pattern of patterns) {
+    let match = pattern.exec(withoutCodeBlocks);
+
+    while (match) {
+      const { base } = splitLink(match[1]);
+      const normalized = normalizeDocRef(base, normalizedDir);
+
+      if (docsByRel.has(normalized) && normalized !== relativeMdPath) {
+        references.add(normalized);
+      }
+
+      match = pattern.exec(withoutCodeBlocks);
+    }
+  }
+
+  renderContext = previousContext;
+
+  return [...references].sort();
+}
+
+function documentCatalog(currentMdPath, docs) {
+  const groups = ["Core Docs", "Implementation Specs", "ADR"];
+
+  return groups
+    .map((group) => {
+      const items = docs.filter((doc) => doc.group === group);
+
+      if (items.length === 0) {
+        return "";
+      }
+
+      return `<section class="doc-directory-group">
+          <h2>${group}</h2>
+          <div class="doc-directory-links">
+            ${items
+              .map((doc) => {
+                const current = doc.relativeMdPath === currentMdPath ? ' aria-current="page"' : "";
+                const href = escapeHtml(relativeHtmlHref(currentMdPath, doc.relativeMdPath));
+                return `<a href="${href}"${current}>${escapeHtml(doc.title)}</a>`;
+              })
+              .join("\n")}
+          </div>
+        </section>`;
+    })
+    .join("\n");
+}
+
+function relationLinks(title, docs, currentMdPath) {
+  if (docs.length === 0) {
+    return "";
+  }
+
+  return `<section>
+          <h2>${escapeHtml(title)}</h2>
+          <div class="doc-relation-links">
+            ${docs
+              .slice(0, 12)
+              .map((doc) => {
+                const href = escapeHtml(relativeHtmlHref(currentMdPath, doc.relativeMdPath));
+                return `<a href="${href}"><span>${escapeHtml(doc.group)}</span>${escapeHtml(doc.title)}</a>`;
+              })
+              .join("\n")}
+          </div>
+        </section>`;
+}
+
+function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, incomingDocs }) {
   const prefix = relativePrefix(relativeMdPath);
   const sourceHref = `https://github.com/artBass-rip/t-helper/blob/master/docs/${relativeMdPath
     .split(path.sep)
@@ -353,6 +530,13 @@ function docShell({ relativeMdPath, title, body, headings }) {
       (heading) =>
         `<a class="toc-level-${heading.level}" href="#${heading.id}">${renderInline(heading.text)}</a>`,
     )
+    .join("\n");
+  const catalog = documentCatalog(relativeMdPath, docs);
+  const relations = [
+    relationLinks("Связанные документы", outgoingDocs, relativeMdPath),
+    relationLinks("Ссылаются сюда", incomingDocs, relativeMdPath),
+  ]
+    .filter(Boolean)
     .join("\n");
 
   return `<!doctype html>
@@ -374,6 +558,8 @@ function docShell({ relativeMdPath, title, body, headings }) {
       </a>
       <nav class="nav-links" aria-label="Разделы документации">
         <a href="${prefix}index.html#docs">Документы</a>
+        <a href="${prefix}requirements.html">Requirements</a>
+        <a href="${prefix}architecture.html">Architecture</a>
         <a href="${prefix}roadmap.html">Roadmap</a>
         <a href="${prefix}api.html">API</a>
       </nav>
@@ -386,14 +572,36 @@ function docShell({ relativeMdPath, title, body, headings }) {
       <aside class="doc-aside" aria-label="Навигация по документу">
         <a class="doc-home" href="${prefix}index.html">T-Helper Docs</a>
         <span>${escapeHtml(relativeMdPath.split(path.sep).join("/"))}</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="${prefix}requirements.html">Requirements</a>
+          <a href="${prefix}architecture.html">Architecture</a>
+          <a href="${prefix}api.html">API</a>
+          <a href="${prefix}data-model.html">Data model</a>
+          <a href="${prefix}roadmap.html">Roadmap</a>
+          <a href="${prefix}traceability.html">Traceability</a>
+        </nav>
         <nav class="doc-toc">
           ${toc || '<a href="#main">Начало</a>'}
         </nav>
       </aside>
 
-      <article class="markdown-body">
-        ${body}
-      </article>
+      <div class="doc-content">
+        <article class="markdown-body">
+          ${body}
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          ${relations || '<section><h2>Навигация</h2><p>Этот документ входит в общий каталог T-Helper Docs.</p></section>'}
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          ${catalog}
+        </section>
+      </div>
     </main>
 
     <footer class="site-footer doc-footer">
@@ -448,17 +656,65 @@ if (outRoot !== docsRoot) {
 
 walk(docsRoot);
 
-for (const mdPath of markdownFiles) {
-  const relativeMdPath = path.relative(docsRoot, mdPath);
-  const relativeHtmlPath = relativeMdPath.replace(/\.md$/, ".html");
+const docs = markdownFiles
+  .map((mdPath) => {
+    const relativeMdPath = toPosix(path.relative(docsRoot, mdPath));
+    const markdown = fs.readFileSync(mdPath, "utf8");
+
+    return {
+      relativeMdPath,
+      title: extractTitle(markdown, relativeMdPath),
+      group: docGroup(relativeMdPath),
+      markdown,
+    };
+  })
+  .sort((left, right) => {
+    const groupOrder = {
+      "Core Docs": 1,
+      "Implementation Specs": 2,
+      ADR: 3,
+    };
+
+    if (groupOrder[left.group] !== groupOrder[right.group]) {
+      return groupOrder[left.group] - groupOrder[right.group];
+    }
+
+    return left.relativeMdPath.localeCompare(right.relativeMdPath);
+  });
+const docsByRel = new Map(docs.map((doc) => [doc.relativeMdPath, doc]));
+
+renderContext.docsByRel = docsByRel;
+
+for (const doc of docs) {
+  doc.references = extractReferencedDocs(doc.markdown, doc.relativeMdPath, docsByRel);
+}
+
+for (const doc of docs) {
+  doc.referencedBy = docs
+    .filter((candidate) => candidate.references.includes(doc.relativeMdPath))
+    .map((candidate) => candidate.relativeMdPath);
+}
+
+for (const doc of docs) {
+  const relativeHtmlPath = doc.relativeMdPath.replace(/\.md$/, ".html");
   const targetPath = path.join(outRoot, relativeHtmlPath);
-  const markdown = fs.readFileSync(mdPath, "utf8");
-  const rendered = renderMarkdown(markdown);
+  const currentDir = path.posix.dirname(doc.relativeMdPath);
+
+  renderContext = {
+    currentDir: currentDir === "." ? "" : currentDir,
+    currentMdPath: doc.relativeMdPath,
+    docsByRel,
+  };
+
+  const rendered = renderMarkdown(doc.markdown);
   const html = docShell({
-    relativeMdPath,
-    title: rendered.title || readableTitle(relativeMdPath),
+    relativeMdPath: doc.relativeMdPath,
+    title: rendered.title || doc.title,
     body: rendered.body,
     headings: rendered.headings,
+    docs,
+    outgoingDocs: doc.references.map((reference) => docsByRel.get(reference)).filter(Boolean),
+    incomingDocs: doc.referencedBy.map((reference) => docsByRel.get(reference)).filter(Boolean),
   });
 
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });

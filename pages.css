@@ -513,6 +513,7 @@ code {
   transform: translateY(-3px);
 }
 
+.doc-links a:nth-child(4n),
 .doc-links a:last-child {
   border-right: 0;
 }
@@ -541,6 +542,8 @@ code {
   font-weight: 760;
 }
 
+<<<<<<< Updated upstream
+=======
 .doc-page {
   background: var(--surface);
 }
@@ -566,9 +569,9 @@ code {
 
 .doc-shell {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 860px);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 920px);
   gap: clamp(32px, 6vw, 84px);
-  width: min(100%, 1260px);
+  width: min(100%, 1340px);
   margin: 0 auto;
   padding: 54px clamp(18px, 5vw, 72px) 88px;
 }
@@ -593,10 +596,35 @@ code {
   font-weight: 780;
 }
 
+.doc-global-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 22px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.doc-global-links a {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.doc-global-links a:hover {
+  color: var(--accent-dark);
+  transform: translateX(3px);
+}
+
 .doc-toc {
   display: grid;
   gap: 8px;
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 .doc-toc a {
@@ -614,6 +642,10 @@ code {
 
 .doc-toc .toc-level-3 {
   padding-left: 14px;
+}
+
+.doc-content {
+  min-width: 0;
 }
 
 .markdown-body {
@@ -675,6 +707,10 @@ code {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+
+.markdown-body a code {
+  color: var(--accent-dark);
 }
 
 .markdown-body ul,
@@ -740,6 +776,111 @@ code {
   background: var(--paper);
 }
 
+.doc-relations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 34px;
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.doc-relations h2,
+.doc-directory-heading h2,
+.doc-directory-group h2 {
+  margin: 0;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.doc-relations h2 {
+  font-size: 22px;
+}
+
+.doc-relation-links {
+  display: grid;
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--line);
+}
+
+.doc-relation-links a {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.doc-relation-links a:hover {
+  background: var(--paper);
+  color: var(--accent-dark);
+  transform: translateX(3px);
+}
+
+.doc-relation-links span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.doc-directory {
+  margin-top: 72px;
+  padding-top: 34px;
+  border-top: 1px solid var(--line);
+}
+
+.doc-directory-heading {
+  margin-bottom: 28px;
+}
+
+.doc-directory-heading h2 {
+  font-size: clamp(30px, 4vw, 44px);
+}
+
+.doc-directory-group {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.32fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+}
+
+.doc-directory-group h2 {
+  color: var(--muted);
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.doc-directory-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+}
+
+.doc-directory-links a {
+  color: var(--ink);
+  line-height: 1.24;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.doc-directory-links a:hover,
+.doc-directory-links a[aria-current="page"] {
+  color: var(--accent-dark);
+}
+
+.doc-directory-links a:hover {
+  transform: translateX(3px);
+}
+
+>>>>>>> Stashed changes
 [data-reveal] {
   opacity: 0;
   transform: translateY(24px);
@@ -765,7 +906,7 @@ code {
 }
 
 @media (max-width: 960px) {
-  .site-header:not(.doc-header) {
+  .site-header {
     position: absolute;
     mix-blend-mode: normal;
   }
@@ -801,6 +942,8 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+<<<<<<< Updated upstream
+=======
   .doc-shell {
     grid-template-columns: 1fr;
     padding-top: 36px;
@@ -818,6 +961,12 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .doc-relations,
+  .doc-directory-group {
+    grid-template-columns: 1fr;
+  }
+
+>>>>>>> Stashed changes
   .status-rail article:nth-child(2n),
   .doc-links a:nth-child(2n) {
     border-right: 0;
@@ -867,6 +1016,8 @@ code {
     grid-template-columns: 1fr;
   }
 
+<<<<<<< Updated upstream
+=======
   .doc-header {
     gap: 14px;
   }
@@ -883,6 +1034,13 @@ code {
     font-size: 16px;
   }
 
+  .doc-global-links,
+  .doc-relations,
+  .doc-directory-links {
+    grid-template-columns: 1fr;
+  }
+
+>>>>>>> Stashed changes
   .status-rail article,
   .doc-links a {
     min-height: auto;

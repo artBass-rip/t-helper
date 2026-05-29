@@ -83,11 +83,11 @@
       <section class="section status-section" id="status" aria-labelledby="status-title">
         <div class="section-heading" data-reveal>
           <p class="eyebrow">Текущий baseline</p>
-          <h2 id="status-title">Stage 05: repository manager MVP</h2>
+          <h2 id="status-title">Stage 04: scanner и registry MVP</h2>
           <p>
             Реализована backend foundation: entrypoints, storage adapters,
             migrations, runtime config, module lifecycle, jobs/workers/status,
-            global scanning, scanner/registry HTTP API и repository operations.
+            global scanning и scanner/registry HTTP API.
           </p>
         </div>
 
@@ -153,7 +153,7 @@
         <ol class="roadmap" data-reveal>
           <li>
             <span>Stage 05</span>
-            Завершённый baseline: clone, pull, sync, credentials и path safety.
+            Repository manager MVP: clone, pull, sync, credentials и path safety.
           </li>
           <li>
             <span>Stage 06</span>
@@ -188,14 +188,57 @@
             <span>Configuration</span>
             <code>config.json</code>, <code>.t-helper.ignore</code>, reloadability и validation.
           </a>
+          <a href="architecture.html">
+            <span>Architecture</span>
+            Модули, runtime flow, storage strategy и deployment modes.
+          </a>
+          <a href="interfaces.html">
+            <span>Interfaces</span>
+            CLI, backend API, configuration и frontend contracts.
+          </a>
+          <a href="data-model.html">
+            <span>Data model</span>
+            Persistent entities, migrations, indexes и invariants.
+          </a>
+          <a href="payload-schemas.html">
+            <span>Payload schemas</span>
+            Версионируемые JSON schemas для jobs и module state.
+          </a>
           <a href="development.html">
             <span>Development</span>
             Локальная разработка и тестовый контракт.
+          </a>
+<<<<<<< Updated upstream
+=======
+          <a href="access-control.html">
+            <span>Access control</span>
+            Auth, SCIM, RBAC, permissions и audit scope.
+          </a>
+          <a href="roadmap.html">
+            <span>Roadmap</span>
+            Stages, acceptance criteria и delivery decisions.
+          </a>
+          <a href="test-plan.html">
+            <span>Test plan</span>
+            Coverage map для API, storage, runtime и UI contracts.
+          </a>
+          <a href="traceability.html">
+            <span>Traceability</span>
+            Связи требований с API, моделью данных, permissions и tests.
+          </a>
+          <a href="implementation-specs/README.html">
+            <span>Implementation specs</span>
+            Stage-by-stage delivery contracts и DoD.
+          </a>
+          <a href="adr/0001-go-backend-http-stack.html">
+            <span>ADR</span>
+            Архитектурные решения по backend, storage, jobs и runtime.
           </a>
           <a href="code-optimization.html">
             <span>Optimization</span>
             Выполненные оптимизации, quality gate и дальнейший backlog.
           </a>
+>>>>>>> Stashed changes
         </div>
       </section>
     </main>

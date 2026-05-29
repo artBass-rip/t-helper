@@ -83,12 +83,11 @@
       <section class="section status-section" id="status" aria-labelledby="status-title">
         <div class="section-heading" data-reveal>
           <p class="eyebrow">Current baseline</p>
-          <h2 id="status-title">Stage 05: repository manager MVP</h2>
+          <h2 id="status-title">Stage 04: scanner and registry MVP</h2>
           <p>
             The backend foundation is implemented: service entrypoints, storage
             adapters, migrations, runtime config, module lifecycle,
-            jobs/workers/status, global scanning, scanner/registry HTTP API and
-            repository operations.
+            jobs/workers/status, global scanning and scanner/registry HTTP API.
           </p>
         </div>
 
@@ -155,7 +154,7 @@
         <ol class="roadmap" data-reveal>
           <li>
             <span>Stage 05</span>
-            Completed baseline: clone, pull, sync, credentials and path safety.
+            Repository manager MVP: clone, pull, sync, credentials and path safety.
           </li>
           <li>
             <span>Stage 06</span>
@@ -190,14 +189,57 @@
             <span>Configuration</span>
             <code>config.json</code>, <code>.t-helper.ignore</code>, reloadability and validation.
           </a>
+          <a href="architecture.html">
+            <span>Architecture</span>
+            Modules, runtime flow, storage strategy and deployment modes.
+          </a>
+          <a href="interfaces.html">
+            <span>Interfaces</span>
+            CLI, backend API, configuration and frontend contracts.
+          </a>
+          <a href="data-model.html">
+            <span>Data model</span>
+            Persistent entities, migrations, indexes and invariants.
+          </a>
+          <a href="payload-schemas.html">
+            <span>Payload schemas</span>
+            Versioned JSON schemas for jobs and module state.
+          </a>
           <a href="development.html">
             <span>Development</span>
             Local development and test contract.
+          </a>
+<<<<<<< Updated upstream
+=======
+          <a href="access-control.html">
+            <span>Access control</span>
+            Auth, SCIM, RBAC, permissions and audit scope.
+          </a>
+          <a href="roadmap.html">
+            <span>Roadmap</span>
+            Stages, acceptance criteria and delivery decisions.
+          </a>
+          <a href="test-plan.html">
+            <span>Test plan</span>
+            Coverage map for API, storage, runtime and UI contracts.
+          </a>
+          <a href="traceability.html">
+            <span>Traceability</span>
+            Requirement links to API, data model, permissions and tests.
+          </a>
+          <a href="implementation-specs/README.html">
+            <span>Implementation specs</span>
+            Stage-by-stage delivery contracts and DoD.
+          </a>
+          <a href="adr/0001-go-backend-http-stack.html">
+            <span>ADR</span>
+            Architecture decisions for backend, storage, jobs and runtime.
           </a>
           <a href="code-optimization.html">
             <span>Optimization</span>
             Completed optimizations, quality gate and remaining backlog.
           </a>
+>>>>>>> Stashed changes
         </div>
       </section>
     </main>

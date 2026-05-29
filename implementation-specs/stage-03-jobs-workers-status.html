@@ -17,6 +17,8 @@
       </a>
       <nav class="nav-links" aria-label="Разделы документации">
         <a href="../index.html#docs">Документы</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
         <a href="../roadmap.html">Roadmap</a>
         <a href="../api.html">API</a>
       </nav>
@@ -29,6 +31,14 @@
       <aside class="doc-aside" aria-label="Навигация по документу">
         <a class="doc-home" href="../index.html">T-Helper Docs</a>
         <span>implementation-specs/stage-03-jobs-workers-status.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#stage-03-jobs-workers-and-status-foundation">Stage 03: Jobs, Workers and Status Foundation</a>
 <a class="toc-level-2" href="#цель">Цель</a>
@@ -48,20 +58,21 @@
         </nav>
       </aside>
 
-      <article class="markdown-body">
-        <h1 id="stage-03-jobs-workers-and-status-foundation">Stage 03: Jobs, Workers and Status Foundation</h1>
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="stage-03-jobs-workers-and-status-foundation">Stage 03: Jobs, Workers and Status Foundation</h1>
 <h2 id="цель">Цель</h2>
 <p>Реализовать persistent jobs framework, worker execution model, leases, locks и базовый status-monitor.</p>
 <h2 id="inputs">Inputs</h2>
 <ul>
-<li><code>docs/adr/0003-job-worker-processes.md</code></li>
-<li><code>docs/adr/0005-job-leasing-and-worker-coordination.md</code></li>
-<li><code>docs/adr/0006-project-scan-workflow-and-status-aggregation.md</code></li>
-<li><code>docs/adr/0011-worker-defaults.md</code></li>
-<li><code>docs/data-model.md</code></li>
-<li><code>docs/payload-schemas.md</code></li>
-<li><code>docs/api.md</code></li>
-<li><code>docs/test-plan.md</code></li>
+<li><a href="../adr/0003-job-worker-processes.html"><code>docs/adr/0003-job-worker-processes.md</code></a></li>
+<li><a href="../adr/0005-job-leasing-and-worker-coordination.html"><code>docs/adr/0005-job-leasing-and-worker-coordination.md</code></a></li>
+<li><a href="../adr/0006-project-scan-workflow-and-status-aggregation.html"><code>docs/adr/0006-project-scan-workflow-and-status-aggregation.md</code></a></li>
+<li><a href="../adr/0011-worker-defaults.html"><code>docs/adr/0011-worker-defaults.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a></li>
+<li><a href="../api.html"><code>docs/api.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/test-plan.md</code></a></li>
 </ul>
 <h2 id="scope">Scope</h2>
 <ul>
@@ -80,16 +91,16 @@
 <ul>
 <li>Stage 03 does not change Stage 02 synchronous contracts for <code>POST /api/modules/reload</code> and <code>POST /api/modules/restart</code>.</li>
 <li>Stage 03 implements <code>jobs.config_reload</code> and <code>jobs.module_restart</code> worker handlers as framework validation handlers and for future workflow integration.</li>
-<li>Public write endpoints that are explicitly documented as background operations in <code>docs/api.md</code> create <code>jobs</code> in <code>queued</code> and return <code>202 job_ref</code>.</li>
+<li>Public write endpoints that are explicitly documented as background operations in <a href="../api.html"><code>docs/api.md</code></a> create <code>jobs</code> in <code>queued</code> and return <code>202 job_ref</code>.</li>
 <li>Existing Stage 02 synchronous lifecycle endpoints remain explicit exceptions until a later stage introduces async variants or a documented contract migration.</li>
 <li>Stage 03 does not change <code>thelper-ctl reload</code> and <code>thelper-ctl restart &lt;module&gt;</code> contracts. They remain synchronous Stage 02 lifecycle commands, return <code>config_reload.result.v1</code> / <code>module_restart.result.v1</code>, do not require a running worker and do not enqueue jobs.</li>
 <li>Any async CLI lifecycle behavior must be introduced later as an explicit command or flag and must return <code>job_ref</code> or provide a documented wait mode.</li>
-<li><code>GET /api/status</code>, <code>GET /api/status/jobs/{job_id}</code> and <code>GET /api/status/workers</code> use the <code>runtime_status.v1</code>, <code>job_status.v1</code> and <code>worker_status.v1</code> DTOs from <code>docs/api.md</code>.</li>
+<li><code>GET /api/status</code>, <code>GET /api/status/jobs/{job_id}</code> and <code>GET /api/status/workers</code> use the <code>runtime_status.v1</code>, <code>job_status.v1</code> and <code>worker_status.v1</code> DTOs from <a href="../api.html"><code>docs/api.md</code></a>.</li>
 <li>Stage 03 derives <code>worker_status.v1</code> from running jobs and their leases, aggregated by <code>worker_id</code>. Idle workers are not reported until a later worker heartbeat registry is introduced.</li>
 <li>For SQLite active profiles, Stage 03 enforces <code>worker_process_limit = 1</code> with a local worker process lock keyed by the active database fingerprint. The lock is separate from <code>job_locks</code>: it limits local SQLite worker process count, while <code>job_locks</code> serialize business resources.</li>
 <li><code>Idempotency-Key</code> uniqueness is scoped by operation owner, not global across all jobs. Stage 03 stores <code>idempotency_key</code> on <code>jobs</code> and enforces uniqueness on <code>(actor, job_type, idempotency_key)</code> for non-null keys. Empty actor is normalized to <code>system</code> at enqueue time.</li>
 <li><code>jobs.payload</code> is validated before persistence and rejected if it contains secret-like JSON keys, URL userinfo or unresolved <code>secretref://...</code> values.</li>
-<li><code>jobs.payload</code> is also validated against the minimum admitted job-type contract from <code>docs/payload-schemas.md</code> before persistence. This prevents a job type admitted by the physical schema from being queued with a valid <code>schema_version</code> but missing required routing/domain fields.</li>
+<li><code>jobs.payload</code> is also validated against the minimum admitted job-type contract from <a href="../payload-schemas.html"><code>docs/payload-schemas.md</code></a> before persistence. This prevents a job type admitted by the physical schema from being queued with a valid <code>schema_version</code> but missing required routing/domain fields.</li>
 </ul>
 <h2 id="worker-handler-contract">Worker handler contract</h2>
 <p>Worker runtime owns job lifecycle transitions, lease heartbeat, <code>job_locks</code> acquire/release, final status writes and base <code>job_events</code>. Handlers are domain executors: they receive an already claimed job, perform the domain operation and return a result payload or classified error.</p>
@@ -182,7 +193,7 @@
 </ul>
 <p><code>jobs</code> constraints:</p>
 <ul>
-<li><code>job_type</code> must be one of the values listed in <code>docs/data-model.md</code>;</li>
+<li><code>job_type</code> must be one of the values listed in <a href="../data-model.html"><code>docs/data-model.md</code></a>;</li>
 <li><code>status</code> must be one of <code>queued</code>, <code>running</code>, <code>succeeded</code>, <code>failed</code> or <code>cancelled</code>;</li>
 <li><code>attempt_count &gt;= 0</code>;</li>
 <li><code>max_attempts &gt; 0</code>;</li>
@@ -245,7 +256,7 @@
 </ul>
 <p><code>job_events</code> constraints and indexes:</p>
 <ul>
-<li><code>event_type</code> must include at least the baseline values from <code>docs/data-model.md</code>;</li>
+<li><code>event_type</code> must include at least the baseline values from <a href="../data-model.html"><code>docs/data-model.md</code></a>;</li>
 <li><code>payload</code> must be valid JSON when non-null;</li>
 <li><code>job_id</code> references <code>jobs(id)</code> with <code>ON DELETE RESTRICT</code>;</li>
 <li>index on <code>(job_group_id, created_at)</code>;</li>
@@ -265,7 +276,7 @@
 </ul>
 <p><code>workflow_statuses</code> constraints and indexes:</p>
 <ul>
-<li><code>workflow_type</code> must include at least the baseline values from <code>docs/data-model.md</code>;</li>
+<li><code>workflow_type</code> must include at least the baseline values from <a href="../data-model.html"><code>docs/data-model.md</code></a>;</li>
 <li><code>aggregate_status</code> must be one of <code>queued</code>, <code>running</code>, <code>succeeded</code>, <code>failed</code>, <code>partial</code> or <code>cancelled</code>;</li>
 <li><code>progress_current &gt;= 0</code>;</li>
 <li><code>progress_total &gt;= 0</code>;</li>
@@ -407,7 +418,107 @@
 <li>разные claim semantics в SQLite и PostgreSQL;</li>
 <li>UI начнёт агрегировать статус самостоятельно вместо <code>status-monitor</code>.</li>
 </ul>
-      </article>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Связанные документы</h2>
+          <div class="doc-relation-links">
+            <a href="../adr/0003-job-worker-processes.html"><span>ADR</span>ADR 0003: Job worker processes</a>
+<a href="../adr/0005-job-leasing-and-worker-coordination.html"><span>ADR</span>ADR 0005: Job leasing and worker coordination</a>
+<a href="../adr/0006-project-scan-workflow-and-status-aggregation.html"><span>ADR</span>ADR 0006: Project scan workflow and status aggregation</a>
+<a href="../adr/0011-worker-defaults.html"><span>ADR</span>ADR 0011: Worker defaults</a>
+<a href="../api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="../data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="../payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+<a href="../test-plan.html"><span>Core Docs</span>Test plan</a>
+          </div>
+        </section>
+<section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="README.html">Пакет ТЗ по stage внедрения</a>
+<a href="stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="stage-03-jobs-workers-status.html" aria-current="page">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="../adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="../adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="../adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="../adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="../adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="../adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="../adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="../adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="../adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="../adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="../adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="../adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="../adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="../adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="../adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="../adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="../adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="../adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="../adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
     </main>
 
     <footer class="site-footer doc-footer">
