@@ -444,7 +444,10 @@ func (s *Store) upsertCredential(ctx context.Context, input CredentialInput) (Cr
 	if err := validateSecretRef(input.SecretRef); err != nil {
 		return Credential{}, err
 	}
-	usages := normalizeUsages(input.Usages)
+	usages, err := normalizeUsages(input.Usages)
+	if err != nil {
+		return Credential{}, err
+	}
 	if len(usages) == 0 {
 		usages = []string{UsageGitTransport}
 	}
@@ -897,7 +900,7 @@ func repositoryColumns(provider string) string {
 	return `id, name, COALESCE(provider_instance_id, ''), provider, provider_host, full_path, COALESCE(clone_url, ''), COALESCE(default_branch, ''), COALESCE(root_path_id, ''), COALESCE(target_directory, ''), COALESCE(local_path, ''), COALESCE(auth_type, ''), COALESCE(default_credential_id, ''), status, discovery_source, COALESCE(superseded_by_repository_id, ''), COALESCE(identity_confirmed_at, ''), auto_sync_enabled, webhook_enabled, COALESCE(poll_interval, ''), COALESCE(last_pull_at, ''), COALESCE(last_error, ''), created_at, updated_at`
 }
 
-func normalizeUsages(values []string) []string {
+func normalizeUsages(values []string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	for _, value := range values {
@@ -906,12 +909,12 @@ func normalizeUsages(values []string) []string {
 			continue
 		}
 		if value != UsageGitTransport && value != UsageProviderAPI && value != UsageWebhook {
-			continue
+			return nil, validationError("credential_usage_not_allowed", "unsupported credential usage")
 		}
 		seen[value] = true
 		out = append(out, value)
 	}
-	return out
+	return out, nil
 }
 
 func validCredentialAuthType(value string) bool {

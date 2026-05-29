@@ -387,6 +387,52 @@ func TestStage05CredentialsAPIMasksSecretRefs(t *testing.T) {
 	}
 }
 
+func TestStage05CredentialsAPIRejectsUnknownUsage(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	repoStore := repositorydomain.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewRepositoryHandler(repoStore, scannerStore, jobStore),
+	)
+	instances, err := repoStore.UpsertProviderInstances(ctx, []repositorydomain.ProviderInstanceInput{{
+		Provider:     repositorydomain.ProviderGitHub,
+		ProviderHost: "github.com",
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"repository_credentials": []map[string]any{{
+			"provider_instance_id": instances[0].ID,
+			"name":                 "invalid-usage",
+			"auth_type":            repositorydomain.AuthTypeHTTPSToken,
+			"secret_ref":           "secretref://env/GITHUB_TOKEN",
+			"usages":               []string{"admin"},
+		}},
+	})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/repo-credentials", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("put credentials status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var apiErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if apiErr.Error.Code != "credential_usage_not_allowed" {
+		t.Fatalf("error code = %q", apiErr.Error.Code)
+	}
+}
+
 func TestStage05CloneRejectsCredentialProtocolMismatch(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)

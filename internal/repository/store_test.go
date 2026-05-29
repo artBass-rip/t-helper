@@ -482,6 +482,34 @@ func TestCredentialValidationRejectsProtocolMismatch(t *testing.T) {
 	}
 }
 
+func TestUpsertCredentialsRejectsUnknownUsage(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(openRepositorySQLite(t))
+	enabled := true
+	instances, err := store.UpsertProviderInstances(ctx, []ProviderInstanceInput{{
+		Provider:     ProviderGitHub,
+		ProviderHost: "github.com",
+		Enabled:      &enabled,
+	}})
+	if err != nil {
+		t.Fatalf("upsert provider instance: %v", err)
+	}
+	_, err = store.UpsertCredentials(ctx, []CredentialInput{{
+		ProviderInstanceID: instances[0].ID,
+		Name:               "invalid-usage",
+		AuthType:           AuthTypeHTTPSToken,
+		SecretRef:          "secretref://env/GITHUB_TOKEN",
+		Usages:             []string{"admin"},
+		Enabled:            &enabled,
+	}})
+	if err == nil {
+		t.Fatal("expected unsupported usage validation error")
+	}
+	if code := ValidationCode(err); code != "credential_usage_not_allowed" {
+		t.Fatalf("validation code = %q", code)
+	}
+}
+
 func TestUpsertRepositoryValidatesProviderInstanceIdentity(t *testing.T) {
 	ctx := context.Background()
 	handle := openRepositorySQLite(t)
