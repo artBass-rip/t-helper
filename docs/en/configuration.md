@@ -1,36 +1,37 @@
-# Конфигурация
+# Configuration
 
-## Источник истины
+## Source of Truth
 
-После первичного импорта source of truth для runtime-конфигурации - БД.
+After the initial import, the source of truth for runtime configuration is the database.
 
-Файлы используются только как вход для `thelper-ctl -reconfigure`:
+Files are used only as input for `thelper-ctl -reconfigure`:
 
 - `config.json`
 - `.t-helper.ignore`
 
-`config.example.json` поставляется как валидный референс для структуры `config.json`.
+`config.example.json` is shipped as a valid reference for the structure of `config.json`.
 
-`thelper` не должен читать эти файлы как runtime source of truth после успешного импорта.
+`thelper` must not read these files as the runtime source of truth after a successful import.
 
-Настройки storage backend являются особой частью конфигурации. `config.json` может
-использоваться для первичного чтения и для подготовки migration target, но runtime
-выбирает активную БД по записям в storage configuration table. В этой таблице
-хранятся минимум два profile slot:
+Storage backend settings are a special part of configuration. `config.json` may
+be used for initial reading and for preparing a migration target, but runtime
+selects the active database from records in the storage configuration table. This
+table stores at least two profile slots:
 
-- `current` - БД, которая используется активным runtime сейчас;
-- `migration` - БД, на которую может быть выполнена миграция через `thelper-ctl -migrate-db`.
+- `current` - the database currently used by the active runtime;
+- `migration` - the database that can be migrated to through `thelper-ctl -migrate-db`.
 
-`thelper-ctl -reconfigure` может обновлять runtime config и profile slot `migration`,
-но не переключает активную БД. Переключение с `current` на `migration` разрешено
-только после успешного `thelper-ctl -migrate-db`, который создаёт/обновляет схему,
-переносит данные, проверяет результат и актуализирует статусы profiles. Информация
-о старой БД сохраняется в storage configuration table; сама старая БД не удаляется
-автоматически и может быть использована администратором для ручного отката.
+`thelper-ctl -reconfigure` may update runtime config and profile slot `migration`,
+but it does not switch the active database. Switching from `current` to
+`migration` is allowed only after a successful `thelper-ctl -migrate-db`, which
+creates/updates the schema, migrates data, verifies the result and updates
+profile statuses. Information about the old database is kept in the storage
+configuration table; the old database itself is not deleted automatically and may
+be used by an administrator for manual rollback.
 
-## Пример `config.json`
+## Example `config.json`
 
-Комментарии в примерах допускаются только в документации. Файл, который читает `thelper-ctl -reconfigure`, должен быть валидным JSON без комментариев.
+Comments in examples are allowed only in documentation. The file read by `thelper-ctl -reconfigure` must be valid JSON without comments.
 
 ```json
 {
@@ -119,69 +120,69 @@
 }
 ```
 
-## Секции `config.json`
+## `config.json` Sections
 
 ### `system_settings`
 
-- `app_name` - имя приложения; для стандартной поставки `t-helper`;
-- `version` - версия схемы/поставки конфигурации;
-- `mode` - режим запуска, `server` или `local`.
+- `app_name` - application name; `t-helper` for the standard distribution;
+- `version` - configuration schema/distribution version;
+- `mode` - launch mode, `server` or `local`.
 
 ### `database`
 
-Описывает внутреннее хранилище, которое используется, когда `external_databases.enabled = false`.
+Describes the internal storage used when `external_databases.enabled = false`.
 
 - `database_type` - `sqlite`;
-- `database_path` - путь к каталогу или файлу внутреннего хранилища.
+- `database_path` - path to the internal storage directory or file.
 
 ### `external_databases`
 
-Описывает внешний storage target. Если `enabled = true`, все обязательные поля
-внешнего подключения должны быть заданы. В Stage 02 это создаёт или обновляет
-`migration` profile; runtime начинает использовать внешнюю БД только после
-успешного `thelper-ctl -migrate-db` и последующего запуска с promoted `current`
-profile.
+Describes the external storage target. If `enabled = true`, all required fields
+for the external connection must be set. In Stage 02 this creates or updates the
+`migration` profile; runtime starts using the external database only after a
+successful `thelper-ctl -migrate-db` and a subsequent start with the promoted
+`current` profile.
 
-- `enabled` - включает внешний storage backend;
-- `provider` - `postgresql`, `mysql` или `mssql`;
+- `enabled` - enables the external storage backend;
+- `provider` - `postgresql`, `mysql` or `mssql`;
 - `engine_flavor` - optional operational hint for compatible managed engines; supported values: `standard`, `aurora`;
-- `host` - IP-адрес или FQDN;
-- `port` - TCP-порт провайдера;
-- `username` - имя пользователя или закодированное представление секрета, если используется secret codec;
-- `password` - пароль или ссылка/закодированное представление секрета;
-- `database_name` - имя базы данных.
+- `host` - IP address or FQDN;
+- `port` - provider TCP port;
+- `username` - username or encoded secret representation when a secret codec is used;
+- `password` - password or secret reference/encoded representation;
+- `database_name` - database name.
 
-`provider = postgresql` покрывает PostgreSQL-compatible engines, включая Amazon Aurora PostgreSQL. `provider = mysql` покрывает MySQL-compatible engines, включая Amazon Aurora MySQL. Aurora не является отдельным provider/dialect: для неё используются `postgresql` или `mysql` migrations/adapters.
+`provider = postgresql` covers PostgreSQL-compatible engines, including Amazon Aurora PostgreSQL. `provider = mysql` covers MySQL-compatible engines, including Amazon Aurora MySQL. Aurora is not a separate provider/dialect: it uses `postgresql` or `mysql` migrations/adapters.
 
-`provider = mssql` предназначен для native Microsoft SQL Server-compatible engines. Babelfish for Aurora PostgreSQL не считается эквивалентом `mssql` adapter без отдельного compatibility decision.
+`provider = mssql` is intended for native Microsoft SQL Server-compatible engines. Babelfish for Aurora PostgreSQL is not considered equivalent to the `mssql` adapter without a separate compatibility decision.
 
-Все database providers реализуются как подключаемые storage adapter libraries. Unknown provider должен приводить к `validation_error` без частичного применения конфигурации.
+All database providers are implemented as pluggable storage adapter libraries. An unknown provider must produce `validation_error` without partially applying configuration.
 
-`database` и `external_databases` в файле импорта описывают initial `current`
-profile и optional `migration` profile. Для пустой установки с
-`external_databases.enabled = true` `database` остаётся initial `current`
-profile, а `external_databases` создаёт `migration` target. Они не являются
-reloadable runtime settings и не должны переключать активный storage backend
-без `thelper-ctl -migrate-db`.
+`database` and `external_databases` in the import file describe the initial
+`current` profile and optional `migration` profile. For an empty installation
+with `external_databases.enabled = true`, `database` remains the initial
+`current` profile, while `external_databases` creates the `migration` target.
+They are not reloadable runtime settings and must not switch the active storage
+backend without `thelper-ctl -migrate-db`.
 
 ### `workers`
 
-Описывает отдельные worker-процессы, выполняющие background jobs.
+Describes separate worker processes that execute background jobs.
 
-- `enabled` - включает обработку queued jobs через `thelper-worker`;
-- `concurrency` - максимальное число jobs, одновременно выполняемых одним worker process.
+- `enabled` - enables processing queued jobs through `thelper-worker`;
+- `concurrency` - maximum number of jobs executed concurrently by one worker process.
 
-`thelper` не должен выполнять long-running jobs inline. Он создаёт jobs и отдаёт их на выполнение отдельным `thelper-worker` процессам.
-Если `workers.enabled = false`, `thelper-worker` exits without claiming queued
+`thelper` must not execute long-running jobs inline. It creates jobs and hands them off to separate `thelper-worker` processes.
+If `workers.enabled = false`, `thelper-worker` exits without claiming queued
 jobs; existing jobs remain persisted for a later enabled worker or explicit
 operator action.
 
-Worker execution defaults are provider-specific. `workers.concurrency` в
-top-level config остаётся compatibility/default value для текущего active provider,
-но effective limits, busy timeout, lease defaults и concurrency policy должны
-храниться и применяться отдельно для каждого database provider/profile.
+Worker execution defaults are provider-specific. `workers.concurrency` in
+top-level config remains a compatibility/default value for the current active
+provider, but effective limits, busy timeout, lease defaults and concurrency
+policy must be stored and applied separately for each database provider/profile.
 
-Минимальные MVP defaults:
+Minimum MVP defaults:
 
 - `sqlite`: one active worker process, `concurrency = 1`, `journal_mode = WAL`, `foreign_keys = ON`, `busy_timeout = 5s`;
 - `postgresql`: multiple worker processes allowed, concurrency is installation-specific and can be increased after load testing.
@@ -191,46 +192,46 @@ under `.artifacts/runtime` by default. The lock is keyed by the active database
 fingerprint and is released on normal worker shutdown; stale locks left by dead
 processes are replaced.
 
-Изменение worker settings для одного provider/profile не должно менять settings
-другого provider/profile. Например, настройка PostgreSQL concurrency перед
-миграцией не должна менять SQLite local-mode concurrency.
+Changing worker settings for one provider/profile must not change settings for
+another provider/profile. For example, setting PostgreSQL concurrency before
+migration must not change SQLite local-mode concurrency.
 
 ### `scanning`
 
-Описывает глобальные настройки сканирования. Настройки project-level scan и security/validation scan хранятся относительно отдельного проекта и не должны задаваться глобальными default-параметрами в `config.json`.
+Describes global scanning settings. Project-level scan and security/validation scan settings are stored per project and must not be set as global default parameters in `config.json`.
 
-- `global_scan` - список корневых путей для глобального сканирования;
-- `global_scan[].root_path` - абсолютный корневой путь, который обходит `global-scanner`;
-- `global_scan[].schedule` - включает запуск по расписанию для конкретного пути;
-- `global_scan[].frequency` - `daily`, `weekly` или `monthly`;
-- `security_scan.modules` - список доступных security/validation модулей и policy engines, которые можно подключать в настройках отдельного проекта. MVP example включает только обязательный `trivy`; `gitleaks`, `checkov`, `opa` и `conftest` являются extension modules outside mandatory MVP acceptance.
-- `scanning.toolchain.version_policy` - политика допуска внешних CLI tool versions: `certified_only`, `compatible_range` или `latest_best_effort`;
-- `scanning.toolchain.profile_paths` - optional локальные directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.
+- `global_scan` - list of root paths for global scanning;
+- `global_scan[].root_path` - absolute root path traversed by `global-scanner`;
+- `global_scan[].schedule` - enables scheduled runs for a specific path;
+- `global_scan[].frequency` - `daily`, `weekly` or `monthly`;
+- `security_scan.modules` - list of available security/validation modules and policy engines that can be attached in individual project settings. The MVP example includes only the mandatory `trivy`; `gitleaks`, `checkov`, `opa` and `conftest` are extension modules outside mandatory MVP acceptance.
+- `scanning.toolchain.version_policy` - admission policy for external CLI tool versions: `certified_only`, `compatible_range` or `latest_best_effort`;
+- `scanning.toolchain.profile_paths` - optional local directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.
 
-`global_scan` является каноническим именем поля входной конфигурации. Внутри storage эти записи мапятся на сущность `root_paths`.
+`global_scan` is the canonical input configuration field name. Inside storage, these records are mapped to the `root_paths` entity.
 
-Для scan и clone используется один и тот же materialized список `root_paths`.
-При clone пользователь выбирает существующий root path, импортированный из
-`global_scan[].root_path` или созданный через API, либо создаёт новый root path.
-Если clone выполняется в новый root path, он сохраняется как новый `root_path`
-с `source = api`; `scanning.global_scan` как внешний config source не
-переписывается repository-manager'ом.
+Scan and clone use the same materialized list of `root_paths`.
+During clone, the user selects an existing root path imported from
+`global_scan[].root_path` or created through the API, or creates a new root path.
+If clone targets a new root path, it is saved as a new `root_path` with
+`source = api`; `scanning.global_scan` as the external config source is not
+rewritten by repository-manager.
 
 ### `repositories`
 
-Секция содержит default-параметры repository operations и не задаёт отдельный `repo_root`.
+This section contains default parameters for repository operations and does not define a separate `repo_root`.
 
-- `default_auth_type` - default transport/auth hint для clone/pull/sync, не credential source;
-- `poll_interval_default` - интервал polling sync по умолчанию;
-- `auto_sync_default` - auto sync по умолчанию для новых repository cards.
+- `default_auth_type` - default transport/auth hint for clone/pull/sync, not a credential source;
+- `poll_interval_default` - default polling sync interval;
+- `auto_sync_default` - default auto sync for new repository cards.
 
 Provider hosts and repository credentials are managed through `repository_provider_instances` and `repository_credentials`, not through `config.json`. Credential secret values must be referenced through `secretref://...` and are resolved by workers at use time.
 
 ### `modules`
 
-Секция содержит список зарегистрированных runtime-модулей, которые должны быть активны в текущей установке.
+This section contains the list of registered runtime modules that must be active in the current installation.
 
-Initial module registry создаётся seed step на foundation stages и содержит:
+The initial module registry is created by a seed step in foundation stages and contains:
 
 - `core`
 - `worker-runtime`
@@ -244,13 +245,13 @@ Initial module registry создаётся seed step на foundation stages и �
 - `auth`
 - `web`
 
-`modules.enabled` может ссылаться только на registered modules. Unknown module name должен приводить к `validation_error` без частичного применения конфигурации.
+`modules.enabled` may reference only registered modules. An unknown module name must produce `validation_error` without partially applying configuration.
 
-Модуль может быть зарегистрирован до полной реализации. В таком случае `GET /api/modules` возвращает его с состоянием `unavailable`, а `restart`/`reload` возвращает controlled error вместо `404` или panic.
+A module may be registered before full implementation. In that case, `GET /api/modules` returns it with state `unavailable`, and `restart`/`reload` returns a controlled error instead of `404` or panic.
 
 ## `.t-helper.ignore`
 
-Правила применяются относительно `root_path`.
+Rules are applied relative to `root_path`.
 
 ```gitignore
 .terraform/
@@ -259,123 +260,122 @@ Initial module registry создаётся seed step на foundation stages и �
 **/.cache/
 ```
 
-MVP matcher может быть exclude-only. Правила вида `!pattern` должны импортироваться и храниться без потери данных, но применяются только после реализации full `.gitignore` semantics.
+The MVP matcher may be exclude-only. Rules of the form `!pattern` must be imported and stored without data loss, but are applied only after full `.gitignore` semantics are implemented.
 
 ## Reloadability
 
-Reloadable без полного рестарта:
+Reloadable without a full restart:
 
-- `scanning.global_scan`, применяется к новым global scan jobs
-- `scanning.security_scan.modules`, применяется к новым project security/validation jobs
+- `scanning.global_scan`, applied to new global scan jobs
+- `scanning.security_scan.modules`, applied to new project security/validation jobs
 - `repositories.default_auth_type`
 - `repositories.poll_interval_default`
 - `repositories.auto_sync_default`
 - `security.active_rule_set_id`
 - `logging.level`
 - `logging.format`
-- `logging.log_path`, если backend логирования поддерживает reopen без restart
-- `modules.enabled`, если модуль поддерживает graceful start/stop
+- `logging.log_path`, if the logging backend supports reopen without restart
+- `modules.enabled`, if the module supports graceful start/stop
 
-Требуют restart отдельного модуля:
+Require restart of a specific module:
 
 - `api.listen_address`
 - `auth.local_enabled`
 - `workers.enabled`
 - `workers.concurrency`
-- параметры provider-specific auth adapters
+- provider-specific auth adapter parameters
 - `system_settings.mode`
 
-Не применяются через reload/restart:
+Not applied through reload/restart:
 
 - `database.database_type`
 - `database.database_path`
 - `external_databases.*`
 
-Эти keys обновляют только storage profile metadata для initial bootstrap или
-`migration` slot. Переключение active database выполняется только через
+These keys update only storage profile metadata for initial bootstrap or the
+`migration` slot. Active database switching is performed only through
 `thelper-ctl -migrate-db`.
 
-`thelper-ctl -reload` должен явно вернуть список принятых reloadable
-параметров, список фактически применённых в Stage 02 параметров и список
-параметров, требующих `thelper-ctl -restart <module>` или полного service
-restart. Reloadable key не должен попадать в `applied_keys`, если текущий
-runtime ещё не реализует его применение без restart.
-Explicit unknown reload keys возвращаются в `failed_keys` и не должны
-молчаливо считаться применёнными.
+`thelper-ctl -reload` must explicitly return the list of accepted reloadable
+parameters, the list of parameters actually applied in Stage 02 and the list of
+parameters requiring `thelper-ctl -restart <module>` or a full service restart.
+A reloadable key must not appear in `applied_keys` if the current runtime has
+not yet implemented its application without restart. Explicit unknown reload
+keys are returned in `failed_keys` and must not be silently treated as applied.
 
-## Валидация
+## Validation
 
-`thelper-ctl -reconfigure` и `PUT /api/config` используют строгий schema contract:
+`thelper-ctl -reconfigure` and `PUT /api/config` use a strict schema contract:
 
-- unknown top-level или nested keys должны возвращать `validation_error`;
-- malformed JSON, trailing payload после первого JSON object и `null` вместо
-  config object должны возвращать `validation_error`;
-- deprecated/legacy aliases не принимаются;
-- `scanning.global_scan` является единственным допустимым ключом для global scan roots;
-- `scanning.global_scann`, `globalScan`, `global_scan_roots`, `scan_roots` и любые другие aliases должны отклоняться как unknown keys;
-- validation errors не должны частично изменять `config_entries`,
-  `ignore_rules` или runtime state;
-- `PUT /api/config` не принимает `.t-helper.ignore` payload и поэтому не
-  удаляет ранее imported system `ignore_rules`; очистка rules выполняется через
-  существующий empty `.t-helper.ignore` при `thelper-ctl -reconfigure` или через
+- unknown top-level or nested keys must return `validation_error`;
+- malformed JSON, trailing payload after the first JSON object and `null` instead
+  of a config object must return `validation_error`;
+- deprecated/legacy aliases are not accepted;
+- `scanning.global_scan` is the only allowed key for global scan roots;
+- `scanning.global_scann`, `globalScan`, `global_scan_roots`, `scan_roots` and any other aliases must be rejected as unknown keys;
+- validation errors must not partially change `config_entries`,
+  `ignore_rules` or runtime state;
+- `PUT /api/config` does not accept `.t-helper.ignore` payload and therefore does
+  not delete previously imported system `ignore_rules`; rules are cleared through
+  the existing empty `.t-helper.ignore` during `thelper-ctl -reconfigure` or through
   Stage 04 ignore-rules API.
 
-Минимальные правила:
+Minimum rules:
 
-- `system_settings.app_name` не должен быть пустым;
-- `system_settings.mode` принимает `server` или `local`;
-- `database.database_type` принимает `sqlite`;
-- `database.database_path` должен быть нормализованным путём;
-- если `external_databases.enabled = true`, `provider`, `host`, `port`, `username`, `password` и `database_name` обязательны;
-- `external_databases.provider` принимает `postgresql`, `mysql` или `mssql`;
-- `external_databases.engine_flavor`, если задан, принимает `standard` или `aurora`;
-- `external_databases.port` должен быть положительным TCP-портом;
-- `secretref://env/...` в MVP означает ссылку на переменную окружения, а не literal-значение для сохранения в БД;
-- `scanning.global_scan[].root_path` должен быть абсолютным нормализованным путём;
-- `scanning.global_scan[].schedule` должен быть boolean;
-- `scanning.global_scan[].frequency` принимает `daily`, `weekly` или `monthly`;
-- `scanning.security_scan.modules` должен содержать непустые уникальные имена модулей;
-- `scanning.toolchain.version_policy` принимает `certified_only`, `compatible_range` или `latest_best_effort`; default MVP value is `certified_only`;
-- `scanning.toolchain.profile_paths[]` должен содержать абсолютные нормализованные локальные paths, если задан;
-- `repositories.default_auth_type` принимает `ssh`, `https` или `token` and is not a credential source;
-- `repositories.poll_interval_default` должен быть положительным duration;
-- `workers.enabled` должен быть boolean;
-- `workers.concurrency` должен быть положительным integer;
-- для `sqlite` effective `workers.concurrency` должен быть `1`, а попытка применить большее значение к active SQLite profile должна возвращать `sqlite_worker_concurrency_unsupported`;
-- `modules.enabled` должен содержать только имена из initial module registry или из явно зарегистрированных extension modules;
-- `api.listen_address` должен быть валидным host:port;
-- `logging.level` принимает `debug`, `info`, `warn`, `error`;
-- `logging.format` принимает `json` или `text`;
-- `logging.log_path` должен быть нормализованным путём к каталогу;
-- sensitive keys должны использовать `secretref://env/...`; literal values для sensitive keys должны возвращать `validation_error`;
-- секреты и tokens не должны сохраняться в открытом виде в `config_entries.value`.
+- `system_settings.app_name` must not be empty;
+- `system_settings.mode` accepts `server` or `local`;
+- `database.database_type` accepts `sqlite`;
+- `database.database_path` must be a normalized path;
+- if `external_databases.enabled = true`, `provider`, `host`, `port`, `username`, `password` and `database_name` are required;
+- `external_databases.provider` accepts `postgresql`, `mysql` or `mssql`;
+- `external_databases.engine_flavor`, if set, accepts `standard` or `aurora`;
+- `external_databases.port` must be a positive TCP port;
+- `secretref://env/...` in MVP means an environment variable reference, not a literal value to store in the database;
+- `scanning.global_scan[].root_path` must be an absolute normalized path;
+- `scanning.global_scan[].schedule` must be boolean;
+- `scanning.global_scan[].frequency` accepts `daily`, `weekly` or `monthly`;
+- `scanning.security_scan.modules` must contain non-empty unique module names;
+- `scanning.toolchain.version_policy` accepts `certified_only`, `compatible_range` or `latest_best_effort`; default MVP value is `certified_only`;
+- `scanning.toolchain.profile_paths[]` must contain absolute normalized local paths, if set;
+- `repositories.default_auth_type` accepts `ssh`, `https` or `token` and is not a credential source;
+- `repositories.poll_interval_default` must be a positive duration;
+- `workers.enabled` must be boolean;
+- `workers.concurrency` must be a positive integer;
+- for `sqlite`, effective `workers.concurrency` must be `1`, and attempting to apply a larger value to an active SQLite profile must return `sqlite_worker_concurrency_unsupported`;
+- `modules.enabled` must contain only names from the initial module registry or explicitly registered extension modules;
+- `api.listen_address` must be a valid host:port;
+- `logging.level` accepts `debug`, `info`, `warn`, `error`;
+- `logging.format` accepts `json` or `text`;
+- `logging.log_path` must be a normalized directory path;
+- sensitive keys must use `secretref://env/...`; literal values for sensitive keys must return `validation_error`;
+- secrets and tokens must not be stored in plaintext in `config_entries.value`.
 
-Ошибочная конфигурация не должна частично применяться: импорт и reload выполняются атомарно относительно одного набора изменений.
+Invalid configuration must not be partially applied: import and reload are atomic with respect to one change set.
 
 Sensitive keys:
 
 - `external_databases.username`
 - `external_databases.password`
-- provider tokens и Git HTTPS tokens
+- provider tokens and Git HTTPS tokens
 - webhook secrets
 - auth provider client secrets
-- private keys или passphrases
+- private keys or passphrases
 
-`config_entries.value` хранит secret reference, а не resolved secret. Resolved secrets не должны попадать в `jobs.payload`, `jobs.result_payload`, `job_events.payload`, `workflow_statuses.summary_payload`, `audit_log.payload` или logs.
+`config_entries.value` stores the secret reference, not the resolved secret. Resolved secrets must not appear in `jobs.payload`, `jobs.result_payload`, `job_events.payload`, `workflow_statuses.summary_payload`, `audit_log.payload` or logs.
 
 ## Masked config output
 
-`GET /api/config` возвращает активную runtime-конфигурацию с masked sensitive values.
+`GET /api/config` returns the active runtime configuration with masked sensitive values.
 
-API response не должен раскрывать resolved secret values. `secretref://env/NAME`
-не является raw secret, но имя переменной окружения может раскрывать детали
-инфраструктуры, поэтому output mode зависит от permissions:
+API response must not disclose resolved secret values. `secretref://env/NAME`
+is not a raw secret, but the environment variable name may reveal infrastructure
+details, so output mode depends on permissions:
 
-- `system_admin` и субъекты с `system.config.read` могут видеть full secret reference, например `secretref://env/THELPER_POSTGRES_PASSWORD`, но никогда resolved value;
-- `viewer`, object-scoped readers и ответы, разрешённые только через `system.runtime.read`, получают masked metadata без имени переменной;
+- `system_admin` and subjects with `system.config.read` may see the full secret reference, for example `secretref://env/THELPER_POSTGRES_PASSWORD`, but never the resolved value;
+- `viewer`, object-scoped readers and responses allowed only through `system.runtime.read` receive masked metadata without the variable name;
 - audit, job payloads, job results, workflow payloads and logs never contain resolved values and should prefer masked metadata over full refs unless the event is explicitly administrative.
 
-Допустимая masked форма:
+Allowed masked form:
 
 ```json
 {
@@ -384,28 +384,28 @@ API response не должен раскрывать resolved secret values. `sec
 }
 ```
 
-Raw `secretref://env/...` может храниться в `config_entries.value`, но API output должен избегать раскрытия resolved secret и не должен показывать literal secret values.
+Raw `secretref://env/...` may be stored in `config_entries.value`, but API output must avoid disclosing the resolved secret and must not show literal secret values.
 
 ## Storage migration command
 
-`thelper-ctl -migrate-db` выполняет controlled migration с `current` profile на
+`thelper-ctl -migrate-db` performs controlled migration from the `current` profile to
 `migration` profile.
 
-Минимальный Stage 02 contract:
+Minimum Stage 02 contract:
 
-- проверить доступность migration DB, provider, credentials и permissions;
-- применить schema migrations к migration DB;
-- перенести Stage 02-owned runtime data: `config_entries`,
+- check availability of the migration DB, provider, credentials and permissions;
+- apply schema migrations to the migration DB;
+- migrate Stage 02-owned runtime data: `config_entries`,
   `storage_profiles`, `storage_provider_settings`, `module_states`,
   `ignore_rules` and system migration metadata;
-- не переносить active transient locks как active state;
-- проверить logical migration version, FK integrity и базовые counts/checksums;
-- актуализировать profile statuses: migration становится `current`, предыдущий current сохраняется как historical/rollback candidate;
-- поддерживать последующие migration target после successful switch без перезаписи active `current` profile;
-- не удалять старую БД автоматически;
-- требовать restart runtime после successful switch.
+- do not migrate active transient locks as active state;
+- verify logical migration version, FK integrity and basic counts/checksums;
+- update profile statuses: migration becomes `current`, and the previous current is kept as a historical/rollback candidate;
+- support subsequent migration targets after a successful switch without overwriting the active `current` profile;
+- do not delete the old database automatically;
+- require runtime restart after a successful switch.
 
-Если migration не завершилась успешно, active `current` profile не меняется.
+If migration does not complete successfully, the active `current` profile does not change.
 
 Later stages must extend this same migration contract when they introduce their
 own persistent tables. For example, Stage 03 extends it for jobs/workflows,

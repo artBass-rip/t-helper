@@ -6,13 +6,13 @@
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/api.md`
-- `docs/adr/0017-security-finding-fingerprint.md`
-- `docs/adr/0018-external-toolchain-profiles.md`
+- `docs/ru/roadmap.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/api.md`
+- `docs/ru/adr/0017-security-finding-fingerprint.md`
+- `docs/ru/adr/0018-external-toolchain-profiles.md`
 
 ## Scope
 

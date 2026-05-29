@@ -1,18 +1,18 @@
 # Frontend UI Delivery Contract
 
-## Назначение
+## Purpose
 
-Этот документ фиксирует Stage 08 UI contract для единого `Web UI` и локального
-`GUI`. Цель - не допустить расхождения route tree, navigation model, density и
-runtime assumptions между браузерной и Tauri-оболочкой.
+This document records the Stage 08 UI contract for the unified `Web UI` and
+local `GUI`. The goal is to prevent divergence in route tree, navigation model,
+density and runtime assumptions between the browser UI and the Tauri shell.
 
-`Web UI` и `GUI` используют одну React/TypeScript codebase, один typed API
-client и один documented backend API. Различия допускаются только там, где
-локальность `GUI` явно влияет на runtime discovery/startup.
+`Web UI` and `GUI` use one React/TypeScript codebase, one typed API client and
+one documented backend API. Differences are allowed only where the local nature
+of the `GUI` explicitly affects runtime discovery/startup.
 
 ## Route Map
 
-Top-level route tree для Stage 08 MVP:
+Top-level route tree for the Stage 08 MVP:
 
 ```text
 /projects
@@ -40,9 +40,9 @@ profile administration and additional release-scope controls.
 
 Route rules:
 
-- `Web UI` и `GUI` используют один route tree;
-- route, доступный в `Web UI`, должен быть доступен в `GUI` для того же release scope, unless explicitly marked local-only or unavailable by backend API scope;
-- frontend-only backend routes запрещены;
+- `Web UI` and `GUI` use one route tree;
+- a route available in the `Web UI` must be available in the `GUI` for the same release scope, unless explicitly marked local-only or unavailable by backend API scope;
+- frontend-only backend routes are forbidden;
 - object detail routes use tabs for subviews instead of separate unrelated page shells;
 - query parameters may hold filters, sorting, pagination cursors and selected tabs when this improves shareability/debugging.
 
@@ -94,8 +94,8 @@ Stage 08 entry decisions accepted by Stage 00:
 - Tauri local runtime discovery/start policy for supported local OS targets.
 
 Changes to these decisions require updating this document together with
-`docs/implementation-specs/stage-00-delivery-contract.md`, `docs/roadmap.md` and
-`docs/traceability.md` where affected.
+`docs/en/implementation-specs/stage-00-delivery-contract.md`, `docs/en/roadmap.md` and
+`docs/en/traceability.md` where affected.
 
 ## Stage 08 Exit Decisions
 

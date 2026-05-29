@@ -6,12 +6,12 @@
 
 ## Inputs
 
-- `docs/roadmap.md`
-- `docs/test-plan.md`
-- `docs/data-model.md`
-- `docs/access-control.md`
-- `docs/technology-stack.md`
-- `docs/payload-schemas.md`
+- `docs/ru/roadmap.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/data-model.md`
+- `docs/ru/access-control.md`
+- `docs/ru/technology-stack.md`
+- `docs/ru/payload-schemas.md`
 
 ## Scope
 
@@ -128,7 +128,7 @@ Recommended implementation order:
 
 - Roadmap: Stage 09.
 - Acceptance: `ACC-PLATFORM-004` and operational prerequisites for `ACC-PLATFORM-005`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/ru/roadmap.md`.
 
 ## Риски
 

@@ -1,7 +1,7 @@
-# Модель данных
+# Data Model
 
-Этот документ описывает целевую persistent data model. Он не означает, что все
-таблицы должны появиться в первой миграции.
+This document describes the target persistent data model. It does not mean that all
+tables must appear in the first migration.
 
 Physical migrations are stage-owned: a table or index is introduced only by the
 stage that also ships the code, API or worker behavior and tests for its
@@ -38,7 +38,7 @@ If a later implementation needs to move a table between stages, the owning
 implementation spec must be updated together with roadmap, traceability and test
 plan.
 
-## Базовые сущности
+## Base Entities
 
 ### `root_paths`
 
@@ -52,7 +52,7 @@ plan.
 - `created_at`
 - `updated_at`
 
-`source` принимает `config` или `api`. `scanning.global_scan` sync owns only
+`source` accepts `config` or `api`. `scanning.global_scan` sync owns only
 `source = config` rows: removed config roots are disabled, while API-created
 roots are preserved.
 
@@ -73,13 +73,13 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Допустимые `status` для Stage 04:
+Allowed `status` values for Stage 04:
 
-- `active` - проект обнаружен последним scan или создан/обновлён явно;
-- `missing` - проект ранее обнаруживался под scanned `root_path`, но не найден в последнем completed scan;
-- `disabled` - проект выключен административно и не должен автоматически участвовать в project scan workflows.
+- `active` - the project was found by the latest scan or explicitly created/updated;
+- `missing` - the project was previously found under a scanned `root_path`, but was not found in the latest completed scan;
+- `disabled` - the project is administratively disabled and must not automatically participate in project scan workflows.
 
-Инварианты:
+Invariants:
 
 - `projects.root_path_id + projects.relative_path` unique;
 - Stage 04 scanner creates/updates projects by `root_path_id + relative_path`;
@@ -99,11 +99,11 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Допустимые `link_type`:
+Allowed `link_type` values:
 
 - `same_repository`
 
-Инварианты:
+Invariants:
 
 - project links express relationships between separate local project records; they do not merge projects;
 - `source_project_id` and `target_project_id` must reference different project rows;
@@ -123,7 +123,7 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Настройки project-level scan задаются относительно отдельного проекта и не являются глобальными default-параметрами `config.json`.
+Project-level scan settings are configured per project and are not global default parameters in `config.json`.
 
 ### `project_security_scan_settings`
 
@@ -137,7 +137,7 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-`enabled_modules` должен ссылаться только на модули из глобального каталога `scanning.security_scan.modules`.
+`enabled_modules` must reference only modules from the global catalog `scanning.security_scan.modules`.
 
 ### `repositories`
 
@@ -166,26 +166,26 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Инварианты:
+Invariants:
 
-- `provider` принимает одно из значений: `gitlab`, `github`, `bitbucket`, `azure_devops`, `generic`;
-- `status` принимает `active`, `missing`, `superseded` или `disabled`;
-- `discovery_source` принимает `filesystem`, `provider`, `clone` или `manual`;
-- `provider_instance_id` ссылается на configured provider host/profile, если repository был создан через managed provider integration;
-- `provider_host` хранит нормализованный host provider instance, например `gitlab.foodtech.team` или `github.com`;
-- identity репозитория задаётся tuple `provider + provider_host + full_path`;
+- `provider` accepts one of these values: `gitlab`, `github`, `bitbucket`, `azure_devops`, `generic`;
+- `status` accepts `active`, `missing`, `superseded` or `disabled`;
+- `discovery_source` accepts `filesystem`, `provider`, `clone` or `manual`;
+- `provider_instance_id` references a configured provider host/profile when the repository was created through a managed provider integration;
+- `provider_host` stores the normalized host provider instance, for example `gitlab.foodtech.team` or `github.com`;
+- repository identity is defined by the tuple `provider + provider_host + full_path`;
 - for Stage 04 filesystem-only generic local cards
   (`provider = generic`, `provider_host = local`), identity is scoped by
   `root_path_id + full_path` so different scan roots with the same relative
   repository path do not collapse into one repository card;
-- `full_path` уникален только в пределах `provider + provider_host`;
-- `full_path` хранит namespace/project path внутри provider instance без protocol, host, leading slash и trailing `.git`;
-- `root_path_id` обязателен для клонированных репозиториев;
-- `target_directory` хранит выбранную пользователем директорию внутри `root_path`;
-- `local_path` вычисляется внутри выбранного `root_path` и не должен указывать за пределы этого path;
-- `clone_url` nullable, не unique, является safe normalized transport endpoint и не является identity key;
-- `clone_url` не используется для lookup/upsert/deduplication и не должен содержать credentials, tokens, passwords или userinfo;
-- разные `clone_url`, нормализуемые в один `provider + provider_host + full_path`, должны ссылаться на одну repository card;
+- `full_path` is unique only within `provider + provider_host`;
+- `full_path` stores the namespace/project path inside the provider instance without protocol, host, leading slash or trailing `.git`;
+- `root_path_id` is required for cloned repositories;
+- `target_directory` stores the user-selected directory inside `root_path`;
+- `local_path` is computed inside the selected `root_path` and must not point outside that path;
+- `clone_url` is nullable and non-unique; it is a safe normalized transport endpoint and is not an identity key;
+- `clone_url` is not used for lookup/upsert/deduplication and must not contain credentials, tokens, passwords or userinfo;
+- different `clone_url` values that normalize to one `provider + provider_host + full_path` must reference one repository card;
 - Stage 04 global filesystem scan does not create repository cards directly;
 - Stage 04 `project_discovery` job may create/update conservative repository card with `provider = generic`, `provider_host = local`, `root_path_id = <containing root path>`, `full_path = <root_path-relative normalized repository path>`, `clone_url = null`, `status = active`, `discovery_source = filesystem` and `identity_confirmed_at = null`;
 - Stage 05 repository manager may enrich generic local cards after provider-aware identity resolution, but separate project records must not be merged;
@@ -194,9 +194,9 @@ roots are preserved.
 - `superseded_by_repository_id` may be set only when `status = superseded`;
 - `superseded` repositories must not participate in clone, pull, sync, webhook or polling operations;
 - `identity_confirmed_at` is set when provider-aware identity has been validated by repository manager or explicit provider workflow;
-- `auth_type` является legacy/default transport hint для карточки repository и принимает `ssh`, `https` или `token`; actual auth material берётся из `repository_credentials`;
-- `default_credential_id` nullable и указывает credential, используемый по умолчанию для repository operations, если request не передал explicit `credential_id`;
-- активные `clone`, `pull`, `sync` по одному `repository.id` должны иметь не более одного lock/job в состоянии `queued` или `running`.
+- `auth_type` is the legacy/default transport hint for the repository card and accepts `ssh`, `https` or `token`; actual auth material comes from `repository_credentials`;
+- `default_credential_id` is nullable and points to the credential used by default for repository operations when the request did not pass an explicit `credential_id`;
+- active `clone`, `pull`, `sync` for one `repository.id` must have at most one lock/job in `queued` or `running`.
 
 ### `repository_provider_instances`
 
@@ -212,13 +212,13 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Инварианты:
+Invariants:
 
 - Stage 05 MVP stores `display_name` as `name` and does not yet persist
   `deployment_type` or `default_clone_protocol`; those fields remain the
   forward data-model contract for later provider-profile expansion.
-- `provider` принимает `gitlab`, `github`, `bitbucket`, `azure_devops` или `generic`;
-- `deployment_type` принимает `cloud`, `self_managed`, `enterprise_server`, `data_center` или `organization`;
+- `provider` accepts `gitlab`, `github`, `bitbucket`, `azure_devops` or `generic`;
+- `deployment_type` accepts `cloud`, `self_managed`, `enterprise_server`, `data_center` or `organization`;
 - `provider_host` normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;
 - `provider + provider_host` unique;
 - provider instance stores host/profile metadata only, not secrets.
@@ -245,15 +245,15 @@ roots are preserved.
 - `created_at`
 - `updated_at`
 
-Инварианты:
+Invariants:
 
 - Stage 05 MVP persists a single `secret_ref` selected by `auth_type` instead
   of separate `token_ref`, `password_ref`, `private_key_ref`,
   `passphrase_ref` and `webhook_secret_ref` columns; the separate columns are
   the forward data-model contract for richer credential material.
-- `provider_instance_id` обязателен;
-- `auth_type` принимает `ssh_key`, `https_token`, `https_basic`, `oauth_token`, `app_password`, `webhook_secret`;
-- `usages` содержит один или несколько values: `git_transport`, `provider_api`, `webhook`;
+- `provider_instance_id` is required;
+- `auth_type` accepts `ssh_key`, `https_token`, `https_basic`, `oauth_token`, `app_password`, `webhook_secret`;
+- `usages` contains one or more values: `git_transport`, `provider_api`, `webhook`;
 - secret fields store only `secretref://...` values and never resolved secrets;
 - MVP accepts only `secretref://env/...` secret refs;
 - API responses mask secret refs and never return resolved secrets;
@@ -275,20 +275,20 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `created_at`
 - `updated_at`
 
-Допустимые `origin`:
+Allowed `origin` values:
 
 - `ui`
 - `config_import`
 - `system_default`
 
-Допустимые `scope_type`:
+Allowed `scope_type` values:
 
 - `system`
 - `root_path`
 - `project`
 
-Для MVP matcher может поддерживать только exclude-only правила. Отрицательные правила `!pattern` должны храниться без потери данных и применяться после добавления full `.gitignore` semantics.
-`sort_order` сохраняет порядок импорта/API upsert для будущей полной `.gitignore` семантики.
+For MVP, the matcher may support exclude-only rules. Negative `!pattern` rules must be stored without data loss and applied after full `.gitignore` semantics are added.
+`sort_order` preserves import/API upsert order for future full `.gitignore` semantics.
 
 ### `environments`
 
@@ -320,7 +320,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `updated_at`
 - `updated_by`
 
-Минимальные конфигурационные ключи:
+Minimum configuration keys:
 
 - `system_settings.app_name`
 - `system_settings.version`
@@ -350,8 +350,8 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `logging.format`
 - `logging.log_path`
 
-`external_databases.provider` принимает значения `postgresql`, `mysql` или `mssql`.
-`external_databases.engine_flavor` optional и принимает значения `standard` или `aurora`; он не меняет storage dialect, но используется для diagnostics, validation и operational guidance.
+`external_databases.provider` accepts values `postgresql`, `mysql` or `mssql`.
+`external_databases.engine_flavor` is optional and accepts values `standard` or `aurora`; it does not change the storage dialect, but is used for diagnostics, validation and operational guidance.
 
 ### `storage_profiles`
 
@@ -366,13 +366,13 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `created_at`
 - `updated_at`
 
-Допустимые `slot`:
+Allowed `slot` values:
 
 - `current`
 - `migration`
 - `historical`
 
-Допустимые `status`:
+Allowed `status` values:
 
 - `active`
 - `migration_target`
@@ -381,15 +381,15 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `migration_failed`
 - `superseded`
 
-Инварианты:
+Invariants:
 
-- одновременно может быть только один profile со `slot = current` и `status = active`;
-- `migration` profile может обновляться через `thelper-ctl -reconfigure` или `thelper-ctl -migrate-db`;
-- active runtime использует только `current` profile;
-- переключение active DB выполняется только после successful `thelper-ctl -migrate-db`;
-- старая DB configuration не удаляется после переключения и остаётся historical/rollback metadata;
-- `config_payload` хранит normalized storage settings and secret refs only, not resolved secrets;
-- `database_fingerprint` не должен раскрывать DSN, path, credentials или userinfo.
+- there can be only one profile with `slot = current` and `status = active`;
+- `migration` profile may be updated through `thelper-ctl -reconfigure` or `thelper-ctl -migrate-db`;
+- active runtime uses only the `current` profile;
+- active DB switching is performed only after a successful `thelper-ctl -migrate-db`;
+- the old DB configuration is not deleted after switching and remains historical/rollback metadata;
+- `config_payload` stores only normalized storage settings and secret refs, not resolved secrets;
+- `database_fingerprint` must not reveal DSN, path, credentials or userinfo.
   Stage 01 derives the health fingerprint from safe storage locator components
   and exposes only the opaque fingerprint through `GET /api/health`.
 
@@ -408,7 +408,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `created_at`
 - `updated_at`
 
-Инварианты:
+Invariants:
 
 - settings scoped to one storage profile/provider do not change another provider's settings;
 - for `sqlite`, MVP requires `worker_process_limit = 1`, `workers_concurrency = 1`, `sqlite_journal_mode = WAL`, `sqlite_foreign_keys = true`;
@@ -425,7 +425,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `details`
 - `updated_at`
 
-Допустимые `state`:
+Allowed `state` values:
 
 - `starting`
 - `running`
@@ -436,7 +436,7 @@ from `thelper-ctl -reconfigure`. Stage 04 owns scanner/API behavior for
 - `unavailable`
 - `failed`
 
-`unavailable` означает, что модуль известен registry, но недоступен в текущей сборке, профиле запуска или stage реализации. `restart`/`reload` такого модуля должен возвращать controlled error.
+`unavailable` means the module is known to the registry, but is unavailable in the current build, launch profile or implementation stage. `restart`/`reload` for such a module must return a controlled error.
 
 Initial module registry seed:
 
@@ -478,7 +478,7 @@ Initial module registry seed:
 - `error_message`
 - `updated_at`
 
-Допустимые `job_type`:
+Allowed `job_type` values:
 
 - `global_scan`
 - `project_discovery`
@@ -491,7 +491,7 @@ Initial module registry seed:
 - `module_restart`
 - `scim_sync`
 
-Допустимые `status`:
+Allowed `status` values:
 
 - `queued`
 - `running`
@@ -499,22 +499,22 @@ Initial module registry seed:
 - `failed`
 - `cancelled`
 
-Инварианты:
+Invariants:
 
-- `idempotency_key` уникален для повторяемых write requests в пределах разумного TTL;
-- `parent_job_id` nullable и ссылается на parent orchestration job в `jobs.id`;
-- `job_group_id` объединяет jobs одного workflow, например `project_scan:<project_scan_id>`;
-- child job должен использовать тот же `job_group_id`, что и parent job;
-- `lock_key` заполняется для операций, которые должны сериализоваться;
-- `leased_by` заполняется только после atomic claim конкретным `thelper-worker`;
-- `lease_expires_at` определяет срок владения job worker-процессом;
-- `heartbeat_at` обновляется worker-процессом во время долгого выполнения;
-- истёкший lease позволяет вернуть job в `queued` или завершить его как `failed`, если исчерпаны `max_attempts`;
-- `run_after` используется для отложенного запуска и retry/backoff;
-- `attempt_count` не должен превышать `max_attempts`;
-- job lease отвечает за владение конкретным job, а `job_locks` отвечают за сериализацию бизнес-ресурсов;
-- `payload` и `result_payload` имеют версионируемую JSON-схему, описанную в [`payload-schemas.md`](payload-schemas.md);
-- активный job имеет статус `queued` или `running`.
+- `idempotency_key` is unique for repeatable write requests within a reasonable TTL;
+- `parent_job_id` is nullable and references the parent orchestration job in `jobs.id`;
+- `job_group_id` groups jobs of one workflow, for example `project_scan:<project_scan_id>`;
+- child job must use the same `job_group_id` as the parent job;
+- `lock_key` is populated for operations that must be serialized;
+- `leased_by` is populated only after an atomic claim by a specific `thelper-worker`;
+- `lease_expires_at` defines the worker process ownership period for the job;
+- `heartbeat_at` is updated by the worker process during long execution;
+- an expired lease allows returning the job to `queued` or finishing it as `failed` if `max_attempts` is exhausted;
+- `run_after` is used for delayed start and retry/backoff;
+- `attempt_count` must not exceed `max_attempts`;
+- the job lease owns a specific job, while `job_locks` serialize business resources;
+- `payload` and `result_payload` have a versioned JSON schema described in [`payload-schemas.md`](payload-schemas.md);
+- an active job has status `queued` or `running`.
 
 ### `job_locks`
 
@@ -527,21 +527,21 @@ Initial module registry seed:
 - `expires_at`
 - `released_at`
 
-Допустимые `status`:
+Allowed `status` values:
 
 - `held`
 - `released`
 - `expired`
 
-Инварианты:
+Invariants:
 
-- одновременно может существовать только один lock со статусом `held` для одного `lock_key`;
-- для repository operations final `lock_key` строится как `repository:<repository_id>`, чтобы сериализовать `clone`, `pull` и `sync` между собой;
+- only one lock with status `held` for one `lock_key`;
+- for repository operations, the final `lock_key` is built as `repository:<repository_id>`, to serialize `clone`, `pull` and `sync` with each other;
 - clone additionally uses pre-create lock keys `repository-identity:<provider>:<provider_host>:<full_path>` and `repository-path:<root_path_id>:<normalized_target_path>` before a stable `repository_id` exists;
 - released/expired repository-operation reservations are removed by an explicit
   cleanup storage primitive and may also be pruned opportunistically before new
   reservations are created;
-- истёкшие locks не должны блокировать новые операции, но должны сохраняться для audit/debug.
+- expired locks must not block new operations, but must be retained for audit/debug.
 
 ### `project_scans`
 
@@ -558,7 +558,7 @@ Initial module registry seed:
 - `error_message`
 - `updated_at`
 
-Допустимые `scan_type`:
+Allowed `scan_type` values:
 
 - `terraform_static`
 - `terraform_validate`
@@ -566,7 +566,7 @@ Initial module registry seed:
 - `terraform_full`
 - `security_validation`
 
-Допустимые `status`:
+Allowed `status` values:
 
 - `queued`
 - `running`
@@ -575,8 +575,8 @@ Initial module registry seed:
 - `partial`
 - `cancelled`
 
-`project_scans.job_id` указывает на parent `jobs.job_type = project_scan`.
-Aggregate `project_scans.status` и `project_scans.result_payload` обновляются `status-monitor`, а не отдельными worker handlers.
+`project_scans.job_id` points to the parent `jobs.job_type = project_scan`.
+Aggregate `project_scans.status` and `project_scans.result_payload` are updated by `status-monitor`, not by individual worker handlers.
 
 ### `job_events`
 
@@ -591,7 +591,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `payload`
 - `created_at`
 
-Допустимые базовые `event_type`:
+Allowed base `event_type` values:
 
 - `queued`
 - `claimed`
@@ -605,11 +605,11 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `lease_expired`
 - `retry_scheduled`
 
-Инварианты:
+Invariants:
 
-- `job_events` описывают факты выполнения jobs и не являются aggregate state;
-- payload не должен содержать секреты, tokens, приватные ключи или raw Terraform source;
-- workers пишут `job_events`, а `status-monitor` строит aggregate read models.
+- `job_events` describe job execution facts and are not aggregate state;
+- payload must not contain secrets, tokens, private keys or raw Terraform source;
+- workers write `job_events`, and `status-monitor` builds aggregate read models.
 
 ### `workflow_statuses`
 
@@ -623,7 +623,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `summary_payload`
 - `updated_at`
 
-Допустимые базовые `workflow_type`:
+Allowed base `workflow_type` values:
 
 - `project_scan`
 - `project_discovery`
@@ -633,7 +633,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `module_operation`
 - `scim_sync`
 
-Допустимые `aggregate_status`:
+Allowed `aggregate_status` values:
 
 - `queued`
 - `running`
@@ -642,12 +642,12 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `partial`
 - `cancelled`
 
-Инварианты:
+Invariants:
 
 - `workflow_statuses.workflow_type + workflow_id` unique;
 - `workflow_statuses.job_group_id` unique;
-- `workflow_statuses` являются read model, которым владеет `status-monitor`;
-- UI и внутренние сервисы читают workflow status из aggregate read model, а не собирают его самостоятельно из child jobs.
+- `workflow_statuses` are a read model owned by `status-monitor`;
+- UI and internal services read workflow status from the aggregate read model instead of assembling it themselves from child jobs.
 
 ### `audit_log`
 
@@ -659,7 +659,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `payload`
 - `created_at`
 
-## Security-сущности
+## Security Entities
 
 ### `security_rule_sets`
 
@@ -672,7 +672,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `created_at`
 - `updated_at`
 
-Допустимые `source_type`:
+Allowed `source_type` values:
 
 - `bundled`
 - `local_upload`
@@ -694,25 +694,25 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `created_at`
 - `updated_at`
 
-Допустимые `tool` для Stage 06A/06B MVP:
+Allowed `tool` values for Stage 06A/06B MVP:
 
 - `terraform`
 - `tflint`
 - `trivy`
 
-`checkov`, `gitleaks`, `opa` и `conftest` are extension tool/profile targets outside mandatory Stage 06A/06B MVP acceptance.
+`checkov`, `gitleaks`, `opa` and `conftest` are extension tool/profile targets outside mandatory Stage 06A/06B MVP acceptance.
 
-Допустимые `source_type`:
+Allowed `source_type` values:
 
 - `bundled`
 - `local_upload`
 - `local_path`
 - `generated_candidate`
 
-Инварианты:
+Invariants:
 
 - `tool + profile_id + profile_version` unique;
-- активный profile выбирается по `tool`, configured version policy и discovered tool version;
+- the active profile is selected by `tool`, configured version policy and discovered tool version;
 - bundled certified profiles are required for `terraform validate`, `TFLint` and `Trivy`;
 - profile files follow ADR 0018 and must pass validation before activation;
 - `generated_candidate` profiles created by `tool-profile-analyzer` are inactive by default and must never be selected by runtime until explicitly validated and activated;
@@ -729,13 +729,13 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `diagnostics`
 - `created_at`
 
-Допустимые `validation_status`:
+Allowed `validation_status` values:
 
 - `passed`
 - `failed`
 - `warning`
 
-Инварианты:
+Invariants:
 
 - validation results store fixture diagnostics and profile validation metadata, not raw Terraform source or secrets;
 - activation of local/generated profiles requires at least one successful validation result for the target tool version or approved compatible version range.
@@ -765,7 +765,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `detected_at`
 - `updated_at`
 
-Допустимые `severity`:
+Allowed `severity` values:
 
 - `info`
 - `low`
@@ -773,7 +773,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `high`
 - `critical`
 
-Допустимые `status`:
+Allowed `status` values:
 
 - `open`
 - `accepted`
@@ -781,17 +781,17 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `fixed`
 - `suppressed`
 
-Инварианты:
+Invariants:
 
-- `fingerprint` имеет формат `fp:v1:<sha256>` согласно ADR 0017;
-- `fingerprint_schema_version` для MVP принимает `security_finding.fingerprint.v1`;
-- `fingerprint_components` хранит canonical JSON components без секретов и raw Terraform source;
-- `resource_ref` или stable `finding_key` внутри `fingerprint_components` обязателен для persisted finding;
-- `first_seen_at` фиксирует первое обнаружение fingerprint;
-- `last_seen_at` обновляется при каждом scan, где finding присутствует;
-- `detected_at` сохраняется как backward-compatible alias/initial detection timestamp и должен совпадать с `first_seen_at` для новых rows.
+- `fingerprint` has format `fp:v1:<sha256>` according to ADR 0017;
+- `fingerprint_schema_version` accepts `security_finding.fingerprint.v1` for MVP;
+- `fingerprint_components` stores canonical JSON components without secrets or raw Terraform source;
+- `resource_ref` or stable `finding_key` inside `fingerprint_components` is required for a persisted finding;
+- `first_seen_at` records the first fingerprint detection;
+- `last_seen_at` is updated on every scan where the finding is present;
+- `detected_at` is stored as a backward-compatible alias/initial detection timestamp and must match `first_seen_at` for new rows.
 
-## Auth и RBAC сущности
+## Auth and RBAC Entities
 
 ### `users`
 
@@ -820,15 +820,15 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `created_at`
 - `updated_at`
 
-Инварианты:
+Invariants:
 
-- `user_id` обязателен и unique;
-- `password_hash` хранит Argon2id PHC string;
-- `password_hash_algorithm` в MVP принимает `argon2id`;
-- raw password никогда не сохраняется;
-- successful login сбрасывает `failed_attempt_count`;
-- 5 consecutive failed attempts устанавливают `locked_until` на 15 минут от момента блокировки;
-- если Argon2id PHC parameters слабее текущих defaults, hash обновляется после successful login.
+- `user_id` is required and unique;
+- `password_hash` stores the Argon2id PHC string;
+- `password_hash_algorithm` accepts `argon2id` in MVP;
+- raw password is never stored;
+- successful login resets `failed_attempt_count`;
+- 5 consecutive failed attempts set `locked_until` to 15 minutes from the lock moment;
+- if Argon2id PHC parameters are weaker than current defaults, the hash is updated after successful login.
 
 ### `password_reset_tokens`
 
@@ -839,12 +839,12 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `used_at`
 - `created_at`
 
-Инварианты:
+Invariants:
 
-- reset token хранится только как hash;
-- raw reset token никогда не сохраняется;
-- token является one-time-use и недействителен после `used_at` или `expires_at`;
-- завершение reset flow выставляет `local_user_credentials.password_must_change = true`, если отдельная administrative policy не задаёт другое поведение.
+- reset token is stored only as a hash;
+- raw reset token is never stored;
+- token is one-time-use and invalid after `used_at` or `expires_at`;
+- completing the reset flow sets `local_user_credentials.password_must_change = true`, unless a separate administrative policy defines different behavior.
 
 ### `user_sessions`
 
@@ -857,13 +857,13 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `revoked_at`
 - `last_seen_at`
 
-Инварианты:
+Invariants:
 
-- `user_id` обязателен и ссылается на `users.id`;
-- raw session token никогда не сохраняется;
-- `token_hash` хранит только hash opaque session token;
-- session недействительна после `revoked_at` или `expires_at`;
-- API responses возвращают только opaque `session_id` и safe user metadata, но не bearer token hash.
+- `user_id` is required and references `users.id`;
+- raw session token is never stored;
+- `token_hash` stores only the hash of the opaque session token;
+- session is invalid after `revoked_at` or `expires_at`;
+- API responses return only opaque `session_id` and safe user metadata, but not the bearer token hash.
 
 ### `auth_bootstrap_credentials`
 
@@ -876,16 +876,16 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `used_at`
 - `created_at`
 
-Инварианты:
+Invariants:
 
-- bootstrap user создаётся автоматически только при первом запуске `thelper` на пустой auth state;
-- username и initial password генерируются как случайные латинские буквы и цифры длиной 16 символов каждый;
-- password хранится только как Argon2id PHC hash через `local_user_credentials`, raw password сохраняется только в памяти до single display;
-- credentials показываются один раз в первом запущенном UI и в stdout active runtime;
-- stdout/UI warning должен явно указывать, что bootstrap credentials действуют 24 часа;
-- если bootstrap user не был использован в течение 24 часов, он удаляется вместе с credentials;
-- после истечения или удаления bootstrap user новый bootstrap user автоматически не создаётся;
-- если auth не был настроен и bootstrap credentials истекли, восстановление требует полного удаления данных и повторного запуска для новой пустой установки.
+- bootstrap user is created automatically only on the first start of `thelper` with empty auth state;
+- username and initial password are generated as random Latin letters and digits, 16 characters each;
+- password is stored only as an Argon2id PHC hash through `local_user_credentials`; raw password is kept only in memory until single display;
+- credentials are shown once in the first launched UI and in active runtime stdout;
+- stdout/UI warning must explicitly state that bootstrap credentials are valid for 24 hours;
+- if the bootstrap user is not used within 24 hours, it is deleted together with credentials;
+- after bootstrap user expiration or deletion, a new bootstrap user is not created automatically;
+- if auth was not configured and bootstrap credentials expired, recovery requires full data deletion and a restart as a new empty installation.
 
 ### `groups`
 
@@ -951,55 +951,55 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `created_at`
 - `updated_at`
 
-## Связи между сущностями
+## Entity Relationships
 
-- `root_path` содержит множество найденных `projects`
-- `project` может быть связан с одним `repository`
+- `root_path` contains many discovered `projects`
+- `project` may be linked to one `repository`
 - `project_link` relates two separate `projects`, optionally through one shared `repository`
 - `repository` belongs to one optional `repository_provider_instance`
 - `repository` can reference one default `repository_credential`
 - `repository_provider_instance` has many `repository_credentials`
-- `project` может иметь несколько `workspaces`
-- `workspace` принадлежит паре `project` + `environment`
-- `project_scan` относится к одному `project`
-- `security_finding` может ссылаться на `project`, `repository`, `workspace`, `job`, `security_rule_set`
+- `project` may have several `workspaces`
+- `workspace` belongs to the `project` + `environment` pair
+- `project_scan` belongs to one `project`
+- `security_finding` may reference `project`, `repository`, `workspace`, `job`, `security_rule_set`
 - `tool_profile_validation_result` belongs to one `tool_profile`
-- `job_lock` относится к одному активному или завершённому `job`
+- `job_lock` belongs to one active or completed `job`
 - `local_user_credentials` belongs to one local-auth `user`
 - `password_reset_tokens` belongs to one `user`
 - `user_sessions` belongs to one `user`
 - `auth_bootstrap_credentials` belongs to one bootstrap `user`
-- `role_binding` связывает `user` или `group` с ролью в конкретном scope
+- `role_binding` binds `user` or `group` to a role in a specific scope
 
-## Nullable, FK и delete behavior
+## Nullable, FK and delete behavior
 
-Минимальные правила для SQL adapters:
+Minimum rules for SQL adapters:
 
-- `projects.root_path_id` обязателен и использует `ON DELETE RESTRICT`;
-- `project_links.source_project_id` и `project_links.target_project_id` обязательны и используют `ON DELETE CASCADE`;
-- `project_links.repository_id` nullable и использует `ON DELETE SET NULL`;
-- `project_scan_settings.project_id` обязателен и использует `ON DELETE CASCADE`;
-- `project_security_scan_settings.project_id` обязателен и использует `ON DELETE CASCADE`;
-- `projects.repository_id`, `projects.environment_id`, `projects.default_workspace_id` nullable и используют `ON DELETE SET NULL`;
-- `repositories.provider_instance_id` nullable и использует `ON DELETE SET NULL`;
-- `repositories.default_credential_id` nullable и использует `ON DELETE SET NULL`;
-- `repositories.superseded_by_repository_id` nullable и использует `ON DELETE SET NULL`;
-- `repository_credentials.provider_instance_id` обязателен и использует `ON DELETE CASCADE`;
-- `workspaces.project_id` и `workspaces.environment_id` обязательны и используют `ON DELETE CASCADE` для `project`, `ON DELETE RESTRICT` для `environment`;
-- `project_scans.job_id` и `project_scans.project_id` обязательны; удаление связанных `jobs` и `projects` должно использовать `ON DELETE RESTRICT`;
-- `job_locks.job_id` обязателен; удаление связанных `jobs` должно использовать `ON DELETE RESTRICT`;
-- `security_findings.project_id`, `security_findings.repository_id`, `security_findings.workspace_id`, `security_findings.job_id`, `security_findings.rule_set_id` nullable, но finding должен ссылаться хотя бы на один из `project_id`, `repository_id`, `workspace_id` или `job_id`;
-- `tool_profile_validation_results.tool_profile_id` обязателен и использует `ON DELETE CASCADE`;
-- `local_user_credentials.user_id` обязателен и использует `ON DELETE CASCADE`;
-- `password_reset_tokens.user_id` обязателен и использует `ON DELETE CASCADE`;
-- `user_sessions.user_id` обязателен и использует `ON DELETE CASCADE`;
-- `role_bindings.scope_id = NULL` только для `system` scope; для объектных scopes `scope_id` обязателен;
-- `scim_identities` должен ссылаться ровно на один субъект: `user_id` или `group_id`;
-- audit records не удаляются каскадно вместе с бизнес-сущностями.
+- `projects.root_path_id` is required and uses `ON DELETE RESTRICT`;
+- `project_links.source_project_id` and `project_links.target_project_id` are required and use `ON DELETE CASCADE`;
+- `project_links.repository_id` is nullable and uses `ON DELETE SET NULL`;
+- `project_scan_settings.project_id` is required and uses `ON DELETE CASCADE`;
+- `project_security_scan_settings.project_id` is required and uses `ON DELETE CASCADE`;
+- `projects.repository_id`, `projects.environment_id`, `projects.default_workspace_id` are nullable and use `ON DELETE SET NULL`;
+- `repositories.provider_instance_id` is nullable and uses `ON DELETE SET NULL`;
+- `repositories.default_credential_id` is nullable and uses `ON DELETE SET NULL`;
+- `repositories.superseded_by_repository_id` is nullable and uses `ON DELETE SET NULL`;
+- `repository_credentials.provider_instance_id` is required and uses `ON DELETE CASCADE`;
+- `workspaces.project_id` and `workspaces.environment_id` are required and use `ON DELETE CASCADE` for `project`, `ON DELETE RESTRICT` for `environment`;
+- `project_scans.job_id` and `project_scans.project_id` are required; deletion of related `jobs` and `projects` must use `ON DELETE RESTRICT`;
+- `job_locks.job_id` is required; deletion of related `jobs` must use `ON DELETE RESTRICT`;
+- `security_findings.project_id`, `security_findings.repository_id`, `security_findings.workspace_id`, `security_findings.job_id`, `security_findings.rule_set_id` are nullable, but a finding must reference at least one of `project_id`, `repository_id`, `workspace_id` or `job_id`;
+- `tool_profile_validation_results.tool_profile_id` is required and uses `ON DELETE CASCADE`;
+- `local_user_credentials.user_id` is required and uses `ON DELETE CASCADE`;
+- `password_reset_tokens.user_id` is required and uses `ON DELETE CASCADE`;
+- `user_sessions.user_id` is required and uses `ON DELETE CASCADE`;
+- `role_bindings.scope_id = NULL` only for `system` scope; for object scopes `scope_id` is required;
+- `scim_identities` must reference exactly one subject: `user_id` or `group_id`;
+- audit records are not cascade-deleted together with business entities.
 
-## Индексы и уникальность
+## Indexes and Uniqueness
 
-Минимальный набор для SQL adapters:
+Minimum set for SQL adapters:
 
 - `root_paths.path` unique;
 - `projects.root_path_id + projects.relative_path` unique;
@@ -1061,22 +1061,22 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `roles.name + roles.scope_type` unique;
 - `role_bindings.subject_type + role_bindings.subject_id + role_bindings.role_id + role_bindings.scope_type + role_bindings.scope_id` unique.
 
-## Cross-storage правила
+## Cross-Storage Rules
 
-- SQL/SQL-like backends реализуют инварианты через миграции, constraints и индексы там, где это поддерживается.
-- MVP storage adapters: `PostgreSQL` и `SQLite`.
-- Platform storage adapters: `MySQL` и `MSSQL`.
-- Aurora PostgreSQL поддерживается через `postgresql` adapter; Aurora MySQL поддерживается через `mysql` adapter.
-- Babelfish for Aurora PostgreSQL не считается `mssql` adapter target без отдельного compatibility decision.
-- Все SQL adapters используют синхронизированные logical migration versions с dialect-specific SQL.
-- Adapters с ограниченной поддержкой SQL constraints должны дублировать критичные проверки на уровне приложения.
-- Время хранится в UTC.
-- Идентификаторы должны быть opaque для API consumers.
-- `payload`, `details` и `result_payload` должны иметь версионируемую JSON-схему, описанную в [`payload-schemas.md`](payload-schemas.md).
+- SQL/SQL-like backends implement invariants through migrations, constraints and indexes where supported.
+- MVP storage adapters: `PostgreSQL` and `SQLite`.
+- Platform storage adapters: `MySQL` and `MSSQL`.
+- Aurora PostgreSQL is supported through the `postgresql` adapter; Aurora MySQL is supported through the `mysql` adapter.
+- Babelfish for Aurora PostgreSQL is not considered an `mssql` adapter target without a separate compatibility decision.
+- All SQL adapters use synchronized logical migration versions with dialect-specific SQL.
+- Adapters with limited SQL constraint support must duplicate critical checks at the application level.
+- Times are stored in UTC.
+- Identifiers must be opaque to API consumers.
+- `payload`, `details` and `result_payload` must have a versioned JSON schema described in [`payload-schemas.md`](payload-schemas.md).
 
-## Дизайн-заметки
+## Design Notes
 
-- модель остаётся общей для SQL и non-SQL backends;
-- SQL-адаптеры должны поддерживать миграции;
-- критичные инварианты должны валидироваться и на уровне storage, и на уровне приложения;
-- findings и project scans лучше проектировать как append-oriented сущности с явным статусом и timestamps.
+- the model remains common for SQL and non-SQL backends;
+- SQL adapters must support migrations;
+- critical invariants must be validated both at the storage level and at the application level;
+- findings and project scans are best designed as append-oriented entities with explicit status and timestamps.

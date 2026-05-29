@@ -1,26 +1,26 @@
 # Stage 06B: Project Scanner and Security Validator MVP
 
-## Цель
+## Goal
 
-Реализовать локальный анализ Terraform-проектов и security/validation checks как orchestration layer над локальными CLI-инструментами, используя только Stage 06A tool profile runtime.
+Implement local Terraform project analysis and security/validation checks as an orchestration layer over local CLI tools, using only the Stage 06A tool profile runtime.
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0006-project-scan-workflow-and-status-aggregation.md`
-- `docs/adr/0017-security-finding-fingerprint.md`
-- `docs/adr/0018-external-toolchain-profiles.md`
-- `docs/implementation-specs/stage-06a-toolchain-profiles-foundation.md`
+- `docs/en/requirements.md`
+- `docs/en/architecture.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/test-plan.md`
+- `docs/en/adr/0006-project-scan-workflow-and-status-aggregation.md`
+- `docs/en/adr/0017-security-finding-fingerprint.md`
+- `docs/en/adr/0018-external-toolchain-profiles.md`
+- `docs/en/implementation-specs/stage-06a-toolchain-profiles-foundation.md`
 
 ## Scope
 
-- модуль `project-scanner`;
-- модуль `security-validator`;
+- `project-scanner` module;
+- `security-validator` module;
 - `project_scan_settings`;
 - `project_security_scan_settings`;
 - `project_scans`;
@@ -28,45 +28,45 @@
 - `security_findings`;
 - parent-child workflow `project_scan` -> `security_validation_scan`;
 - `terraform validate`, `TFLint`;
-- `Trivy` как обязательный MVP security scanner;
+- `Trivy` as the mandatory MVP security scanner;
 - integration with Stage 06A profile-based compatibility layer for external CLI tools;
-- adapter extension points для `Gitleaks`, `Checkov`, `OPA` и `Conftest`;
-- scoped и global findings API.
+- adapter extension points for `Gitleaks`, `Checkov`, `OPA` and `Conftest`;
+- scoped and global findings API.
 
 ## Non-goals
 
-- administrative UI для rule sets;
+- administrative UI for rule sets;
 - external findings transfer;
-- отдельная сущность/API `security_scans`;
+- separate `security_scans` entity/API;
 - distributed scanner execution.
-- обязательная MVP-приёмка для всех security tools сразу;
-- bundled policy packs для OPA/Conftest.
+- mandatory MVP acceptance for all security tools at once;
+- bundled policy packs for OPA/Conftest.
 
 ## Deliverables
 
 - project scanner module;
 - security validator module;
 - scan settings API;
-- finding storage и rule set registry;
+- finding storage and rule set registry;
 - normalized scan DTO mapping from tool profiles;
 - local toolchain test harness;
 - aggregate status integration.
 
 ## Definition of Done
 
-- `POST /api/project-scans` создаёт `project_scans` и parent job;
-- child `security_validation_scan` jobs используют тот же `job_group_id`;
-- parent job не ждёт child jobs;
-- `status-monitor` обновляет aggregate `project_scans.status/result_payload`;
-- security modules запускаются только если включены в project settings;
-- обязательная MVP-приёмка требует успешной интеграции `Trivy`;
+- `POST /api/project-scans` creates `project_scans` and a parent job;
+- child `security_validation_scan` jobs use the same `job_group_id`;
+- parent job does not wait for child jobs;
+- `status-monitor` updates aggregate `project_scans.status/result_payload`;
+- security modules run only if enabled in project settings;
+- mandatory MVP acceptance requires successful `Trivy` integration;
 - external tool output is parsed only through approved tool profiles from ADR 0018;
 - certified tool versions and profiles from Stage 06A are used for Stage 06B acceptance tests;
 - unsupported, missing or uncertified tools return controlled machine-readable errors according to configured version policy;
 - findings use ADR 0017 fingerprints and repeated scans update existing finding rows by fingerprint;
 - `security_findings.fingerprint` is unique and `first_seen_at`/`last_seen_at` are maintained;
-- payload/result не содержит raw Terraform source или secrets;
-- network-restricted scan не делает outbound calls.
+- payload/result does not contain raw Terraform source or secrets;
+- network-restricted scan does not make outbound calls.
 
 ## Stage-local blockers
 
@@ -75,7 +75,7 @@
 ## Deferred / platform decisions
 
 - baseline bundled rule sets;
-- policy pack format для OPA/Conftest.
+- policy pack format for OPA/Conftest.
 
 ## Traceability
 
@@ -85,9 +85,9 @@
 - Data model: `project_scans`, scan settings, `security_findings`, `security_rule_sets`, `tool_profiles`, jobs.
 - ADR: `0006`, `0017`, `0018`.
 
-## Риски
+## Risks
 
-- смешение summary results и detailed findings;
-- нестабильность external CLI output formats;
-- автоматическая генерация профилей без явной валидации может изменить fingerprint semantics;
-- рост времени выполнения без отдельной очереди security jobs.
+- mixing summary results and detailed findings;
+- unstable external CLI output formats;
+- automatic profile generation without explicit validation can change fingerprint semantics;
+- runtime growth without a separate security jobs queue.

@@ -1,19 +1,19 @@
 # Stage 03: Jobs, Workers and Status Foundation
 
-## Цель
+## Goal
 
-Реализовать persistent jobs framework, worker execution model, leases, locks и базовый status-monitor.
+Implement the persistent jobs framework, worker execution model, leases, locks and basic status-monitor.
 
 ## Inputs
 
-- `docs/adr/0003-job-worker-processes.md`
-- `docs/adr/0005-job-leasing-and-worker-coordination.md`
-- `docs/adr/0006-project-scan-workflow-and-status-aggregation.md`
-- `docs/adr/0011-worker-defaults.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/api.md`
-- `docs/test-plan.md`
+- `docs/en/adr/0003-job-worker-processes.md`
+- `docs/en/adr/0005-job-leasing-and-worker-coordination.md`
+- `docs/en/adr/0006-project-scan-workflow-and-status-aggregation.md`
+- `docs/en/adr/0011-worker-defaults.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/api.md`
+- `docs/en/test-plan.md`
 
 ## Scope
 
@@ -24,8 +24,8 @@
 - atomic job claim;
 - heartbeat, lease expiry recovery, retry/backoff;
 - SQLite worker process limit enforcement;
-- worker handlers для `config_reload` и `module_restart`;
-- basic status-monitor для jobs/workers/modules;
+- worker handlers for `config_reload` and `module_restart`;
+- basic status-monitor for jobs/workers/modules;
 - status API endpoints.
 
 ## Implementation decisions
@@ -36,7 +36,7 @@
   handlers as framework validation handlers and for future workflow
   integration.
 - Public write endpoints that are explicitly documented as background
-  operations in `docs/api.md` create `jobs` in `queued` and return
+  operations in `docs/en/api.md` create `jobs` in `queued` and return
   `202 job_ref`.
 - Existing Stage 02 synchronous lifecycle endpoints remain explicit exceptions
   until a later stage introduces async variants or a documented contract
@@ -50,7 +50,7 @@
   command or flag and must return `job_ref` or provide a documented wait mode.
 - `GET /api/status`, `GET /api/status/jobs/{job_id}` and
   `GET /api/status/workers` use the `runtime_status.v1`, `job_status.v1` and
-  `worker_status.v1` DTOs from `docs/api.md`.
+  `worker_status.v1` DTOs from `docs/en/api.md`.
 - Stage 03 derives `worker_status.v1` from running jobs and their leases,
   aggregated by `worker_id`. Idle workers are not reported until a later worker
   heartbeat registry is introduced.
@@ -65,7 +65,7 @@
 - `jobs.payload` is validated before persistence and rejected if it contains
   secret-like JSON keys, URL userinfo or unresolved `secretref://...` values.
 - `jobs.payload` is also validated against the minimum admitted job-type
-  contract from `docs/payload-schemas.md` before persistence. This prevents a
+  contract from `docs/en/payload-schemas.md` before persistence. This prevents a
   job type admitted by the physical schema from being queued with a valid
   `schema_version` but missing required routing/domain fields.
 
@@ -204,7 +204,7 @@ Dialect storage rules:
 
 `jobs` constraints:
 
-- `job_type` must be one of the values listed in `docs/data-model.md`;
+- `job_type` must be one of the values listed in `docs/en/data-model.md`;
 - `status` must be one of `queued`, `running`, `succeeded`, `failed` or
   `cancelled`;
 - `attempt_count >= 0`;
@@ -273,7 +273,7 @@ ordering.
 `job_events` constraints and indexes:
 
 - `event_type` must include at least the baseline values from
-  `docs/data-model.md`;
+  `docs/en/data-model.md`;
 - `payload` must be valid JSON when non-null;
 - `job_id` references `jobs(id)` with `ON DELETE RESTRICT`;
 - index on `(job_group_id, created_at)`;
@@ -294,7 +294,7 @@ ordering.
 `workflow_statuses` constraints and indexes:
 
 - `workflow_type` must include at least the baseline values from
-  `docs/data-model.md`;
+  `docs/en/data-model.md`;
 - `aggregate_status` must be one of `queued`, `running`, `succeeded`, `failed`,
   `partial` or `cancelled`;
 - `progress_current >= 0`;
@@ -404,7 +404,7 @@ Refresh behavior:
 - `thelper-worker` execution loop;
 - `thelper-worker` storage/config bootstrap using the same storage provider,
   DSN and active storage profile resolution as `thelper`;
-- job lease implementation для SQLite/PostgreSQL;
+- job lease implementation for SQLite/PostgreSQL;
 - lock acquire/release semantics;
 - status-monitor read models;
 - job/status API;
@@ -419,15 +419,15 @@ Refresh behavior:
 - Stage 02 synchronous `thelper-ctl reload` and `thelper-ctl restart <module>`
   commands continue returning their synchronous result DTOs without requiring a
   running worker or creating jobs;
-- только один worker может claim один job;
-- heartbeat обновляется для running jobs;
-- expired leases восстанавливаются через retry/backoff или failure после `max_attempts`;
-- `job_locks` не допускают конфликтующие active operations;
-- status endpoints читают aggregate read models.
+- only one worker can claim a given job;
+- heartbeat is updated for running jobs;
+- expired leases are recovered through retry/backoff or failure after `max_attempts`;
+- `job_locks` prevent conflicting active operations;
+- status endpoints read aggregate read models.
 
 ## Remaining MVP blockers
 
-- нет Stage 03 blockers после ADR 0011.
+- no Stage 03 blockers remain after ADR 0011.
 
 ## Implementation verification
 
@@ -476,8 +476,8 @@ Regression coverage added for 100% Stage 03 closure:
 - Data model: `jobs`, `job_locks`, `job_events`, `workflow_statuses`.
 - ADR: `0003`, `0005`, `0006`, `0011`.
 
-## Риски
+## Risks
 
-- race conditions между workers;
-- разные claim semantics в SQLite и PostgreSQL;
-- UI начнёт агрегировать статус самостоятельно вместо `status-monitor`.
+- race conditions between workers;
+- different claim semantics in SQLite and PostgreSQL;
+- UI starts aggregating status independently instead of using `status-monitor`.

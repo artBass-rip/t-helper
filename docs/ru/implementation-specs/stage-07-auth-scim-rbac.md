@@ -6,12 +6,12 @@
 
 ## Inputs
 
-- `docs/access-control.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0014-local-password-hashing.md`
+- `docs/ru/access-control.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/test-plan.md`
+- `docs/ru/adr/0014-local-password-hashing.md`
 
 ## Scope
 

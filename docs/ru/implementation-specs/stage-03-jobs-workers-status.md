@@ -6,14 +6,14 @@
 
 ## Inputs
 
-- `docs/adr/0003-job-worker-processes.md`
-- `docs/adr/0005-job-leasing-and-worker-coordination.md`
-- `docs/adr/0006-project-scan-workflow-and-status-aggregation.md`
-- `docs/adr/0011-worker-defaults.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/api.md`
-- `docs/test-plan.md`
+- `docs/ru/adr/0003-job-worker-processes.md`
+- `docs/ru/adr/0005-job-leasing-and-worker-coordination.md`
+- `docs/ru/adr/0006-project-scan-workflow-and-status-aggregation.md`
+- `docs/ru/adr/0011-worker-defaults.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/api.md`
+- `docs/ru/test-plan.md`
 
 ## Scope
 
@@ -36,7 +36,7 @@
   handlers as framework validation handlers and for future workflow
   integration.
 - Public write endpoints that are explicitly documented as background
-  operations in `docs/api.md` create `jobs` in `queued` and return
+  operations in `docs/ru/api.md` create `jobs` in `queued` and return
   `202 job_ref`.
 - Existing Stage 02 synchronous lifecycle endpoints remain explicit exceptions
   until a later stage introduces async variants or a documented contract
@@ -50,7 +50,7 @@
   command or flag and must return `job_ref` or provide a documented wait mode.
 - `GET /api/status`, `GET /api/status/jobs/{job_id}` and
   `GET /api/status/workers` use the `runtime_status.v1`, `job_status.v1` and
-  `worker_status.v1` DTOs from `docs/api.md`.
+  `worker_status.v1` DTOs from `docs/ru/api.md`.
 - Stage 03 derives `worker_status.v1` from running jobs and their leases,
   aggregated by `worker_id`. Idle workers are not reported until a later worker
   heartbeat registry is introduced.
@@ -65,7 +65,7 @@
 - `jobs.payload` is validated before persistence and rejected if it contains
   secret-like JSON keys, URL userinfo or unresolved `secretref://...` values.
 - `jobs.payload` is also validated against the minimum admitted job-type
-  contract from `docs/payload-schemas.md` before persistence. This prevents a
+  contract from `docs/ru/payload-schemas.md` before persistence. This prevents a
   job type admitted by the physical schema from being queued with a valid
   `schema_version` but missing required routing/domain fields.
 
@@ -204,7 +204,7 @@ Dialect storage rules:
 
 `jobs` constraints:
 
-- `job_type` must be one of the values listed in `docs/data-model.md`;
+- `job_type` must be one of the values listed in `docs/ru/data-model.md`;
 - `status` must be one of `queued`, `running`, `succeeded`, `failed` or
   `cancelled`;
 - `attempt_count >= 0`;
@@ -273,7 +273,7 @@ ordering.
 `job_events` constraints and indexes:
 
 - `event_type` must include at least the baseline values from
-  `docs/data-model.md`;
+  `docs/ru/data-model.md`;
 - `payload` must be valid JSON when non-null;
 - `job_id` references `jobs(id)` with `ON DELETE RESTRICT`;
 - index on `(job_group_id, created_at)`;
@@ -294,7 +294,7 @@ ordering.
 `workflow_statuses` constraints and indexes:
 
 - `workflow_type` must include at least the baseline values from
-  `docs/data-model.md`;
+  `docs/ru/data-model.md`;
 - `aggregate_status` must be one of `queued`, `running`, `succeeded`, `failed`,
   `partial` or `cancelled`;
 - `progress_current >= 0`;

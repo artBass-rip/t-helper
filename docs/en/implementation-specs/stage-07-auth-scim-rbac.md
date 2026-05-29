@@ -1,44 +1,44 @@
 # Stage 07: Auth, RBAC, SCIM and Audit
 
-## Цель
+## Goal
 
-Ввести отдельный модуль `auth`, обеспечивающий локальную аутентификацию, авторизацию, RBAC, SCIM contract/stub и аудит security-событий для backend API.
+Introduce a separate `auth` module that provides local authentication, authorization, RBAC, a SCIM contract/stub and audit logging for backend API security events.
 
 ## Inputs
 
-- `docs/access-control.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0014-local-password-hashing.md`
+- `docs/en/access-control.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/test-plan.md`
+- `docs/en/adr/0014-local-password-hashing.md`
 
 ## Scope
 
-- модуль `auth`;
-- локальная аутентификация;
+- `auth` module;
+- local authentication;
 - first-run bootstrap admin user flow;
 - runtime auth session API: login, logout, current session, password reset and password change;
-- каркас external auth providers;
+- external auth provider skeleton;
 - pluggable auth provider registry;
 - users, groups, memberships;
 - roles, permissions, role bindings;
 - API authorization enforcement;
-- SCIM contract/stub без полноценного sync workflow;
-- `audit_log` для security-событий.
+- SCIM contract/stub without a full sync workflow;
+- `audit_log` for security events.
 
 ## Non-goals
 
 - frontend administrative UI;
-- enterprise IAM integrations сверх согласованного минимального набора providers;
+- enterprise IAM integrations beyond the agreed minimal provider set;
 - detailed policy authoring UI.
-- полноценный SCIM sync workflow.
+- full SCIM sync workflow.
 
 ## Deliverables
 
 - auth module;
 - auth provider libraries for local auth and future external providers;
-- persistence model для RBAC и SCIM;
+- persistence model for RBAC and SCIM;
 - local credentials persistence with Argon2id PHC hashes;
 - `user_sessions` persistence with hash-only opaque session token storage;
 - `auth_bootstrap_credentials` persistence for one-time first-run bootstrap display and expiry tracking;
@@ -49,13 +49,13 @@
 
 ## Definition of Done
 
-- все API endpoints проверяют authorization matrix;
-- wildcard permissions развёрнуты в concrete permissions на seed/migration уровне;
-- runtime не использует wildcard string matching;
-- object-scoped access не раскрывается через `system.runtime.read`;
-- group inheritance работает;
-- auth providers реализованы как подключаемые libraries за provider interface;
-- unknown auth provider отклоняется controlled validation error;
+- all API endpoints check the authorization matrix;
+- wildcard permissions are expanded into concrete permissions at seed/migration level;
+- runtime does not use wildcard string matching;
+- object-scoped access is not exposed through `system.runtime.read`;
+- group inheritance works;
+- auth providers are implemented as pluggable libraries behind a provider interface;
+- unknown auth provider is rejected with a controlled validation error;
 - local password hashes use Argon2id PHC strings and are stored outside `users`;
 - first-run bootstrap admin is created only for empty auth state, shown once in first UI and stdout, expires after 24 hours and is not recreated automatically;
 - successful login creates a session without persisting raw session token material;
@@ -68,7 +68,7 @@
 
 ## Deferred non-blocking decisions
 
-- минимальный набор external auth providers beyond local auth;
+- minimal set of external auth providers beyond local auth;
 - SCIM sync conflict policy and full sync handler.
 
 ## Traceability
@@ -79,8 +79,8 @@
 - Data model: auth/RBAC/SCIM/audit entities, `local_user_credentials`, `password_reset_tokens`, `auth_bootstrap_credentials`.
 - ADR: `0012`, `0014`.
 
-## Риски
+## Risks
 
-- слишком позднее RBAC enforcement приведёт к переделке early handlers;
-- неоднозначность precedence system/object roles;
-- provider abstraction может расшириться до enterprise IAM раньше MVP.
+- late RBAC enforcement will require reworking early handlers;
+- ambiguous precedence between system and object roles;
+- provider abstraction may expand into enterprise IAM before MVP.

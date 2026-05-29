@@ -6,12 +6,12 @@
 
 ## Inputs
 
-- `docs/adr/0018-external-toolchain-profiles.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/configuration.md`
-- `docs/test-plan.md`
+- `docs/ru/adr/0018-external-toolchain-profiles.md`
+- `docs/ru/api.md`
+- `docs/ru/data-model.md`
+- `docs/ru/payload-schemas.md`
+- `docs/ru/configuration.md`
+- `docs/ru/test-plan.md`
 
 ## Scope
 

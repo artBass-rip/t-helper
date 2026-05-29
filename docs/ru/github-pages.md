@@ -33,17 +33,17 @@ Generated document pages also include a static RU/EN switcher for the same
 document path. This keeps the published site usable even when JavaScript is
 unavailable.
 
-Markdown documents under `docs/` are the canonical Russian sources. Matching
-Markdown documents under `docs/en/` are the canonical English sources for the
-same document paths. During publication, `docs/build-pages.js` generates
-Russian pages from `docs/<path>.md` and English pages from
-`docs/en/<path>.md`, rewrites internal Markdown links to the generated
-same-language HTML pages and links inline document references such as
-`docs/api.md` when the target exists. The published Pages site therefore shows
-documentation as complete styled pages with common navigation, local table of
-contents, related documents, backlinks and a full documentation catalog. The
-raw same-language `.md` source remains available from each generated document
-page.
+Markdown documents under `docs/ru/**/*.md` are the canonical Russian sources.
+Matching Markdown documents under `docs/en/**/*.md` are the canonical English
+sources for the same document paths. During publication,
+`docs/build-pages.js` uses `docs/ru` as the path catalog, generates Russian
+pages at the Pages root and English pages under `en/`, rewrites internal
+Markdown links to the generated same-language HTML pages and links inline
+document references such as `docs/ru/api.md` or `docs/en/api.md` when the
+target exists. The published Pages site therefore shows documentation as
+complete styled pages with common navigation, local table of contents, related
+documents, backlinks and a full documentation catalog. The raw same-language
+`.md` source remains available from each generated document page.
 
 ## Deployment
 
@@ -77,7 +77,7 @@ The workflow permissions are intentionally limited to:
 - Keep generated document pages buildable with the repository-local Node.js
   script; do not require package installation for Pages publication.
 - Keep cross-document references as relative Markdown links or inline
-  `docs/...md` references so the Pages generator can produce HTML links and
-  backlinks.
+  `docs/ru/...md` / `docs/en/...md` references so the Pages generator can
+  produce HTML links and backlinks.
 - Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI
-  contracts remain in `docs/frontend-ui-contract.md`.
+  contracts remain in `docs/ru/frontend-ui-contract.md`.

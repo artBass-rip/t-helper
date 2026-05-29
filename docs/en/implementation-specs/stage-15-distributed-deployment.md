@@ -1,35 +1,35 @@
 # Stage 15: Distributed Deployment
 
-## Цель
+## Goal
 
-Подготовить систему к multi-node и HA deployment без ломки доменных контрактов и без расхождения с монолитным режимом.
+Prepare the system for multi-node and HA deployment without breaking domain contracts and without diverging from monolithic mode.
 
 ## Inputs
 
-- `docs/architecture.md`
-- `docs/roadmap.md`
-- `docs/technology-stack.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/access-control.md`
-- `docs/implementation-specs/stage-09-runtime-observability-hardening.md`
+- `docs/en/architecture.md`
+- `docs/en/roadmap.md`
+- `docs/en/technology-stack.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/access-control.md`
+- `docs/en/implementation-specs/stage-09-runtime-observability-hardening.md`
 
 ## Scope
 
-- вынос `global-scanner`;
-- вынос `project-scanner`;
-- вынос `repository-manager`;
-- вынос `security-validator`;
-- вынос `auth`;
-- optional вынос `status-monitor`;
-- межмодульные contracts;
-- service discovery и health model;
+- extracting `global-scanner`;
+- extracting `project-scanner`;
+- extracting `repository-manager`;
+- extracting `security-validator`;
+- extracting `auth`;
+- optional extraction of `status-monitor`;
+- inter-module contracts;
+- service discovery and health model;
 - worker groups, queues, locks ownership;
 - HA topology.
 
 ## Non-goals
 
-- изменение MVP product scenarios;
+- changing MVP product scenarios;
 - distributed-only user API;
 - second configuration source of truth;
 - incompatible payload schema changes.
@@ -73,9 +73,9 @@
 
 - Roadmap: Stage 15.
 - Acceptance: `ACC-PLATFORM-005`.
-- Platform criteria are defined in `docs/roadmap.md`.
+- Platform criteria are defined in `docs/en/roadmap.md`.
 
-## Риски
+## Risks
 
 - distributed extraction before runtime hardening multiplies runtime complexity;
 - informal inter-module contracts diverge from monolith;

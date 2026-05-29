@@ -1,8 +1,8 @@
 # Stage 05: Repository Manager MVP
 
-## Цель
+## Goal
 
-Добавить управляемые repository operations поверх registry, не нарушая инварианты путей, идемпотентности и сериализации конкурентных действий.
+Add managed repository operations on top of the registry without violating path, idempotency and concurrent-action serialization invariants.
 
 ## Implementation status
 
@@ -15,15 +15,15 @@ remaining repository work is split into later stages:
 
 ## Inputs
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/api.md`
-- `docs/data-model.md`
-- `docs/payload-schemas.md`
-- `docs/test-plan.md`
-- `docs/adr/0013-repository-identity.md`
-- `docs/adr/0015-repository-provider-integration-profiles.md`
-- `docs/adr/0016-repository-provider-url-parsing.md`
+- `docs/en/requirements.md`
+- `docs/en/architecture.md`
+- `docs/en/api.md`
+- `docs/en/data-model.md`
+- `docs/en/payload-schemas.md`
+- `docs/en/test-plan.md`
+- `docs/en/adr/0013-repository-identity.md`
+- `docs/en/adr/0015-repository-provider-integration-profiles.md`
+- `docs/en/adr/0016-repository-provider-url-parsing.md`
 
 ## Entry baseline
 
@@ -63,45 +63,45 @@ Closed Stage 05 gaps in the implementation:
 
 ## Scope
 
-- модуль `repository-manager`;
-- полноценная модель `repositories`;
-- provider-aware clone adapters для `generic` Git и одного managed provider: `gitlab` или `github`;
+- `repository-manager` module;
+- full `repositories` model;
+- provider-aware clone adapters for `generic` Git and one managed provider: `gitlab` or `github`;
 - repository identity `provider + provider_host + full_path`;
 - repository card enrichment for Stage 04 generic filesystem-discovered repositories;
 - GitKraken-like provider integration profiles with multi-host support;
 - multi-credential support per provider host with usage validation;
 - `clone`, `pull`, `sync`;
-- `job_locks` для сериализации;
-- API и jobs repository operations.
+- `job_locks` for serialization;
+- API and jobs repository operations.
 
 ## Non-goals
 
-- project/security scan orchestration после clone/pull;
+- project/security scan orchestration after clone/pull;
 - UI clone workflow;
-- расширенные auth providers;
+- extended auth providers;
 - distributed execution repository-manager.
 - webhook-based sync;
 - polling-based sync;
 - recursive GitLab group/subgroups clone;
-- `bitbucket` и `azure_devops` adapters.
+- `bitbucket` and `azure_devops` adapters.
 
 ## Deliverables
 
 - repository-manager module;
-- provider adapter для `generic` Git;
-- provider adapter для одного managed provider: `github`;
+- provider adapter for `generic` Git;
+- provider adapter for one managed provider: `github`;
 - provider instance/profile API and storage;
 - repository credentials API and storage using `secretref://...`;
 - normalized repository identity handling with `provider_host`;
 - repository lifecycle fields: `status`, `discovery_source`, `superseded_by_repository_id`, `identity_confirmed_at`;
-- repo operation jobs и payload handlers;
+- repo operation jobs and payload handlers;
 - safe path normalization;
 - repository API;
 - concurrency tests.
 
 ## Definition of Done
 
-- clone/pull/sync создают jobs и выполняются через worker;
+- clone/pull/sync create jobs and run through worker;
 - repository cards are unique by `provider + provider_host + full_path`;
 - repository manager enriches repository cards and relinks project relations when needed, but never merges separate `projects` rows;
 - adapters normalize `provider_host` and `full_path` before repository lookup or creation;
@@ -115,10 +115,10 @@ Closed Stage 05 gaps in the implementation:
 - Git operations run non-interactively and repository operation failure messages are redacted before being persisted on repository cards;
 - released/expired clone pre-create reservations are pruned after the retention window;
 - provider URL parsing follows ADR 0016 and equivalent HTTPS/SSH/scp-like URLs resolve to the same repository identity;
-- `local_path` всегда внутри выбранного `root_path`;
-- path traversal отклоняется на API и domain layer;
-- новый root path при clone сохраняется в `root_paths`;
-- конфликтующие repo operations сериализуются через `job_locks` and the MVP conflict policy below;
+- `local_path` is always inside the selected `root_path`;
+- path traversal is rejected at the API and domain layer;
+- a new root path on clone is saved in `root_paths`;
+- conflicting repo operations are serialized through `job_locks` and the MVP conflict policy below;
 - provider-aware operations reject `status = superseded` repositories with controlled validation error.
 - Stage 05 MVP `repo_sync` is pull-only: the worker runs the same Git pull
   path as `repo_pull` and records `operation = repo_sync`; project/security
@@ -345,8 +345,8 @@ following checklist:
 - Data model: `repositories`, `repository_provider_instances`, `repository_credentials`, `jobs`, `job_locks`, `root_paths`.
 - ADR: `0013`, `0015`, `0016`.
 
-## Риски
+## Risks
 
-- ошибки path normalization приведут к записи за пределы root;
-- provider adapters разойдутся по payload/transport behavior;
-- расширение provider set после MVP может нарушить URL parsing contract, если adapters не используют ADR 0016.
+- path normalization errors will lead to writes outside the root;
+- provider adapters may diverge in payload/transport behavior;
+- expanding the provider set after MVP may break the URL parsing contract if adapters do not use ADR 0016.

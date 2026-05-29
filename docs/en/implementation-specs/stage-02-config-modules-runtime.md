@@ -8,34 +8,34 @@ Stage 02 implements synchronous config/module lifecycle operations. It does not
 create Stage 03 `jobs`; reload/restart responses use Stage 02 result DTOs and
 persist runtime observability in `module_states`.
 
-## Цель
+## Goal
 
-Реализовать persisted runtime configuration, module lifecycle и local singleton runtime policy.
+Implement persisted runtime configuration, module lifecycle and local singleton runtime policy.
 
 ## Inputs
 
-- `docs/configuration.md`
-- `docs/data-model.md`
-- `docs/interfaces.md`
-- `docs/api.md`
-- `docs/technology-stack.md`
-- `docs/adr/0004-frontend-and-tauri-runtime-policy.md`
-- `docs/adr/0008-configuration-key-compatibility.md`
-- `docs/adr/0009-secret-resolution.md`
-- `docs/adr/0010-singleton-runtime-lock-and-health.md`
+- `docs/en/configuration.md`
+- `docs/en/data-model.md`
+- `docs/en/interfaces.md`
+- `docs/en/api.md`
+- `docs/en/technology-stack.md`
+- `docs/en/adr/0004-frontend-and-tauri-runtime-policy.md`
+- `docs/en/adr/0008-configuration-key-compatibility.md`
+- `docs/en/adr/0009-secret-resolution.md`
+- `docs/en/adr/0010-singleton-runtime-lock-and-health.md`
 
 ## Scope
 
 - `config_entries`;
 - `module_states`;
-- import через `thelper-ctl -reconfigure`;
-- reload через `thelper-ctl -reload`;
+- import through `thelper-ctl -reconfigure`;
+- reload through `thelper-ctl -reload`;
 - `thelper-ctl -restart <module>`;
-- module registry с lifecycle `start`, `stop`, `reload`, `health`;
+- module registry with lifecycle `start`, `stop`, `reload`, `health`;
 - initial module registry seed: `core`, `worker-runtime`, `config-manager`, `module-runtime`, `status-monitor`, `global-scanner`, `repository-manager`, `project-scanner`, `security-validator`, `auth`, `web`;
 - singleton runtime lock/health mechanism;
-- masking secrets в `GET /api/config`;
-- policy для `secretref://...`.
+- masking secrets in `GET /api/config`;
+- policy for `secretref://...`.
 
 ## Non-goals
 
@@ -52,13 +52,13 @@ persist runtime observability in `module_states`.
 - initial module registry seed;
 - module state persistence;
 - config/module API endpoints;
-- CLI commands для reconfigure/reload/restart;
+- CLI commands for reconfigure/reload/restart;
 - full storage profile migration command `thelper-ctl -migrate-db`;
 - singleton runtime discovery contract using the existing `health_status.v1` response schema.
 
 ## Definition of Done
 
-- `thelper-ctl -reconfigure` атомарно импортирует config и ignore rules;
+- `thelper-ctl -reconfigure` atomically imports config and ignore rules;
 - `PUT /api/config` imports config atomically without clearing imported system
   `ignore_rules`, because `.t-helper.ignore` is not part of the HTTP payload;
 - unknown config keys and deprecated aliases are rejected with `validation_error`;
@@ -74,20 +74,20 @@ persist runtime observability in `module_states`.
 - failed DB migration does not change the active `current` profile;
 - SQLite -> PostgreSQL `thelper-ctl -migrate-db` is covered end-to-end for
   Stage 02-owned tables using `secretref://env/...` credentials;
-- runtime читает конфигурацию из БД, а не из файлов;
+- runtime reads configuration from the DB, not from files;
 - reload returns accepted keys, actually applied Stage 02 keys and
   restart-required keys; accepted-but-not-applied reloadable keys must not be
   misreported as applied;
-- module restart обновляет `module_states`;
-- `modules.enabled` отклоняет unknown module names;
-- registered but unavailable modules возвращаются в `GET /api/modules` со state `unavailable`;
-- restart/reload для unavailable module возвращает controlled error;
+- module restart updates `module_states`;
+- `modules.enabled` rejects unknown module names;
+- registered but unavailable modules are returned in `GET /api/modules` with state `unavailable`;
+- restart/reload for an unavailable module returns a controlled error;
 - sensitive literal values are rejected;
-- secrets не сохраняются и не возвращаются в открытом виде;
+- secrets are not stored or returned in cleartext;
 - `GET /api/config` returns masked sensitive values and never returns resolved secrets;
 - Stage 02 extends the existing Stage 01 `GET /api/health` endpoint with singleton runtime lock/probe semantics and must not introduce a breaking `health_status.v1` response schema change;
 - runtime lock metadata `config_database_fingerprint` matches the safe `database_fingerprint` returned by `/api/health`;
-- повторный local runtime не создаёт второй активный процесс.
+- a repeated local runtime does not create a second active process.
 
 ## Verification
 
@@ -141,7 +141,7 @@ Covered Stage 02 checks:
 
 ## Remaining MVP blockers
 
-- нет Stage 02 blockers после ADR 0010 и Stage 00 initial module registry decision.
+- no Stage 02 blockers remain after ADR 0010 and the Stage 00 initial module registry decision.
 
 ## Traceability
 
@@ -153,11 +153,11 @@ Covered Stage 02 checks:
   `ignore_rules`.
 - ADR: `0004`, `0008`, `0009`, `0010`.
 
-## Риски
+## Risks
 
-- расхождение file import и runtime source of truth;
-- неявное сохранение секретов в `config_entries`;
-- module lifecycle станет in-memory only и потеряет observability.
+- divergence between file import and the runtime source of truth;
+- implicit storage of secrets in `config_entries`;
+- module lifecycle becomes in-memory only and loses observability.
 
 ## Notes for Later Stages
 
