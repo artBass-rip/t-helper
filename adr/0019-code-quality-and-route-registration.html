@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0019: Code Quality Baseline And Route Registration - T-Helper documentation.">
+    <title>ADR 0019: Code Quality Baseline And Route Registration - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0019-code-quality-and-route-registration.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0019-code-quality-and-route-registration.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0019-code-quality-baseline-and-route-registration">ADR 0019: Code Quality Baseline And Route Registration</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#context">Context</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0019-code-quality-baseline-and-route-registration">ADR 0019: Code Quality Baseline And Route Registration</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="context">Context</h2>
+<p>После Stage 05 runtime содержит стабильный набор backend routes, jobs lifecycle paths и storage-backed stores. Предыдущая реализация <code>httpapi.New</code> принимала <code>optionalHandlers ...any</code> и регистрировала routes через <code>type-switch</code>. Такой подход позволял передать неподдержанный handler без compile-time ошибки: он молчаливо игнорировался.</p>
+<p>Store-слой также содержит повторяющийся паттерн:</p>
+<pre><code class="language-text">BeginTx -&gt; defer Rollback -&gt; business writes -&gt; Commit</code></pre>
+<p>Паттерн корректен, но при росте store-файлов усложняет чтение изменяемых lifecycle paths.</p>
+<h2 id="decision">Decision</h2>
+<p>HTTP route composition использует явный compile-time контракт:</p>
+<pre><code class="language-go">type RouteRegistrar interface {
+	RegisterRoutes(chi.Router)
+}</code></pre>
+<p>Каждый HTTP handler регистрирует собственные routes рядом со своими методами. <code>httpapi.New</code> отвечает только за создание router, common middleware и вызов <code>RegisterRoutes</code>.</p>
+<p>Для транзакций добавлен helper:</p>
+<pre><code class="language-go">func WithTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) error</code></pre>
+<p>Он централизует rollback/commit поведение и оставляет возможность передавать <code>sql.TxOptions</code> для hot paths.</p>
+<p>Локальный quality gate зафиксирован в <code>Makefile</code>:</p>
+<ul>
+<li><code>make test</code>: <code>gofmt</code> check, <code>go vet ./...</code>, <code>go test ./...</code>;</li>
+<li><code>make race</code>: <code>go test -race ./...</code>.</li>
+</ul>
+<p>Performance work должен сопровождаться benchmarks или другим измеримым baseline. Первые benchmarks добавлены для <code>jobs.Store.ClaimNext</code> и <code>jobs.Store.RefreshWorkflowStatus</code>.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Unsupported HTTP handler type больше нельзя передать в <code>httpapi.New</code> без compile-time ошибки.</li>
+<li>Route ownership виден локально в handler-файлах, а общий route smoke-test защищает от случайной потери endpoint.</li>
+<li><code>storage.WithTx</code> используется в новых или сильно изменяемых местах; массовый механический рефакторинг существующего store-кода не требуется.</li>
+<li><code>make test</code> становится рекомендуемой командой перед PR/commit.</li>
+<li>Stage 09 optimization backlog должен ссылаться на измерения, а не только на интуицию.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>Полный SQL dialect abstraction не входит в это решение и остаётся отдельным backlog item.</li>
+<li>Разделение крупных store-файлов не выполняется механически без изменений соответствующей области.</li>
+<li><code>WithTx</code> не скрывает domain-specific retry, isolation или lock strategy.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0019-code-quality-and-route-registration.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

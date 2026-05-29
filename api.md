@@ -7,8 +7,8 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 
 ## Текущий executable baseline
 
-Репозиторий сейчас находится на Stage 04 scanner/registry baseline. В текущем
-runtime реализованы:
+Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В
+текущем runtime реализованы:
 
 - `GET /api/health`;
 - `GET /api/config`, `PUT /api/config`;
@@ -25,14 +25,23 @@ runtime реализованы:
 - `POST /api/project-scans` only as the Stage 04 lifecycle guard for future
   Stage 06 scans;
 - `GET /api/repos`, `GET /api/repos/{id}`;
+- `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`;
+- `GET /api/repo-credentials`, `PUT /api/repo-credentials`;
+- `POST /api/repos/clone`, `POST /api/repos/pull`,
+  `POST /api/repos/sync`;
 - `GET /api/ignore-rules`, `PUT /api/ignore-rules`;
 - `GET /api/environments`, `GET /api/environments/{id}`;
 - `GET /api/workspaces`, `GET /api/workspaces/{id}`.
 
+Executable route registration is type-safe: every handler implements
+`httpapi.RouteRegistrar`, and the current route surface is covered by
+`internal/httpapi/router_test.go`. API changes must update this document and
+the route smoke-test in the same change.
+
 The endpoint table below also includes accepted future-stage contracts. Rows
 whose Notes column identifies a later stage are specification targets, not
-current runtime routes, unless the Notes column explicitly says that Stage 04
-exposes a guard or compatibility endpoint.
+current runtime routes, unless the Notes column explicitly says that the current
+baseline exposes a guard or compatibility endpoint.
 
 ## Общие правила
 
@@ -249,9 +258,9 @@ paths, usernames, passwords or userinfo.
 | `PUT /api/repo-provider-instances` | `repository_provider_instances[]` | `list_response<repository_provider_instance>` | Идемпотентно upsert'ит configured provider hosts/profiles by `id` or `provider + provider_host`; secrets are not accepted here. |
 | `GET /api/repo-credentials` | `limit`, `cursor`, `provider_instance_id?`, `usage?`, `auth_type?` | `list_response<repository_credential>` | Возвращает credentials with masked secret refs only. |
 | `PUT /api/repo-credentials` | `repository_credentials[]` | `list_response<repository_credential>` | Идемпотентно upsert'ит credential metadata and secret refs by `id` or `provider_instance_id + name`; raw secret values are rejected. |
-| `POST /api/repos/clone` | `provider_instance_id?`, `provider`, `provider_host?`, `credential_id?`, `protocol`, `clone_url?`, `group_path?`, `clone_scope`, `full_path?`, `root_path_id?`, `new_root_path?`, `target_directory?`, `new_target_directory?` | `202 job_ref` | Создаёт `jobs.job_type = repo_clone`; URL parsing follows ADR 0016; repository identity нормализуется как `provider + provider_host + full_path`; before a stable `repository_id` exists, clone checks active conflicts by normalized repository identity and normalized target path; `provider_instance_id` выбирает configured host/profile; `credential_id` выбирает credential with required usage; `clone_url` принимается только как transport metadata, не участвует в deduplication и не должен сохраняться с credentials/userinfo; Stage 05 MVP supports `single_repository` clone for `generic` Git and one managed provider from `gitlab`/`github`; `gitlab_group_recursive` is a post-MVP extension and requires `provider_api` credential usage when enabled. |
-| `POST /api/repos/pull` | `repository_id`, `credential_id?` | `202 job_ref` | Создаёт `jobs.job_type = repo_pull`; credential must support `git_transport`. |
-| `POST /api/repos/sync` | `repository_id`, `credential_id?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = repo_sync`; credential usage depends on sync mode. |
+| `POST /api/repos/clone` | `provider_instance_id?`, `provider`, `provider_host?`, `credential_id?`, `protocol`, `clone_url?`, `group_path?`, `clone_scope`, `full_path?`, `root_path_id?`, `new_root_path?`, `target_directory?`, `new_target_directory?` | `202 job_ref` | Создаёт `jobs.job_type = repo_clone`; URL parsing follows ADR 0016; repository identity нормализуется как `provider + provider_host + full_path`; before a stable `repository_id` exists, clone checks active conflicts by normalized repository identity and normalized target path; `provider_instance_id` выбирает configured host/profile; `credential_id` выбирает credential with required usage and protocol-compatible `auth_type` (`ssh_key` for `ssh`, HTTPS/token auth types for `https`); `clone_url` принимается только как transport metadata, не участвует в deduplication и не должен сохраняться с credentials/userinfo; Stage 05 MVP supports `single_repository` clone for `generic` Git and GitHub; `gitlab_group_recursive` is a post-MVP extension and requires `provider_api` credential usage when enabled. |
+| `POST /api/repos/pull` | `repository_id`, `credential_id?` | `202 job_ref` | Создаёт `jobs.job_type = repo_pull`; credential must support `git_transport` and match the repository transport protocol. |
+| `POST /api/repos/sync` | `repository_id`, `credential_id?`, `reason?` | `202 job_ref` | Создаёт `jobs.job_type = repo_sync`; Stage 05 sync is pull-only and applies the same credential usage/protocol validation as pull. |
 | `GET /api/jobs` | `limit`, `cursor`, `job_type?`, `status?`, `lock_key?`, `job_group_id?`, `parent_job_id?` | `list_response<job>` | Общая видимость jobs. Для UI workflow status предпочтительнее status/project-scan aggregate endpoints. |
 | `GET /api/jobs/{id}` | n/a | `job` | Возвращает payload/result metadata без секретов. |
 | `GET /api/status` | n/a | `runtime_status.v1` | Aggregate runtime status из `status-monitor`; summarizes jobs, derived worker status and module states. |

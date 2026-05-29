@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0011: Worker defaults - T-Helper documentation.">
+    <title>ADR 0011: Worker defaults - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0011-worker-defaults.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0011-worker-defaults.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0011-worker-defaults">ADR 0011: Worker defaults</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0011-worker-defaults">ADR 0011: Worker defaults</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Workers use a stable diagnostic identity and bounded exponential retry defaults.</p>
+<p>Worker identity format:</p>
+<pre><code class="language-text">&lt;hostname&gt;:&lt;pid&gt;:&lt;worker_uuid&gt;</code></pre>
+<p><code>worker_uuid</code> is generated at worker process startup and remains stable for the lifetime of that process.</p>
+<p>Default retry policy:</p>
+<ul>
+<li><code>max_attempts</code>: <code>3</code></li>
+<li>initial backoff: <code>5s</code></li>
+<li>backoff multiplier: <code>2</code></li>
+<li>max backoff: <code>5m</code></li>
+<li>jitter: enabled, up to 20 percent</li>
+</ul>
+<p>The retry delay is stored in <code>jobs.run_after</code>. <code>attempt_count</code> is incremented only after a successful atomic claim. A job that exhausts <code>max_attempts</code> is marked <code>failed</code>.</p>
+<p>Business lock contention policy:</p>
+<ul>
+<li>if a worker cannot acquire <code>job_locks.lock_key</code>, it clears the job lease, returns the job to <code>queued</code>, and sets <code>run_after</code> using the retry policy;</li>
+<li>lock contention must not execute the job handler;</li>
+<li>lock contention emits a <code>job_events</code> entry with a machine-readable reason.</li>
+</ul>
+<p>Retention defaults:</p>
+<ul>
+<li><code>job_events</code>: 30 days for routine event payloads;</li>
+<li>released or expired <code>job_locks</code>: 30 days;</li>
+<li>completed <code>jobs</code>: retained until an explicit cleanup policy for jobs is introduced;</li>
+<li><code>audit_log</code>: not covered by worker retention and must not be deleted by worker cleanup.</li>
+</ul>
+<p>Retention cleanup must be explicit and observable. It must not delete events, locks or jobs that are still active.</p>
+<h2 id="rationale">Rationale</h2>
+<p>Stage 03 needs deterministic worker behavior before implementation. Without shared defaults, handlers may diverge in retry timing, lock contention handling and diagnostic metadata.</p>
+<p>Keeping completed jobs while expiring high-volume events and old locks preserves operational history without unbounded growth of the noisiest tables.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 03 uses these defaults unless runtime configuration overrides them.</li>
+<li>Worker logs, job events and failed job result payloads include <code>worker_id</code>.</li>
+<li>Tests must cover worker identity format, retry/backoff calculation, lock contention requeue behavior and retention safety.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0011-worker-defaults.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

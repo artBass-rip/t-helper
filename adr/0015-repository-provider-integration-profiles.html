@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0015: Repository provider integration profiles and credentials - T-Helper documentation.">
+    <title>ADR 0015: Repository provider integration profiles and credentials - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0015-repository-provider-integration-profiles.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0015-repository-provider-integration-profiles.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0015-repository-provider-integration-profiles-and-credentials">ADR 0015: Repository provider integration profiles and credentials</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0015-repository-provider-integration-profiles-and-credentials">ADR 0015: Repository provider integration profiles and credentials</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Repository integrations use a GitKraken-like profile model with explicit multi-host and multi-credential support.</p>
+<p>The model has two separate concepts:</p>
+<ul>
+<li>repository provider instance/profile - a configured provider host, for example GitHub Cloud, GitHub Enterprise Server, GitLab Cloud, GitLab Self-Managed, Bitbucket Cloud, Bitbucket Data Center or Azure DevOps organization/server;</li>
+<li>repository credential - one auth material reference with explicit usages/capabilities, for example git transport, provider API or webhook verification.</li>
+</ul>
+<p>Repository provider instances are first-class records. A single provider can have multiple configured hosts:</p>
+<pre><code class="language-text">gitlab + gitlab.com
+gitlab + gitlab.foodtech.team
+gitlab + gitlab.company-a.internal
+github + github.com
+github + ghe.company.internal
+bitbucket + bitbucket.org
+bitbucket + bitbucket.company.internal
+azure_devops + dev.azure.com/company</code></pre>
+<p>Repository credentials are also first-class records. One provider instance may have multiple credentials with different permissions, scopes and operational purpose.</p>
+<p>Credential usages:</p>
+<pre><code class="language-text">git_transport
+provider_api
+webhook</code></pre>
+<p>Credential auth types:</p>
+<pre><code class="language-text">ssh_key
+https_token
+https_basic
+oauth_token
+app_password
+webhook_secret</code></pre>
+<p>All secret values are stored as secret references using ADR 0009. MVP supports <code>secretref://env/...</code>. Raw tokens, passwords, private keys, passphrases and webhook secrets must not be accepted for persistence.</p>
+<p>Repository operations pass <code>credential_id</code>, not raw secret references, in job payloads. Workers load the credential record and resolve secret refs at use time.</p>
+<p>Provider API operations such as GitLab recursive group clone require a credential with <code>provider_api</code> usage. Git transport operations require a credential with <code>git_transport</code> usage. Webhook verification requires a credential with <code>webhook</code> usage. A credential may support multiple usages only when the underlying auth material and provider semantics allow it.</p>
+<h2 id="rationale">Rationale</h2>
+<p>On-premise and enterprise environments commonly use multiple hosts for the same Git provider. Different tokens on the same host can have different permissions: read-only clone, group listing, webhook management or admin-level repository operations.</p>
+<p>Keeping provider instances separate from credentials avoids coupling host identity, account/profile UX and secret material. It also lets UI expose an integration experience similar to GitKraken while preserving the on-premise secret model.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 05 adds <code>repository_provider_instances</code> and <code>repository_credentials</code>.</li>
+<li><code>repositories</code> references a provider instance and may reference a default credential.</li>
+<li>Repository operation APIs accept <code>provider_instance_id</code> and/or normalized <code>provider + provider_host</code>; credential selection is explicit through <code>credential_id</code>.</li>
+<li><code>jobs.repo_*</code> payloads carry <code>credential_id</code> only.</li>
+<li>API responses mask secret refs and never return resolved secrets.</li>
+<li>UI must support multiple provider hosts and multiple credentials per host.</li>
+<li>Tests must cover multi-host identity, multi-credential selection, usage validation and secret masking.</li>
+<li>Provider URL parsing follows ADR 0016.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0015-repository-provider-integration-profiles.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

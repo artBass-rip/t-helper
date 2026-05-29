@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Frontend UI Delivery Contract - T-Helper documentation.">
+    <title>Frontend UI Delivery Contract - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/frontend-ui-contract.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>frontend-ui-contract.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#frontend-ui-delivery-contract">Frontend UI Delivery Contract</a>
+<a class="toc-level-2" href="#назначение">Назначение</a>
+<a class="toc-level-2" href="#route-map">Route Map</a>
+<a class="toc-level-2" href="#navigation-model">Navigation Model</a>
+<a class="toc-level-2" href="#operational-density">Operational Density</a>
+<a class="toc-level-2" href="#tauri-gui-policy">Tauri GUI Policy</a>
+<a class="toc-level-2" href="#stage-08-entry-decisions">Stage 08 Entry Decisions</a>
+<a class="toc-level-2" href="#stage-08-exit-decisions">Stage 08 Exit Decisions</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="frontend-ui-delivery-contract">Frontend UI Delivery Contract</h1>
+<h2 id="назначение">Назначение</h2>
+<p>Этот документ фиксирует Stage 08 UI contract для единого <code>Web UI</code> и локального <code>GUI</code>. Цель - не допустить расхождения route tree, navigation model, density и runtime assumptions между браузерной и Tauri-оболочкой.</p>
+<p><code>Web UI</code> и <code>GUI</code> используют одну React/TypeScript codebase, один typed API client и один documented backend API. Различия допускаются только там, где локальность <code>GUI</code> явно влияет на runtime discovery/startup.</p>
+<h2 id="route-map">Route Map</h2>
+<p>Top-level route tree для Stage 08 MVP:</p>
+<pre><code class="language-text">/projects
+/projects/:id
+/repositories
+/repositories/:id
+/scans
+/project-scans/:id
+/findings
+/jobs
+/modules
+/config
+/audit
+/auth/users
+/auth/groups
+/auth/roles
+/auth/role-bindings</code></pre>
+<p>Stage 08 includes full MVP administrative screens for auth, RBAC, configuration and security rule sets when their backend APIs are part of the MVP release. Stage 12 hardens and extends these administrative surfaces for platform-only capabilities such as full SCIM sync management, advanced tool profile administration and additional release-scope controls.</p>
+<p>Route rules:</p>
+<ul>
+<li><code>Web UI</code> и <code>GUI</code> используют один route tree;</li>
+<li>route, доступный в <code>Web UI</code>, должен быть доступен в <code>GUI</code> для того же release scope, unless explicitly marked local-only or unavailable by backend API scope;</li>
+<li>frontend-only backend routes запрещены;</li>
+<li>object detail routes use tabs for subviews instead of separate unrelated page shells;</li>
+<li>query parameters may hold filters, sorting, pagination cursors and selected tabs when this improves shareability/debugging.</li>
+</ul>
+<h2 id="navigation-model">Navigation Model</h2>
+<ul>
+<li>left sidebar for top-level operational areas;</li>
+<li>content header with title, object identity, status and primary actions;</li>
+<li>tabs for object detail subviews;</li>
+<li>tables for list-heavy resources;</li>
+<li>drawers or modals for focused create/edit flows;</li>
+<li>confirmation dialogs for operations that create jobs or change runtime state;</li>
+<li>long-running operations show <code>job_id</code>, status, latest event and links to job/status details;</li>
+<li>access-denied and unauthenticated states are first-class UI states, not generic errors.</li>
+</ul>
+<h2 id="operational-density">Operational Density</h2>
+<p>Stage 08 UI is an operational tool, not a landing page.</p>
+<p>Rules:</p>
+<ul>
+<li>default density is compact;</li>
+<li>list pages are table-first;</li>
+<li>filters are compact, persistent and close to the table they affect;</li>
+<li>cards are allowed for repeated summary items only when they improve scanning;</li>
+<li>nested cards are not allowed;</li>
+<li>no marketing hero or landing page is used as the first screen;</li>
+<li>dashboard summaries must link to concrete operational lists or objects;</li>
+<li>table rows must expose status, ownership/context and primary actions without requiring navigation for every common check;</li>
+<li>forms use documented backend schemas and client-side Zod validation.</li>
+</ul>
+<h2 id="tauri-gui-policy">Tauri GUI Policy</h2>
+<ul>
+<li><code>GUI</code> is local-only;</li>
+<li>remote access to <code>GUI</code> is unsupported;</li>
+<li><code>GUI</code> uses the same API client and route tree as <code>Web UI</code>;</li>
+<li><code>GUI</code> discovers runtime through runtime lock file plus <code>GET /api/health</code>;</li>
+<li>if runtime is absent, <code>GUI</code> may start local <code>thelper</code>;</li>
+<li>detailed runtime state uses authenticated <code>/api/status</code>, not <code>/api/health</code>;</li>
+<li>packaging/signing targets must be listed before release artifact publication;</li>
+<li>development builds may be unsigned if explicitly documented as non-release artifacts.</li>
+</ul>
+<h2 id="stage-08-entry-decisions">Stage 08 Entry Decisions</h2>
+<p>Stage 08 entry decisions accepted by Stage 00:</p>
+<ul>
+<li>this route map;</li>
+<li>navigation model;</li>
+<li>operational density rules;</li>
+<li>Tauri local runtime discovery/start policy for supported local OS targets.</li>
+</ul>
+<p>Changes to these decisions require updating this document together with <code>docs/implementation-specs/stage-00-delivery-contract.md</code>, <code>docs/roadmap.md</code> and <code>docs/traceability.md</code> where affected.</p>
+<h2 id="stage-08-exit-decisions">Stage 08 Exit Decisions</h2>
+<p>Release artifact publication requires:</p>
+<ul>
+<li>supported desktop OS targets listed;</li>
+<li>packaging/signing policy accepted;</li>
+<li>update/distribution channel policy documented or explicitly deferred.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/frontend-ui-contract.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

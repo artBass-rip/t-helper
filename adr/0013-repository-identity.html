@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0013: Repository identity - T-Helper documentation.">
+    <title>ADR 0013: Repository identity - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0013-repository-identity.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0013-repository-identity.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0013-repository-identity">ADR 0013: Repository identity</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0013-repository-identity">ADR 0013: Repository identity</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Repository identity is defined by the tuple:</p>
+<pre><code class="language-text">provider + provider_host + full_path</code></pre>
+<p><code>repositories.full_path</code> is not globally unique by itself.</p>
+<p>The <code>repositories</code> entity must include:</p>
+<ul>
+<li><code>provider</code> - repository provider type, for example <code>gitlab</code>, <code>github</code>, <code>bitbucket</code> or <code>generic</code>;</li>
+<li><code>provider_host</code> - normalized provider host or self-hosted instance host;</li>
+<li><code>full_path</code> - normalized namespace/project path inside that provider instance.</li>
+</ul>
+<p>Storage uniqueness uses:</p>
+<pre><code class="language-text">repositories.provider + repositories.provider_host + repositories.full_path</code></pre>
+<p>Normalization rules:</p>
+<ul>
+<li><code>provider_host</code> is lower-case host name from clone URL, provider configuration or explicit clone request;</li>
+<li><code>provider_host</code> includes a non-default port when it is required to distinguish provider instances;</li>
+<li><code>provider_host</code> does not include protocol, username, token, path, query or fragment;</li>
+<li><code>full_path</code> does not include protocol, host, query, fragment, leading slash or trailing <code>.git</code>;</li>
+<li><code>full_path</code> uses <code>/</code> as separator;</li>
+<li>provider adapters follow provider-specific parsing rules from ADR 0016 and must produce the same canonical identity fields for equivalent URLs.</li>
+</ul>
+<p><code>clone_url</code> is optional transport metadata, not the repository identity key. It may differ for <code>ssh</code> and <code>https</code> and may change without changing repository identity.</p>
+<p><code>clone_url</code> rules:</p>
+<ul>
+<li><code>clone_url</code> is nullable;</li>
+<li><code>clone_url</code> is not unique;</li>
+<li><code>clone_url</code> must not be used for repository lookup, upsert or deduplication;</li>
+<li>persisted <code>clone_url</code> must be a safe normalized transport URL without credentials, tokens, passwords or other userinfo;</li>
+<li>if an input URL contains credentials, provider adapters must strip credentials before persistence and use secret references or provider credential configuration for runtime authentication;</li>
+<li>different transport URLs that normalize to the same <code>provider + provider_host + full_path</code> must resolve to the same repository card.</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>Enterprise and on-premise installations can use multiple repository providers and multiple self-hosted instances of the same provider. The same namespace/project path can validly exist in GitLab, GitHub, Bitbucket or in separate GitLab instances.</p>
+<p>Using global <code>full_path</code> uniqueness would prevent valid repositories from being registered together. Using <code>clone_url</code> as identity would couple repository identity to transport protocol and credentials handling.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 05 migrations must add <code>provider_host</code> and enforce uniqueness on <code>provider</code>, <code>provider_host</code> and <code>full_path</code>.</li>
+<li>Repository API DTOs and job payloads must carry <code>provider_host</code>.</li>
+<li>Clone/import idempotency must resolve repository identity through <code>provider</code>, <code>provider_host</code> and <code>full_path</code>.</li>
+<li><code>clone_url</code> must remain nullable and non-unique.</li>
+<li><code>clone_url</code> must not be the primary deduplication rule.</li>
+<li>Persisted <code>clone_url</code> must not contain credentials, secret material or URL userinfo.</li>
+<li>UI lists and search results should display provider and provider host when showing <code>full_path</code>.</li>
+<li>Provider adapters must expose deterministic URL parsing and identity normalization tests.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0013-repository-identity.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

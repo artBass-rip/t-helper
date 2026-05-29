@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Технологический стек - T-Helper documentation.">
+    <title>Технологический стек - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/technology-stack.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>technology-stack.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#технологический-стек">Технологический стек</a>
+<a class="toc-level-2" href="#backend">Backend</a>
+<a class="toc-level-2" href="#storage">Storage</a>
+<a class="toc-level-2" href="#jobs-и-workers">Jobs и Workers</a>
+<a class="toc-level-2" href="#frontend">Frontend</a>
+<a class="toc-level-2" href="#desktop-gui">Desktop GUI</a>
+<a class="toc-level-2" href="#singleton-runtime-policy">Singleton Runtime Policy</a>
+<a class="toc-level-2" href="#stack-invariants">Stack Invariants</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="технологический-стек">Технологический стек</h1>
+<p>Документ фиксирует базовый стек реализации <code>t-helper</code> для code scaffolding и последующих этапов roadmap.</p>
+<h2 id="backend">Backend</h2>
+<p>Backend реализуется на <code>Go</code>.</p>
+<p>Область применения:</p>
+<ul>
+<li>runtime service <code>thelper</code>;</li>
+<li>worker process <code>thelper-worker</code>;</li>
+<li>administrative CLI <code>thelper-ctl</code>;</li>
+<li>backend HTTP API;</li>
+<li>module lifecycle и jobs framework;</li>
+<li>status-monitor и aggregate status read models;</li>
+<li>storage abstraction и adapters;</li>
+<li>orchestration локальных toolchain-команд для scanning и repository operations.</li>
+</ul>
+<p>Требования к backend-реализации:</p>
+<ul>
+<li>доменная логика не должна зависеть от конкретного storage backend;</li>
+<li>provider-specific integrations must be isolated in pluggable modules/libraries behind internal interfaces;</li>
+<li>API contracts должны соответствовать <code>docs/api.md</code>;</li>
+<li>CLI contracts должны соответствовать <code>docs/interfaces.md</code>;</li>
+<li>background jobs должны использовать documented payload schemas из <code>docs/payload-schemas.md</code>;</li>
+<li>outbound calls для security stack не допускаются, кроме явно настроенных repository/provider integrations.</li>
+</ul>
+<h2 id="storage">Storage</h2>
+<p>MVP storage stack:</p>
+<ul>
+<li><code>SQLite</code> - default internal SQL-like storage for local setup;</li>
+<li><code>PostgreSQL</code> - default external storage for server setup.</li>
+</ul>
+<p>Platform storage targets:</p>
+<ul>
+<li><code>SQLite</code>;</li>
+<li><code>PostgreSQL</code>;</li>
+<li><code>MySQL</code>;</li>
+<li><code>MSSQL</code>.</li>
+</ul>
+<p>Managed engine compatibility:</p>
+<ul>
+<li>Aurora PostgreSQL through the PostgreSQL adapter;</li>
+<li>Aurora MySQL through the MySQL adapter;</li>
+<li>Babelfish for Aurora PostgreSQL is not a substitute for the native MSSQL adapter.</li>
+</ul>
+<p>Требования:</p>
+<ul>
+<li>оба MVP storage backend используют SQL-like модель и поддерживают миграции;</li>
+<li>логическая модель данных и storage interfaces едины для всех supported adapters;</li>
+<li>SQL migrations используют dialect-specific SQL при синхронизированных logical migration versions;</li>
+<li><code>MySQL</code> и <code>MSSQL</code> добавляются на Stage 10 Storage Adapter Expansion как first-class SQL adapters.</li>
+</ul>
+<p>Database providers are implemented as pluggable storage adapter libraries selected by configuration. Provider-specific SQL, connection handling and health checks must not leak into domain services or HTTP handlers.</p>
+<h2 id="jobs-и-workers">Jobs и Workers</h2>
+<p>Background jobs выполняются отдельными worker-процессами.</p>
+<p>Базовые компоненты:</p>
+<ul>
+<li><code>thelper</code> - API/runtime process, создаёт jobs, управляет конфигурацией, module states и HTTP API;</li>
+<li><code>thelper-worker</code> - отдельный worker process, atomically claims queued jobs through storage-level leases, выполняет job handlers и сохраняет result payload;</li>
+<li><code>thelper-ctl</code> - administrative CLI, создаёт lifecycle/config jobs или вызывает documented backend API.</li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>API/CLI не выполняют long-running jobs inline;</li>
+<li>jobs persisted в БД и имеют documented payload/result schemas;</li>
+<li>job leases определяют ownership конкретного job worker-процессом;</li>
+<li><code>job_locks</code> сериализуют конфликтующие бизнес-операции между worker-процессами;</li>
+<li>workers поддерживают heartbeat, lease expiry recovery и retry/backoff;</li>
+<li>jobs публикуют status events/metrics, которые агрегирует <code>status-monitor</code>;</li>
+<li>UI и внутренние сервисы читают aggregate status из status-monitor read models;</li>
+<li>несколько worker-процессов могут работать параллельно, если их lock keys не конфликтуют;</li>
+<li>distributed deployment расширяет эту модель, но не меняет storage contracts jobs.</li>
+</ul>
+<h2 id="frontend">Frontend</h2>
+<p>Единый frontend-контур реализуется на:</p>
+<ul>
+<li><code>React</code>;</li>
+<li><code>TypeScript</code>;</li>
+<li><code>Vite</code>;</li>
+<li><code>TanStack Router</code>;</li>
+<li><code>TanStack Query</code>;</li>
+<li><code>Zod</code>;</li>
+<li><code>React Hook Form</code>;</li>
+<li><code>Ant Design</code>.</li>
+</ul>
+<p>Область применения:</p>
+<ul>
+<li><code>Web UI</code>;</li>
+<li>shared UI codebase для локального <code>GUI</code>;</li>
+<li>read/operate сценарии MVP;</li>
+<li>full MVP administrative UI delivered in Stage 08, with Stage 12 reserved for admin hardening and platform-only administrative extensions.</li>
+</ul>
+<p>Требования к frontend-реализации:</p>
+<ul>
+<li><code>Web UI</code> и <code>GUI</code> используют один documented backend API;</li>
+<li>frontend не вводит и не требует frontend-only backend endpoints;</li>
+<li>API DTO валидируются на границе клиента через typed schemas;</li>
+<li>long-running operations отображаются через <code>jobs</code> и documented job references;</li>
+<li>UI должен быть пригоден для плотных operational сценариев: таблицы, фильтры, формы, статусы, findings, RBAC и audit views.</li>
+<li>route map, navigation model and operational density rules must follow <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
+</ul>
+<h2 id="desktop-gui">Desktop GUI</h2>
+<p>Локальный desktop GUI реализуется на <code>Tauri</code> с использованием той же React/TypeScript codebase.</p>
+<p>Требования к GUI:</p>
+<ul>
+<li><code>GUI</code> работает только локально;</li>
+<li>удалённый доступ к <code>GUI</code> не поддерживается;</li>
+<li>взаимодействие с системой идёт через тот же backend API, что и <code>Web UI</code>;</li>
+<li>GUI-specific поведение не должно менять backend contracts;</li>
+<li>Tauri packaging/signing and local runtime discovery policy must follow <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
+</ul>
+<h2 id="singleton-runtime-policy">Singleton Runtime Policy</h2>
+<p>В одной локальной установке может быть запущен только один экземпляр <code>t-helper</code> runtime.</p>
+<p>Правила:</p>
+<ul>
+<li>если <code>thelper</code> уже запущен для <code>Web UI</code>, Tauri GUI подключается к существующему local runtime;</li>
+<li>если <code>thelper</code> ещё не запущен, Tauri GUI запускает local <code>thelper</code>, после чего <code>Web UI</code> подключается к этому же runtime;</li>
+<li>повторный запуск <code>thelper</code> должен обнаруживать существующий runtime через lock/health mechanism и завершаться без создания второго активного процесса;</li>
+<li><code>Web UI</code> и <code>GUI</code> всегда работают с одним backend API и одной runtime БД.</li>
+</ul>
+<h2 id="stack-invariants">Stack Invariants</h2>
+<ul>
+<li>Backend: <code>Go</code>.</li>
+<li>Web frontend: <code>React + TypeScript + Vite</code>.</li>
+<li>Routing: <code>TanStack Router</code>.</li>
+<li>Server state: <code>TanStack Query</code>.</li>
+<li>Runtime/client validation: <code>Zod</code>.</li>
+<li>Forms: <code>React Hook Form</code>.</li>
+<li>UI component system: <code>Ant Design</code>.</li>
+<li>Desktop shell: <code>Tauri</code>.</li>
+<li>Internal local storage: <code>SQLite</code>.</li>
+<li>External server storage: <code>PostgreSQL</code>.</li>
+<li>Platform storage targets: <code>SQLite</code>, <code>PostgreSQL</code>, <code>MySQL</code>, <code>MSSQL</code>.</li>
+<li>Background execution: separate <code>thelper-worker</code> processes.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/technology-stack.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

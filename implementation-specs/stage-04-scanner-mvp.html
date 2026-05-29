@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 04: Scanner and Registry MVP - T-Helper documentation.">
+    <title>Stage 04: Scanner and Registry MVP - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-04-scanner-mvp.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-04-scanner-mvp.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-04-scanner-and-registry-mvp">Stage 04: Scanner and Registry MVP</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#implementation-contract">Implementation contract</a>
+<a class="toc-level-3" href="#discovery-algorithm-notes">Discovery algorithm notes</a>
+<a class="toc-level-3" href="#upsert-and-identity-rules">Upsert and identity rules</a>
+<a class="toc-level-3" href="#filesystem-read-boundaries">Filesystem read boundaries</a>
+<a class="toc-level-3" href="#symlink-policy">Symlink policy</a>
+<a class="toc-level-3" href="#ignore-rule-behavior">Ignore-rule behavior</a>
+<a class="toc-level-3" href="#scan-result-and-status-policy">Scan result and status policy</a>
+<a class="toc-level-3" href="#required-fixtures">Required fixtures</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#deferred-decisions">Deferred decisions</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-04-scanner-and-registry-mvp">Stage 04: Scanner and Registry MVP</h1>
+<h2 id="цель">Цель</h2>
+<p>Реализовать discovery-слой, который обнаруживает Terraform-проекты в <code>root_path</code>, применяет ignore rules, регистрирует каждый локально обнаруженный проект отдельной записью в БД и ставит фоновые project discovery jobs для последующего определения Git-связей.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><code>docs/requirements.md</code></li>
+<li><code>docs/interfaces.md</code></li>
+<li><code>docs/api.md</code></li>
+<li><code>docs/data-model.md</code></li>
+<li><code>docs/payload-schemas.md</code></li>
+<li><code>docs/test-plan.md</code></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li>модуль <code>global-scanner</code>;</li>
+<li><code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>;</li>
+<li>минимальный registry-mode <code>repositories</code> через фоновые project discovery jobs, а не напрямую из global filesystem traversal;</li>
+<li><code>project_links</code> для связи отдельных локальных project records, относящихся к одному Git repository;</li>
+<li><code>environments</code> и <code>workspaces</code> backend read models/API для Frontend MVP;</li>
+<li>conservative MVP lifecycle для <code>project</code> / <code>environment</code> / <code>workspace</code>: scanner создаёт и обновляет <code>projects</code>, а связи с <code>environment</code> и <code>workspace</code> сохраняются только если они уже известны или заданы явно;</li>
+<li>bounded worker pool обхода; SQLite runtime uses an effective traversal concurrency of 1 to avoid local database writer contention, while other storage providers use bounded parallel traversal;</li>
+<li>exclude-only matcher с сохранением <code>!pattern</code>;</li>
+<li>обнаружение Terraform-проектов по <code>*.tf</code>;</li>
+<li>enqueue фонового <code>project_discovery</code> job для каждого созданного или обновлённого проекта;</li>
+<li>определение Git-связей проекта только в <code>project_discovery</code> job по MVP Git marker allowlist: <code>.git/</code> directory или <code>.git</code> file с первой непустой строкой <code>gitdir:</code>;</li>
+<li>negative handling для <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> внутри <code>project_discovery</code>;</li>
+<li>API для scan/root paths/ignore rules/projects/environments/workspaces.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>provider-aware repository operations;</li>
+<li>provider-aware URL parsing, remote enrichment and clone/pull/sync behavior from Stage 05;</li>
+<li>чтение <code>.git/config</code> или shell-out в <code>git</code> из <code>global-scanner</code>;</li>
+<li>project-level checks и security findings;</li>
+<li>auth enforcement beyond documented permission contracts;</li>
+<li>automatic linking rules для <code>project</code> / <code>environment</code> / <code>workspace</code> на основе naming conventions или Terraform source parsing;</li>
+<li>full <code>.gitignore</code> semantics.</li>
+<li><code>follow_symlinks = true</code>; MVP supports only <code>follow_symlinks = false</code>, extended symlink traversal is deferred to Stage 09 runtime hardening.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>модуль <code>global-scanner</code>;</li>
+<li><code>project_discovery</code> worker handler for local project metadata discovery;</li>
+<li>migrations/read models для <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>project_links</code>, <code>environments</code>, <code>workspaces</code>;</li>
+<li>registry API для root paths, scans, projects, environments, workspaces и ignore rules;</li>
+<li>scan fixtures и acceptance tests;</li>
+<li>discovery algorithm notes.</li>
+</ul>
+<h2 id="implementation-contract">Implementation contract</h2>
+<h3 id="discovery-algorithm-notes">Discovery algorithm notes</h3>
+<ul>
+<li><code>POST /api/scans</code> and <code>jobs.global_scan.payload.v1</code> resolve requested <code>root_path_ids</code> through the registry and deduplicate repeated IDs while preserving request order.</li>
+<li><code>global-scanner</code> materializes <code>scanning.global_scan</code>, loads ignore rules per root, then traverses each root with a bounded in-process worker pool. SQLite runs traversal with effective concurrency <code>1</code>; other providers use <code>workers.concurrency</code> capped at <code>64</code>, with default <code>4</code>.</li>
+<li>Traversal uses directory entries and <code>lstat</code> metadata only. Terraform project detection checks entry names for <code>*.tf</code>; it does not open Terraform source files and stops traversal below a detected Terraform working directory.</li>
+<li><code>.git</code> directories are skipped by global traversal. Repository detection is deferred to <code>project_discovery</code>, which walks upward from the project path to the root path and checks only the allowlisted <code>.git</code> marker.</li>
+<li>Stage 04 filesystem boundary tests use an injected filesystem adapter to assert that global scan does not open Terraform source, <code>.git</code> marker files or <code>.git/config</code>, and that project discovery reads at most <code>4 KiB</code> from <code>.git</code> marker files.</li>
+</ul>
+<h3 id="upsert-and-identity-rules">Upsert and identity rules</h3>
+<ul>
+<li><code>root_paths</code> upsert key: normalized absolute <code>path</code>.</li>
+<li>Public <code>PUT /api/root-paths</code> treats <code>root_paths.source</code> as read-only. API-created or API-updated rows are owned as <code>source = api</code>; <code>source = config</code> is reserved for materialized <code>scanning.global_scan</code> entries.</li>
+<li><code>projects</code> upsert key: <code>root_path_id + relative_path</code>.</li>
+<li>Global filesystem scan never merges local project records. Every discovered Terraform working directory gets its own <code>projects</code> row keyed by <code>root_path_id + relative_path</code>.</li>
+<li>Project records are created with the full project schema from the beginning; fields whose information is not known yet remain nullable/default and are filled later by project discovery, repository manager, project scans or explicit user/admin input.</li>
+<li><code>global_scan</code> fills <code>projects.name</code>, <code>projects.path</code>, <code>projects.relative_path</code>, <code>projects.root_path_id</code>, <code>projects.terraform_marker</code>, <code>projects.status = active</code>, <code>projects.detected_at</code>, <code>projects.last_seen_at</code>, <code>projects.created_at</code> and <code>projects.updated_at</code>.</li>
+<li><code>project_discovery</code> fills <code>projects.repository_id</code> when repository membership is known and creates <code>project_links</code> for same-repository relationships.</li>
+<li>Stage 05 repository manager enriches repository cards, not project rows; project rows remain separate and only their <code>repository_id</code> relation may be updated.</li>
+<li>Stage 06 project/security scans write scan data to scan/finding tables, not summary fields on <code>projects</code>.</li>
+<li>Manual/admin input may set <code>projects.environment_id</code>, <code>projects.default_workspace_id</code> and future explicit metadata fields.</li>
+<li><code>repositories</code> provider-aware upsert key remains <code>provider + provider_host + full_path</code>.</li>
+<li>Stage 04 generic local fallback identity is scoped by root path: <code>provider + provider_host + root_path_id + full_path</code>. This prevents two different scan roots with the same relative repository path from being merged.</li>
+<li>Generic local repository upsert must be idempotent under concurrent <code>project_discovery</code> jobs for projects in the same Git repository. A unique identity conflict is handled by re-reading/updating the existing repository card rather than failing the job.</li>
+<li>Stage 04 global scan does not create repository cards directly. It enqueues <code>jobs.job_type = project_discovery</code> for each created/updated project and continues traversal without waiting for that job.</li>
+<li><code>project_discovery</code> performs local Git marker discovery for one project. If the project belongs to a Git working tree but provider identity is not known, project discovery creates or updates a conservative generic repository card:</li>
+<li><code>provider = generic</code>;</li>
+<li><code>provider_host = local</code>;</li>
+<li><code>full_path = &lt;root_path-relative normalized repository path&gt;</code>;</li>
+<li><code>root_path_id</code> points to the containing root path;</li>
+<li><code>local_path</code> points to the normalized discovered repository path;</li>
+<li><code>clone_url = null</code>.</li>
+<li>If multiple local project records belong to the same Git repository, project discovery does not merge project records. It sets the same <code>repository_id</code> where known and writes <code>project_links</code> with <code>link_type = same_repository</code>.</li>
+<li>Stage 05 provider-aware repository manager may later enrich repository cards after explicit provider URL parsing/remote validation, but it must not merge separate project records into one project.</li>
+</ul>
+<h3 id="filesystem-read-boundaries">Filesystem read boundaries</h3>
+<ul>
+<li><code>global-scanner</code> reads directory entries and metadata required for traversal.</li>
+<li><code>global-scanner</code> must not open <code>*.tf</code> files during Stage 04 discovery; Terraform project detection is based on filenames only.</li>
+<li><code>global-scanner</code> must not read <code>.git</code>, <code>.git/config</code> or execute <code>git</code>.</li>
+<li><code>project_discovery</code> may read a <code>.git</code> regular file only as Git metadata and only up to an implementation limit of <code>4 KiB</code>; marker is valid when the first non-empty line starts with <code>gitdir:</code>.</li>
+<li><code>project_discovery</code> must not execute <code>git</code> or Terraform/toolchain commands.</li>
+</ul>
+<h3 id="symlink-policy">Symlink policy</h3>
+<ul>
+<li>Default Stage 04 behavior is <code>follow_symlinks = false</code>.</li>
+<li>Symlinked directories are skipped by default and counted as skipped directories.</li>
+<li>A root path that is itself a symlink is rejected for Stage 04 traversal when <code>follow_symlinks = false</code>; the job fails if no requested root path can be processed.</li>
+<li><code>follow_symlinks = true</code> is not supported in MVP and is deferred to Stage 09. A future implementation must include opt-in configuration, cycle detection, root containment checks, traversal counters and max-depth/max-visited guards.</li>
+</ul>
+<h3 id="ignore-rule-behavior">Ignore-rule behavior</h3>
+<ul>
+<li>Ignore rules are applied relative to <code>root_path</code>.</li>
+<li>MVP matcher is exclude-only.</li>
+<li>Rule order is preserved on import/storage for future full <code>.gitignore</code> semantics.</li>
+<li>Negative rules beginning with <code>!</code> are imported and returned by API without loss, but do not affect Stage 04 matching.</li>
+<li>Ignored directories are not traversed deeper.</li>
+</ul>
+<h3 id="scan-result-and-status-policy">Scan result and status policy</h3>
+<ul>
+<li><code>projects_created</code> counts newly inserted project rows.</li>
+<li><code>projects_updated</code> counts existing project rows whose discovery metadata or <code>last_seen_at</code> is updated.</li>
+<li><code>project_discovery_jobs_enqueued</code> counts background project discovery jobs created by global scan.</li>
+<li>Repository counters are not part of <code>jobs.global_scan.result.v1</code>; repository cards are created/updated by <code>project_discovery</code> jobs.</li>
+<li><code>directories_skipped</code> counts ignored directories, skipped symlink directories and immediate child directories skipped because traversal stops below a detected Terraform working directory.</li>
+<li>Per-directory errors are recorded in <code>job_events</code> and increment <code>errors_count</code>.</li>
+<li>If at least one requested root path is processed successfully, the job may finish with <code>jobs.status = succeeded</code> even when <code>errors_count &gt; 0</code>.</li>
+<li>If all requested root paths fail before useful traversal, the job must finish with <code>jobs.status = failed</code>.</li>
+<li><code>jobs.status</code> does not use <code>partial</code>; partial scan quality is represented through <code>errors_count</code>, result payload counters and <code>job_events</code>.</li>
+<li>Missing previously discovered projects are not deleted in MVP. If a project under a scanned <code>root_path</code> is not seen in a completed scan, scanner sets <code>projects.status = missing</code> and keeps the row for audit/UI continuity.</li>
+<li>Missing status does not replace or merge project records. If the project is later discovered again, the same row returns to <code>active</code>.</li>
+<li><code>GET /api/projects</code> returns <code>active</code> projects by default. Missing/disabled projects are returned only when <code>status?</code> explicitly requests them or when <code>status=all</code>.</li>
+<li>Missing projects are read-only for project scan operations until rediscovered; <code>POST /api/project-scans</code> must reject <code>projects.status = missing</code> with a controlled validation error.</li>
+<li>Stale <code>project_discovery</code> jobs for <code>projects.status = missing</code> or <code>disabled</code> are no-op and must not create repository cards, links or <code>projects.repository_id</code>.</li>
+<li>If a later global scan finds the same <code>root_path_id + relative_path</code>, the project is automatically reactivated by setting <code>status = active</code> and updating <code>last_seen_at</code>.</li>
+</ul>
+<h3 id="required-fixtures">Required fixtures</h3>
+<ul>
+<li><code>basic_tf_project</code>: directory with <code>main.tf</code>.</li>
+<li><code>nested_tf_project</code>: parent with <code>main.tf</code> and nested <code>child/main.tf</code>; nested child is not registered separately.</li>
+<li><code>git_repo_marker_directory</code>: valid <code>.git/</code> directory for <code>project_discovery</code>.</li>
+<li><code>git_repo_marker_file</code>: valid <code>.git</code> regular file with first non-empty line starting with <code>gitdir:</code> for <code>project_discovery</code>.</li>
+<li><code>git_repo_marker_file_invalid</code>: <code>.git</code> regular file without valid <code>gitdir:</code>.</li>
+<li><code>same_git_repository_projects</code>: two Terraform working directories related to the same Git repository; separate project rows remain and <code>project_links.link_type = same_repository</code> is created.</li>
+<li>negative marker fixtures: <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code>.</li>
+<li><code>ignored_directory</code>: directory excluded by <code>.t-helper.ignore</code>.</li>
+<li><code>negative_ignore_pattern</code>: <code>!pattern</code> stored without applying in exclude-only matcher.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>scan обнаруживает Terraform working directory по <code>*.tf</code>;</li>
+<li>global scan creates/updates only project records and enqueues <code>project_discovery</code> jobs;</li>
+<li><code>project_discovery</code> обнаруживает только разрешённые Git markers: <code>.git/</code> directory и <code>.git</code> file с <code>gitdir:</code>;</li>
+<li>похожие файлы/директории <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> не создают repository link/card;</li>
+<li>scanner не выполняет shell-out в <code>git</code> во время discovery;</li>
+<li>scanner не читает Terraform source и не читает <code>.git/config</code> на Stage 04;</li>
+<li>filesystem-only Git repositories без provider identity регистрируются project discovery job'ом как <code>provider = generic</code>, <code>provider_host = local</code>;</li>
+<li>разные Terraform projects внутри одного Git repository остаются отдельными <code>projects</code> rows and are linked through <code>project_links</code>;</li>
+<li>symlinked directories skipped by default when <code>follow_symlinks = false</code>;</li>
+<li>nested Terraform directories под найденным project не регистрируются отдельно;</li>
+<li>повторный scan не создаёт дубли;</li>
+<li>concurrent <code>project_discovery</code> jobs for one Git repository do not create duplicate generic repository cards and do not fail on repository identity conflicts;</li>
+<li>ранее найденные, но отсутствующие в новом scan projects не удаляются и получают <code>status = missing</code>;</li>
+<li><code>!pattern</code> сохраняется без применения в exclude-only matcher;</li>
+<li>scanner не создаёт implicit <code>environment</code> или <code>workspace</code> без явного входного правила/данных;</li>
+<li>если связь проекта с <code>environment</code> или <code>workspace</code> уже известна, повторный scan сохраняет её;</li>
+<li>environments/workspaces read endpoints работают и имеют FK/read tests;</li>
+<li><code>root_paths.source</code> ownership is enforced: API cannot claim config-owned source values through request payloads;</li>
+<li>stale project discovery for missing/disabled projects does not mutate repository registry state;</li>
+<li>results пишутся в <code>jobs.global_scan.result.v1</code>.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>нет Stage 04 blockers по Git marker allowlist; MVP allowlist закрыт этим spec.</li>
+</ul>
+<h2 id="deferred-decisions">Deferred decisions</h2>
+<ul>
+<li>automatic linking rules для <code>project</code> / <code>environment</code> / <code>workspace</code>;</li>
+<li>default seed/import behavior для environments/workspaces сверх минимальных read models и FK constraints.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 04.</li>
+<li>Acceptance: <code>ACC-MVP-001</code>, <code>ACC-MVP-002</code>, <code>ACC-MVP-003</code>, <code>ACC-MVP-004</code>, <code>ACC-MVP-005</code>, <code>ACC-MVP-015</code>, <code>ACC-MVP-021</code>.</li>
+<li>API: root paths, scans, projects, environments, workspaces, ignore rules.</li>
+<li>Data model: <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>project_links</code>, <code>repositories</code>, <code>environments</code>, <code>workspaces</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>ошибочная нормализация путей и дубли карточек проектов;</li>
+<li>чрезмерное число <code>stat/open</code> операций при большом дереве;</li>
+<li>неправильная обработка <code>.git</code> file для worktree/submodule.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-04-scanner-mvp.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="GitHub Pages - T-Helper documentation.">
+    <title>GitHub Pages - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/github-pages.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>github-pages.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#github-pages">GitHub Pages</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#files">Files</a>
+<a class="toc-level-2" href="#deployment">Deployment</a>
+<a class="toc-level-2" href="#maintenance-contract">Maintenance contract</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="github-pages">GitHub Pages</h1>
+<h2 id="purpose">Purpose</h2>
+<p>The repository includes a static bilingual GitHub Pages landing page for the project. The page is intentionally separate from the Stage 08 product frontend: it is repository documentation and project presentation, not the runtime Web UI.</p>
+<p>Both language variants start with a visible notice that the project is implemented exclusively by AI.</p>
+<h2 id="files">Files</h2>
+<ul>
+<li><code>docs/index.html</code> - Russian landing page and default GitHub Pages entrypoint.</li>
+<li><code>docs/en.html</code> - English landing page.</li>
+<li><code>docs/pages.css</code> - shared responsive styles.</li>
+<li><code>docs/pages.js</code> - shared reveal and hero interaction behavior.</li>
+<li><code>docs/build-pages.js</code> - static Markdown-to-HTML generator for published documentation pages.</li>
+<li><code>docs/.nojekyll</code> - disables Jekyll processing for the Pages artifact.</li>
+<li><code>.github/workflows/pages.yml</code> - GitHub Actions deployment workflow.</li>
+</ul>
+<p>The language switcher uses plain static links:</p>
+<ul>
+<li>Russian to English: <code>en.html</code>;</li>
+<li>English to Russian: <code>index.html</code>.</li>
+</ul>
+<p>This keeps the published site usable even when JavaScript is unavailable.</p>
+<p>Markdown documents under <code>docs/**/*.md</code> are the canonical sources. During publication, <code>docs/build-pages.js</code> generates sibling <code>*.html</code> pages for every Markdown file and rewrites internal Markdown links to the generated HTML pages. The published Pages site therefore shows documentation as complete styled pages with page navigation, while the raw <code>.md</code> sources remain available from each generated document page.</p>
+<h2 id="deployment">Deployment</h2>
+<p>The <code>github-pages</code> workflow publishes the <code>docs</code> directory to the <code>gh-pages</code> branch on pushes to <code>master</code> and on manual <code>workflow_dispatch</code> runs.</p>
+<p>Before copying files to the publish worktree, the workflow runs:</p>
+<pre><code class="language-text">node docs/build-pages.js --out &quot;$publish_source&quot;</code></pre>
+<p>The generator copies the static assets, renders all Markdown files to HTML and keeps the generated pages dependency-free.</p>
+<p>Repository settings must use:</p>
+<ul>
+<li>Pages source: <code>Deploy from a branch</code>;</li>
+<li>branch: <code>gh-pages</code>;</li>
+<li>folder: <code>/ (root)</code>.</li>
+</ul>
+<p>This branch-based deployment avoids the GitHub Pages REST API calls used by <code>actions/configure-pages</code> and <code>actions/deploy-pages</code>. Those REST calls can fail with <code>Resource not accessible by integration</code> when the repository or organization does not allow <code>GITHUB_TOKEN</code> to create or configure the Pages site.</p>
+<p>The workflow permissions are intentionally limited to:</p>
+<ul>
+<li><code>contents: write</code>.</li>
+</ul>
+<h2 id="maintenance-contract">Maintenance contract</h2>
+<ul>
+<li>Keep Russian and English content aligned when updating page copy.</li>
+<li>Keep the AI-only implementation notice visible before the hero content in both language variants.</li>
+<li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
+<li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
+<li>Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI contracts remain in <code>docs/frontend-ui-contract.md</code>.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/github-pages.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

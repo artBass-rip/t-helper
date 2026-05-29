@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0003: Job worker processes - T-Helper documentation.">
+    <title>ADR 0003: Job worker processes - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0003-job-worker-processes.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0003-job-worker-processes.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0003-job-worker-processes">ADR 0003: Job worker processes</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0003-job-worker-processes">ADR 0003: Job worker processes</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Background jobs are executed by separate <code>thelper-worker</code> processes.</p>
+<p><code>thelper</code> creates jobs, validates requests, exposes API/runtime endpoints and manages configuration/module state. It does not execute long-running jobs inline.</p>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li>Separating API/runtime from job execution improves fault isolation.</li>
+<li>Worker processes prepare the system for distributed deployment.</li>
+<li>Persistent jobs and <code>job_locks</code> remain the shared coordination mechanism.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 01 must scaffold <code>thelper-worker</code>.</li>
+<li>Job handlers run in worker processes.</li>
+<li>Multiple workers may run concurrently when lock keys do not conflict.</li>
+<li><code>job_locks</code> must be enforced across processes through persistent storage.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0003-job-worker-processes.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

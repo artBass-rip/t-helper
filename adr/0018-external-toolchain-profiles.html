@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0018: External toolchain profiles - T-Helper documentation.">
+    <title>ADR 0018: External toolchain profiles - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0018-external-toolchain-profiles.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0018-external-toolchain-profiles.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0018-external-toolchain-profiles">ADR 0018: External toolchain profiles</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#profile-analyzer">Profile analyzer</a>
+<a class="toc-level-2" href="#migration-strategy">Migration strategy</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0018-external-toolchain-profiles">ADR 0018: External toolchain profiles</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Stage 06 scanner integrations use profile-based external tool compatibility. <code>project-scanner</code> and <code>security-validator</code> do not parse raw CLI output directly. They call a shared tool adapter runtime:</p>
+<pre><code class="language-text">tool runner
+  -&gt; version discovery
+  -&gt; tool profile selection
+  -&gt; command execution
+  -&gt; output parser
+  -&gt; normalization mapper
+  -&gt; internal scan DTO / findings</code></pre>
+<p>The stable contract inside <code>t-helper</code> is the normalized scan DTO and persisted entities. CLI command shapes, supported version ranges, output parsing and field mapping are described by versioned tool profile files.</p>
+<p>Bundled profile files live under:</p>
+<pre><code class="language-text">tool-profiles/
+  terraform/
+  tflint/
+  trivy/
+  checkov/</code></pre>
+<p>MVP profiles are required for:</p>
+<ul>
+<li><code>terraform validate</code>;</li>
+<li><code>TFLint</code>;</li>
+<li><code>Trivy</code> as the mandatory Stage 06 MVP security scanner.</li>
+</ul>
+<p>Tool profiles are declarative and may use only approved parser primitives:</p>
+<ul>
+<li>JSON with JSONPath or JMESPath selectors;</li>
+<li>regex named groups;</li>
+<li>line parsers;</li>
+<li>enum and severity mapping tables;</li>
+<li>default values;</li>
+<li>required field validation;</li>
+<li>redaction rules.</li>
+</ul>
+<p>Tool profiles must not contain:</p>
+<ul>
+<li>shell fragments;</li>
+<li>arbitrary scripts or eval behavior;</li>
+<li>network calls;</li>
+<li>file reads outside the captured tool output;</li>
+<li>commands other than explicit version discovery and scan command templates.</li>
+</ul>
+<p>Profile fields include:</p>
+<ul>
+<li><code>schema_version</code>;</li>
+<li><code>tool</code>;</li>
+<li><code>profile_id</code>;</li>
+<li><code>profile_version</code>;</li>
+<li><code>certified_versions</code>;</li>
+<li><code>compatible_versions</code>;</li>
+<li><code>version_discovery</code>;</li>
+<li><code>scan_command</code>;</li>
+<li><code>exit_codes</code>;</li>
+<li><code>parser</code>;</li>
+<li><code>mapping</code>;</li>
+<li><code>fingerprint</code>;</li>
+<li><code>redaction</code>.</li>
+</ul>
+<p>Runtime version policy supports:</p>
+<pre><code class="language-text">certified_only
+compatible_range
+latest_best_effort</code></pre>
+<p>Default MVP policy is <code>certified_only</code>. In <code>compatible_range</code>, supported but uncertified versions may run and must be marked as <code>compatible</code> / <code>uncertified</code> in result metadata. In <code>latest_best_effort</code>, unknown release versions may run only with explicit opt-in and must be marked as <code>uncertified</code>.</p>
+<p>Machine-readable errors:</p>
+<pre><code class="language-text">tool_not_found
+tool_version_unsupported
+tool_version_uncertified
+tool_output_parse_failed
+tool_schema_unsupported
+tool_profile_not_found
+tool_profile_validation_failed</code></pre>
+<p>Raw CLI output is not the primary persistence contract. <code>jobs.result_payload</code>, <code>project_scans.result_payload</code> and <code>security_findings</code> store normalized metadata and must not contain raw Terraform source, secrets, private keys, tokens or credential-bearing URLs. Diagnostic snippets may be stored only after redaction, size limits and explicit schema fields.</p>
+<h2 id="profile-analyzer">Profile analyzer</h2>
+<p><code>t-helper</code> may include an optional <code>tool-profile-analyzer</code> used by maintainers or operators to prepare new profile versions without changing <code>t-helper</code> code.</p>
+<p>The analyzer consumes:</p>
+<ul>
+<li>raw sample stdout/stderr;</li>
+<li>command exit code;</li>
+<li>discovered tool version;</li>
+<li>expected normalized DTO fixtures when available;</li>
+<li>an existing profile version as a baseline when available.</li>
+</ul>
+<p>The analyzer may generate candidate profile files, parser selectors, mapping tables and validation fixtures. Generated profiles are never activated automatically. They must pass profile validation and be imported/activated explicitly through CLI/API before runtime uses them.</p>
+<p>Analyzer output must include confidence and unresolved mapping diagnostics. Any field that affects fingerprints (<code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code>, <code>check_type</code>) requires explicit validation against fixtures before activation.</p>
+<h2 id="migration-strategy">Migration strategy</h2>
+<p>Fresh tool versions are adopted without changing <code>t-helper</code> code when their output can be represented by existing parser primitives:</p>
+<ol>
+<li>Capture new tool outputs on approved fixtures.</li>
+<li>Run profile validation against the existing profile.</li>
+<li>If compatible, extend <code>compatible_versions</code> or <code>certified_versions</code>.</li>
+<li>If output changed, create a new profile version.</li>
+<li>Validate expected normalized DTOs, exit code behavior, redaction and fingerprint components.</li>
+<li>Import and explicitly activate the new profile.</li>
+</ol>
+<p>Acceptance tests use certified profile versions. Latest-version testing may run as a non-blocking compatibility suite, but does not define MVP acceptance.</p>
+<h2 id="rationale">Rationale</h2>
+<p>External CLI tools do not provide a stable internal API for <code>t-helper</code>. JSON schemas, exit codes, rule identifiers, severity names and diagnostic fields can change between releases. Hard-coding parser logic in scanners would make Stage 06 acceptance unstable and require <code>t-helper</code> code changes for routine tool upgrades.</p>
+<p>Profile-based compatibility keeps the scanner code stable while allowing operators to certify new external tool versions through data files and fixtures.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 06 implements a shared tool runner, profile registry, profile validator and normalized DTO mapper.</li>
+<li>Bundled profiles are required for the Stage 06 MVP toolchain.</li>
+<li>New tool versions can be adopted by adding or updating profile files when no new parser primitive is needed.</li>
+<li>If a tool output change cannot be represented by supported profile primitives, a code change or a new adapter capability is required.</li>
+<li>Tests must cover certified, compatible and unsupported versions, profile validation, redaction and fingerprint stability.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0018-external-toolchain-profiles.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

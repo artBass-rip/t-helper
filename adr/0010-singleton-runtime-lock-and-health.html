@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0010: Singleton runtime lock and health - T-Helper documentation.">
+    <title>ADR 0010: Singleton runtime lock and health - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0010-singleton-runtime-lock-and-health.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0010-singleton-runtime-lock-and-health.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0010-singleton-runtime-lock-and-health">ADR 0010: Singleton runtime lock and health</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0010-singleton-runtime-lock-and-health">ADR 0010: Singleton runtime lock and health</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Local mode uses a runtime lock file plus an HTTP health probe to enforce a single active <code>t-helper</code> runtime.</p>
+<p>The runtime lock file contains:</p>
+<ul>
+<li><code>schema_version</code>;</li>
+<li><code>instance_id</code>;</li>
+<li><code>pid</code>;</li>
+<li><code>host</code>;</li>
+<li><code>api_listen_address</code>;</li>
+<li><code>started_at</code>;</li>
+<li><code>updated_at</code>;</li>
+<li><code>config_database_fingerprint</code>.</li>
+</ul>
+<p>Default lock file location:</p>
+<pre><code class="language-text">&lt;runtime_dir&gt;/thelper-runtime.lock</code></pre>
+<p><code>runtime_dir</code> is resolved from explicit runtime config first, then platform defaults. The implementation must keep the path local to the current user or service account unless a deployment package explicitly configures a shared service runtime directory.</p>
+<p>Startup behavior:</p>
+<ol>
+<li><code>thelper</code> tries to acquire an exclusive process lock for the runtime lock file.</li>
+<li>If no active lock exists, <code>thelper</code> writes lock metadata and starts normally.</li>
+<li>If a lock exists, <code>thelper</code> reads the lock metadata and probes the recorded health endpoint.</li>
+<li>If PID and health probe indicate a live runtime, the second process exits without starting another runtime.</li>
+<li>If PID is gone and health probe fails, the lock is stale and may be replaced.</li>
+<li>If PID and health disagree, startup fails closed and reports a diagnostic error rather than risking split-brain.</li>
+</ol>
+<p>Health endpoint:</p>
+<pre><code class="language-text">GET /api/health</code></pre>
+<p>The health response must include <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code> and a basic readiness state. Tauri GUI and local tools use the lock file plus <code>/api/health</code> to discover and verify an existing runtime.</p>
+<p>Stage 01 must introduce the final <code>health_status.v1</code> response shape from <code>docs/api.md</code>. Stage 02 adds runtime lock acquisition, stale lock handling and lock/probe semantics to that endpoint without a breaking response schema change.</p>
+<p><code>config_database_fingerprint</code> identifies the runtime database/config target without exposing credentials. A second runtime must not attach to a different local database while an active runtime lock exists.</p>
+<h2 id="rationale">Rationale</h2>
+<p>A lock file alone is not enough after crashes, and a health endpoint alone does not tell local clients where to connect before discovery. Combining both gives deterministic startup behavior for <code>thelper</code>, Tauri GUI and <code>thelper-ctl</code>.</p>
+<p>Failing closed on ambiguous lock/health state avoids split-brain local state and conflicting writes to the runtime database.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 01 implements the safe unauthenticated <code>/api/health</code> endpoint with the final <code>health_status.v1</code> DTO shape.</li>
+<li>Stage 02 implements lock acquisition, stale lock handling and singleton runtime discovery semantics on top of the existing <code>/api/health</code> endpoint.</li>
+<li>Tauri GUI discovery uses the runtime lock file and verifies it through <code>/api/health</code>.</li>
+<li>Starting a second <code>thelper</code> against a live runtime exits without creating a second active process.</li>
+<li>Tests must cover normal startup, second-process detection, stale lock replacement and PID/health mismatch failure.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0010-singleton-runtime-lock-and-health.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

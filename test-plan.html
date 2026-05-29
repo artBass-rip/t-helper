@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Test plan - T-Helper documentation.">
+    <title>Test plan - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/test-plan.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>test-plan.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#test-plan">Test plan</a>
+<a class="toc-level-2" href="#общие-правила">Общие правила</a>
+<a class="toc-level-2" href="#mvp-acceptance-mapping">MVP acceptance mapping</a>
+<a class="toc-level-2" href="#cross-cutting-tests">Cross-cutting tests</a>
+<a class="toc-level-3" href="#idempotency">Idempotency</a>
+<a class="toc-level-3" href="#configuration-contract">Configuration contract</a>
+<a class="toc-level-3" href="#provider-adapters">Provider adapters</a>
+<a class="toc-level-3" href="#repository-operation-conflicts">Repository operation conflicts</a>
+<a class="toc-level-3" href="#module-registry">Module registry</a>
+<a class="toc-level-3" href="#secret-masking">Secret masking</a>
+<a class="toc-level-3" href="#authorization">Authorization</a>
+<a class="toc-level-3" href="#local-auth-password-hashing">Local auth password hashing</a>
+<a class="toc-level-3" href="#bulk-write-and-delete-semantics">Bulk write and delete semantics</a>
+<a class="toc-level-3" href="#payload-schemas">Payload schemas</a>
+<a class="toc-level-3" href="#status-aggregation">Status aggregation</a>
+<a class="toc-level-3" href="#toolchain-coverage">Toolchain coverage</a>
+<a class="toc-level-3" href="#storage-invariants">Storage invariants</a>
+<a class="toc-level-3" href="#worker-execution">Worker execution</a>
+<a class="toc-level-3" href="#singleton-runtime">Singleton runtime</a>
+<a class="toc-level-3" href="#frontend-ui-contract">Frontend UI contract</a>
+<a class="toc-level-3" href="#scanner-fixtures">Scanner fixtures</a>
+<a class="toc-level-3" href="#stage-04-scanner-registry-behavior">Stage 04 scanner registry behavior</a>
+<a class="toc-level-3" href="#stage-05-repository-enrichment">Stage 05 repository enrichment</a>
+<a class="toc-level-3" href="#stage-05-path-safety">Stage 05 path safety</a>
+<a class="toc-level-3" href="#api-compatibility">API compatibility</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="test-plan">Test plan</h1>
+<p>Документ связывает MVP acceptance criteria из <a href="roadmap.html"><code>roadmap.md</code></a> с проверками API, storage state и runtime behavior.</p>
+<h2 id="общие-правила">Общие правила</h2>
+<ul>
+<li>Acceptance tests должны запускаться против локального on-premise окружения без внешних SaaS dependencies.</li>
+<li>API assertions используют endpoint contracts из <a href="api.html"><code>api.md</code></a>.</li>
+<li>Payload assertions используют schema versions из <a href="payload-schemas.html"><code>payload-schemas.md</code></a>.</li>
+<li>Storage assertions используют сущности и инварианты из <a href="data-model.html"><code>data-model.md</code></a>.</li>
+<li>Authorization assertions используют permissions из <a href="access-control.html"><code>access-control.md</code></a>.</li>
+<li>Тестовые Terraform fixtures не должны содержать реальные секреты.</li>
+</ul>
+<h2 id="mvp-acceptance-mapping">MVP acceptance mapping</h2>
+<table>
+<thead><tr><th>ID</th><th>Acceptance</th><th>Primary checks</th></tr></thead>
+<tbody>
+<tr><td><code>ACC-MVP-001</code></td><td>Terraform-проект обнаруживается по наличию <code>*.tf</code>.</td><td>Создать fixture с <code>main.tf</code>; запустить <code>POST /api/scans</code>; проверить <code>projects</code> с <code>terraform_marker = *.tf</code>.</td></tr>
+<tr><td><code>ACC-MVP-002</code></td><td>Глобальное сканирование определяет Terraform-проекты, а фоновый project discovery определяет Git-связи проектов.</td><td>Fixture содержит <code>*.tf</code> и разрешённые Git markers <code>.git/</code> directory и <code>.git</code> file с <code>gitdir:</code>; проверить <code>projects</code>, queued <code>project_discovery</code> jobs, <code>repositories</code>/<code>project_links</code> после выполнения project discovery; проверить negative fixtures для похожих файлов, которые не должны создавать repository link/card.</td></tr>
+<tr><td><code>ACC-MVP-003</code></td><td>После обнаружения проекта вложенные директории не сканируются как отдельные working directories.</td><td>Fixture содержит parent <code>main.tf</code> и nested <code>child/main.tf</code>; проверить отсутствие второго <code>project</code> под parent.</td></tr>
+<tr><td><code>ACC-MVP-004</code></td><td>Ignore rules исключают файлы и директории; <code>!pattern</code> сохраняется.</td><td>Загрузить <code>.t-helper.ignore</code>; проверить <code>ignore_rules.pattern</code>, исключение directories и сохранение отрицательных patterns.</td></tr>
+<tr><td><code>ACC-MVP-005</code></td><td>Проекты сохраняются отдельными записями и обновляются в БД; Git-связи проектов сохраняются без merge project records.</td><td>Запустить scan дважды; проверить отсутствие дублей по unique constraints и обновление <code>last_seen_at</code>; выполнить project discovery и проверить shared <code>repository_id</code>/<code>project_links</code> для проектов из одного Git repository без merge project rows.</td></tr>
+<tr><td><code>ACC-MVP-006</code></td><td>Project-level scan определяет providers, required auth и quality через <code>terraform validate</code> и <code>TFLint</code>, а security/validation scan сохраняет findings через <code>Trivy</code> как обязательный локальный scanner.</td><td>Настроить <code>PUT /api/projects/{id}/scan-settings</code>, запустить <code>POST /api/project-scans</code>; проверить parent <code>jobs.job_type = project_scan</code>, child <code>jobs.job_type = security_validation_scan</code> с тем же <code>job_group_id</code>, <code>project_scans.result_payload</code>, <code>workflow_statuses</code> и <code>security_findings</code> для <code>Trivy</code>.</td></tr>
+<tr><td><code>ACC-MVP-007</code></td><td>Runtime-конфигурация хранится в БД.</td><td>Импортировать config; проверить <code>config_entries</code> и <code>GET /api/config</code>.</td></tr>
+<tr><td><code>ACC-MVP-008</code></td><td><code>thelper-ctl -reconfigure</code> импортирует конфигурацию и ignore rules.</td><td>Запустить CLI command; проверить <code>config_entries</code>, <code>ignore_rules</code>, отсутствие service restart side effect.</td></tr>
+<tr><td><code>ACC-MVP-009</code></td><td><code>thelper-ctl -reload</code> применяет reloadable-конфигурацию.</td><td>Изменить <code>modules.enabled</code>, <code>logging.level</code> или <code>scanning.global_scan</code>; проверить sync reload result с <code>accepted_keys</code>, <code>applied_keys</code>, <code>restart_required_keys</code>, <code>failed_keys</code>, отсутствие Stage 03 <code>jobs</code> dependency and honest distinction between accepted and actually applied Stage 02 keys.</td></tr>
+<tr><td><code>ACC-MVP-010</code></td><td><code>thelper-ctl -restart &lt;module&gt;</code> работает для любого доступного отдельного модуля, а unavailable modules дают controlled error.</td><td>Перезапустить доступный module, например <code>config-manager</code> или <code>global-scanner</code>; проверить <code>module_states</code> transition и <code>module_restart.result.v1</code>; restart/reload unavailable roadmap modules должен вернуть controlled <code>module_unavailable</code>.</td></tr>
+<tr><td><code>ACC-MVP-011</code></td><td><code>GUI</code> и <code>Web UI</code> используют единый backend API и покрывают MVP read/operate сценарии.</td><td>Контрактный тест: оба frontend clients используют только documented backend API.</td></tr>
+<tr><td><code>ACC-MVP-012</code></td><td><code>GUI</code> работает только локально.</td><td>Проверить bind policy/config и отказ удалённого GUI access.</td></tr>
+<tr><td><code>ACC-MVP-013</code></td><td><code>PostgreSQL</code> и <code>SQLite</code> поддерживаются через storage abstraction.</td><td>Запустить один и тот же storage test suite против PostgreSQL и SQLite adapters.</td></tr>
+<tr><td><code>ACC-MVP-014</code></td><td><code>clone</code>, <code>pull</code>, <code>sync</code> сериализуются через <code>job_locks</code>, clone использует общий root path, а новый root path автоматически попадает в root paths.</td><td>Запустить конкурирующие repo operations; проверить один <code>held</code> lock и отсутствие конфликтующих active jobs; выполнить <code>POST /api/repos/clone</code> с <code>new_root_path</code> и проверить появление нового <code>root_path</code>; проверить clone в существующую и новую <code>target_directory</code>; проверить, что repository identity строится по <code>provider + provider_host + full_path</code>.</td></tr>
+<tr><td><code>ACC-MVP-022</code></td><td>Clone workflow поддерживает <code>generic</code> Git и один managed provider из <code>gitlab</code> или <code>github</code>, выбор `https</td><td>ssh<code>, multi-host/multi-credential provider profiles, path safety и </code>job_locks`.</td><td>Выполнить generic Git и выбранный managed provider clone requests; проверить transport URL, <code>repositories.provider</code>, <code>repositories.provider_host</code>, clone в выбранную <code>target_directory</code>, несколько provider hosts и credentials на одном provider, path containment и lock serialization.</td></tr>
+<tr><td><code>ACC-MVP-015</code></td><td>Поддерживаются <code>environments</code> и <code>workspaces</code>.</td><td>Создать/импортировать связи; проверить <code>GET /api/environments</code>, <code>GET /api/workspaces</code> и FK constraints.</td></tr>
+<tr><td><code>ACC-MVP-016</code></td><td><code>auth</code> реализован как отдельный модуль.</td><td>Проверить <code>module_states</code> для <code>auth</code> и auth endpoints.</td></tr>
+<tr><td><code>ACC-MVP-017</code></td><td>Local auth и <code>RBAC</code> реализованы на backend/API уровне; SCIM endpoints могут быть contract/stub без полноценного sync workflow.</td><td>Проверить users/groups/roles/bindings, bootstrap admin flow, negative authorization tests и controlled SCIM stub responses.</td></tr>
+<tr><td><code>ACC-MVP-018</code></td><td>Security stack работает локально и не передаёт код наружу.</td><td>Запустить project scan в network-restricted окружении; проверить отсутствие outbound calls.</td></tr>
+<tr><td><code>ACC-MVP-019</code></td><td>Security findings и rule sets хранятся внутри системы.</td><td>Проверить <code>security_rule_sets</code>, <code>security_findings</code>, <code>GET /api/security/findings</code>.</td></tr>
+<tr><td><code>ACC-MVP-020</code></td><td>Один project scan API создаёт <code>project_scans</code>, findings читаются без <code>security_scans</code>.</td><td>Проверить <code>POST /api/project-scans</code>, <code>GET /api/project-scans/{project_scan_id}/findings</code>; убедиться, что отдельной сущности <code>security_scans</code> нет.</td></tr>
+<tr><td><code>ACC-MVP-021</code></td><td>Backend API покрывает scan roots, repositories, jobs, environments, workspaces и module states для Frontend MVP.</td><td>Контрактный тест по endpoint list из <code>api.md</code> и authorization matrix.</td></tr>
+</tbody></table>
+<h2 id="cross-cutting-tests">Cross-cutting tests</h2>
+<h3 id="idempotency">Idempotency</h3>
+<ul>
+<li>Повторить write request с тем же <code>Idempotency-Key</code> и тем же payload.</li>
+<li>Ожидание: возвращается тот же <code>job_id</code> или тот же итоговый state.</li>
+<li>Повторить write request с тем же <code>Idempotency-Key</code>, но другим payload.</li>
+<li>Ожидание: <code>409 Conflict</code> или <code>validation_error</code> с явным кодом.</li>
+<li>Для job-producing endpoints проверить, что <code>Idempotency-Key</code> scoped by <code>(actor, job_type, key)</code>: same actor/job type/key replays, different payload conflicts, but the same key can be used independently by another job type or actor.</li>
+</ul>
+<h3 id="configuration-contract">Configuration contract</h3>
+<ul>
+<li>Проверить, что <code>config.example.json</code> использует <code>scanning.global_scan</code>.</li>
+<li>Импортировать config with unknown top-level key; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Импортировать config with unknown nested key; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Импортировать config with trailing JSON payload after a valid config object; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Импортировать конфигурацию с <code>scanning.global_scan</code>; Stage 02 expectation: <code>config_entries</code> stores the canonical key and <code>GET /api/config</code> returns <code>scanning.global_scan</code>. Stage 04 materializes scan roots into <code>root_paths</code>.</li>
+<li>Импортировать конфигурацию с legacy/alias key <code>scanning.global_scann</code>; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Импортировать конфигурацию с любым другим alias для global scan roots, например <code>globalScan</code> или <code>scan_roots</code>; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Проверить, что reload request/result использует ключи вида <code>scanning.global_scan</code> и возвращает sync result без Stage 03 <code>jobs</code> dependency.</li>
+<li>Отправить reload request с explicit unknown key, например <code>logging.levl</code>; ожидание: key отражён в <code>failed_keys</code>, а не в <code>accepted_keys</code> или <code>applied_keys</code>.</li>
+<li>Проверить, что <code>PUT /api/config</code> не удаляет imported system <code>ignore_rules</code>, так как <code>.t-helper.ignore</code> не входит в HTTP config payload.</li>
+<li>Проверить, что storage/API/read models используют <code>repository_id</code> для связи project -&gt; repository и не требуют поле <code>repo_id</code>.</li>
+<li>Проверить, что <code>modules.enabled</code> принимает только registered modules из initial module registry.</li>
+<li>Импортировать конфигурацию с unknown module в <code>modules.enabled</code>; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Импортировать конфигурацию с unknown database provider; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Проверить, что <code>database.*</code> и <code>external_databases.*</code> обновляют только storage profile metadata/current bootstrap или <code>migration</code> slot и не переключают active DB через reload.</li>
+<li>Проверить, что <code>thelper-ctl -reconfigure</code> может обновить <code>migration</code> storage profile без изменения <code>current</code>.</li>
+<li>Проверить, что <code>thelper-ctl -migrate-db</code> переносит schema/data, затем актуализирует <code>current</code>/<code>migration</code> statuses and preserves old DB profile metadata.</li>
+<li>Проверить SQLite -&gt; PostgreSQL <code>thelper-ctl -migrate-db</code> с <code>external_databases.username/password = secretref://env/...</code>; ожидание: target DB получает Stage-owned tables/data, secret refs остаются refs, API output masked.</li>
+<li>Проверить, что failed DB migration не меняет active <code>current</code> profile.</li>
+<li>Для Stage 02 проверить перенос только Stage 02-owned tables: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, <code>ignore_rules</code> and system migration metadata. Later stage-owned tables must extend this migration test when introduced.</li>
+<li>Проверить, что provider-specific worker settings scoped to PostgreSQL do not change SQLite settings and наоборот.</li>
+</ul>
+<h3 id="provider-adapters">Provider adapters</h3>
+<ul>
+<li>Проверить, что database providers регистрируются через storage provider registry, а не выбираются условной логикой в HTTP/CLI/domain layers.</li>
+<li>Проверить, что auth providers регистрируются через auth provider registry.</li>
+<li>Проверить, что unknown database/auth provider names возвращают controlled validation errors.</li>
+<li>Проверить, что provider-specific code не используется напрямую из HTTP handlers.</li>
+<li>Проверить, что repository provider adapters нормализуют identity как <code>provider + provider_host + full_path</code>.</li>
+<li>Проверить URL parsing по ADR 0016: equivalent HTTPS/SSH/scp-like URLs дают одинаковые <code>provider</code>, <code>provider_host</code>, <code>full_path</code>, <code>protocol</code> и safe <code>clone_url</code>.</li>
+<li>Проверить provider-specific path rules for MVP provider: GitLab supports nested groups or GitHub requires exactly <code>owner/repo</code>; Bitbucket and Azure DevOps path rules are platform/extension tests.</li>
+<li>Проверить negative URL parsing cases: userinfo in persisted URL, unsupported protocol, empty segments, <code>..</code>, backslash, provider path shape mismatch.</li>
+<li>Проверить machine-readable URL validation errors: <code>provider_host_required</code>, <code>unsupported_provider_url</code>, <code>unsupported_url_protocol</code>, <code>invalid_repository_path</code>, <code>invalid_provider_host</code>, <code>credential_userinfo_not_allowed</code>, <code>provider_path_shape_mismatch</code>.</li>
+<li>Проверить, что одинаковый <code>full_path</code> может существовать в разных <code>provider_host</code> или разных providers без конфликта unique constraint.</li>
+<li>Проверить, что <code>clone_url</code> nullable и не имеет unique constraint.</li>
+<li>Проверить, что <code>clone_url</code> не используется для lookup/upsert/deduplication и разные SSH/HTTPS transport URLs для одного repository сходятся в одну repository card.</li>
+<li>Проверить, что persisted <code>clone_url</code>, <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events</code> и logs не содержат credentials, tokens, passwords или URL userinfo.</li>
+<li>Проверить multi-host provider profiles: один provider имеет несколько <code>repository_provider_instances</code> с разными <code>provider_host</code>.</li>
+<li>Проверить multi-credential per host: один <code>repository_provider_instance</code> имеет несколько <code>repository_credentials</code> с разными <code>usages</code> и <code>scope_hint</code>.</li>
+<li>Проверить, что raw credential values отклоняются, а <code>secretref://env/...</code> accepted и masked в API responses.</li>
+<li>Проверить usage validation: clone/pull требуют <code>git_transport</code>; GitLab recursive group clone and webhook verification are platform/extension tests.</li>
+<li>Проверить, что repo job payloads содержат <code>credential_id</code>, но не secret refs и не resolved secrets.</li>
+</ul>
+<h3 id="repository-operation-conflicts">Repository operation conflicts</h3>
+<ul>
+<li>Создать active <code>repo_clone</code>, <code>repo_pull</code> или <code>repo_sync</code> job для <code>lock_key = repository:&lt;id&gt;</code>.</li>
+<li>Повторить тот же request с тем же <code>Idempotency-Key</code> и тем же payload; ожидание: возвращается существующий <code>job_id</code>.</li>
+<li>Повторить request с тем же <code>Idempotency-Key</code>, но другим payload; ожидание: <code>409 Conflict</code> или <code>validation_error</code>.</li>
+<li>Отправить новый <code>clone</code>, <code>pull</code> или <code>sync</code> request без того же <code>Idempotency-Key</code>; ожидание: <code>409 Conflict</code> с кодом <code>repository_operation_already_running</code>.</li>
+<li>Проверить, что conflict details содержат <code>repository_id</code>, <code>lock_key</code>, <code>active_job_id</code> и <code>active_job_type</code>.</li>
+<li>Отправить два конкурирующих clone request для одного normalized <code>provider + provider_host + full_path</code>, когда <code>repository_id</code> ещё не создан; ожидание: pre-create identity conflict prevents duplicate jobs/repository rows, а exact <code>Idempotency-Key</code> replay returns the existing <code>job_ref</code>.</li>
+<li>Отправить два конкурирующих clone request в один normalized target path для разных repositories; ожидание: второй request получает <code>409 conflict</code> with <code>repository_target_path_busy</code>.</li>
+<li>Проверить, что MVP не создаёт merged/replacement/cancel/superseding job для конфликтующей repository operation.</li>
+</ul>
+<h3 id="module-registry">Module registry</h3>
+<ul>
+<li>После initial migrations/seed проверить наличие registered modules: <code>core</code>, <code>worker-runtime</code>, <code>config-manager</code>, <code>module-runtime</code>, <code>status-monitor</code>, <code>global-scanner</code>, <code>repository-manager</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>auth</code>, <code>web</code>.</li>
+<li>Проверить, что <code>GET /api/modules</code> возвращает registered modules со state из <code>module_states</code>.</li>
+<li>Проверить, что registered module без доступной реализации получает state <code>unavailable</code>.</li>
+<li>Проверить, что <code>POST /api/modules/restart</code> для unknown module возвращает validation/not found error.</li>
+<li>Проверить, что <code>POST /api/modules/restart</code> или reload для <code>unavailable</code> module возвращает controlled error без panic и без изменения unrelated module states.</li>
+</ul>
+<h3 id="secret-masking">Secret masking</h3>
+<ul>
+<li>Импортировать sensitive config keys со значениями <code>secretref://env/...</code>; ожидание: в <code>config_entries.value</code> хранится reference, а не resolved secret.</li>
+<li>Вызвать <code>GET /api/config</code>; ожидание: sensitive values masked и не раскрывают имя/значение resolved secret сверх разрешённого reference metadata.</li>
+<li>Проверить masking modes: admin with <code>system.config.read</code> may see full <code>secretref://env/NAME</code>, viewer/runtime summary receives masked metadata without env var name, no response returns resolved value.</li>
+<li>Попробовать импортировать literal secret в sensitive key, включая <code>external_databases.username</code> и <code>external_databases.password</code>; ожидание: <code>validation_error</code> без частичного применения.</li>
+<li>Проверить, что <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events.payload</code>, <code>workflow_statuses.summary_payload</code>, <code>audit_log.payload</code> и logs не содержат resolved secrets.</li>
+</ul>
+<h3 id="authorization">Authorization</h3>
+<ul>
+<li>Проверить, что <code>GET /api/health</code> доступен без аутентификации и возвращает только safe metadata без config values, filesystem paths, DSN, users, secrets или object-scoped details.</li>
+<li>Для Stage 01 проверить shape <code>health_status.v1</code>: response содержит <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> и <code>schema_version = health_status.v1</code>.</li>
+<li>Для каждого write endpoint проверить отказ без требуемого permission.</li>
+<li>Для object-scoped read проверить, что пользователь без object permission не получает sensitive details.</li>
+<li>Для <code>system.runtime.read</code> проверить только runtime summary/list metadata, без раскрытия object-scoped details.</li>
+<li>Проверить examples for <code>system.runtime.read</code>: counts/module summary allowed; filesystem paths, DSNs, full secret refs, job payloads and object details without object permission denied or masked.</li>
+</ul>
+<h3 id="local-auth-password-hashing">Local auth password hashing</h3>
+<ul>
+<li>Создать local user через setup/API flow; проверить, что raw password не сохраняется в <code>users</code> или <code>local_user_credentials</code>.</li>
+<li>На пустой auth state запустить <code>thelper</code>; проверить, что bootstrap admin user created automatically.</li>
+<li>Проверить, что bootstrap username/password are latin alphanumeric length 16, shown once in first UI and stdout, and warning says credentials expire after 24 hours.</li>
+<li>Проверить, что successful bootstrap login allows creating other users/auth provider settings.</li>
+<li>Проверить, что unused bootstrap user is deleted after 24 hours and is not recreated automatically.</li>
+<li>Проверить, что <code>local_user_credentials.password_hash</code> является Argon2id PHC string с production defaults или test-approved override.</li>
+<li>Проверить, что <code>users</code> не содержит password hash fields.</li>
+<li>Проверить <code>POST /api/auth/login</code> с Argon2id PHC verification.</li>
+<li>Проверить, что successful login создаёт <code>user_sessions</code> row с <code>token_hash</code>, но raw session token не сохраняется.</li>
+<li>Проверить <code>GET /api/auth/session</code> для текущей session и <code>POST /api/auth/logout</code>, после которого session недействительна.</li>
+<li>Проверить rehash-on-login: hash со слабыми параметрами обновляется после successful login.</li>
+<li>Проверить failed login generic error без раскрытия существования username.</li>
+<li>Проверить lockout: 5 consecutive failed attempts устанавливают <code>locked_until</code> примерно на 15 минут; successful login after unlock сбрасывает <code>failed_attempt_count</code>.</li>
+<li>Проверить password reset endpoints: <code>POST /api/auth/password-reset/request</code> возвращает generic response, raw token не сохраняется, <code>password_reset_tokens.token_hash</code> хранит только hash, token становится invalid после successful <code>POST /api/auth/password-reset/confirm</code>, <code>used_at</code> или <code>expires_at</code>.</li>
+<li>Проверить <code>POST /api/auth/password/change</code> для current authenticated local user.</li>
+<li>Проверить, что API responses, <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events.payload</code>, <code>workflow_statuses.summary_payload</code>, <code>audit_log.payload</code> и logs не содержат raw passwords, password hashes, session tokens, session token hashes, reset tokens или reset token hashes.</li>
+</ul>
+<h3 id="bulk-write-and-delete-semantics">Bulk write and delete semantics</h3>
+<ul>
+<li>These checks validate confirmed MVP behavior from Stage 00 delivery decisions.</li>
+<li>Для MVP bulk <code>PUT</code> endpoints проверить non-destructive upsert semantics: omitted records are not deleted.</li>
+<li>Проверить stable identity для upsert: root paths by normalized <code>path</code>, provider instances by <code>provider + provider_host</code>, credentials by <code>provider_instance_id + name</code>, users by <code>username</code>, groups by <code>name</code>, roles by <code>name + scope_type</code>, role bindings by subject/role/scope tuple.</li>
+<li>Проверить, что public <code>DELETE</code> endpoints отсутствуют или возвращают documented not found/method not allowed до отдельного API contract.</li>
+<li>Проверить MVP lifecycle без hard delete: root paths/provider records can be disabled/deactivated through documented write fields; projects can become <code>missing</code> or <code>disabled</code>; repositories can become <code>disabled</code>, <code>missing</code> or <code>superseded</code>; users can become <code>active = false</code>.</li>
+<li>Проверить, что UI/API labels and audit actions for MVP lifecycle use disable/deactivate/mark_missing/supersede terminology and do not present these operations as hard delete.</li>
+</ul>
+<h3 id="payload-schemas">Payload schemas</h3>
+<ul>
+<li>Для каждого <code>jobs.job_type</code> проверить наличие <code>schema_version</code> в <code>payload</code> и <code>result_payload</code>.</li>
+<li>Для <code>project_scans.result_payload</code> проверить <code>schema_version = project_scans.result.v1</code>.</li>
+<li>Для <code>security_findings.fingerprint_components</code> проверить <code>schema_version = security_finding.fingerprint.v1</code>.</li>
+<li>Проверить, что <code>security_findings.fingerprint</code> имеет формат <code>fp:v1:&lt;sha256&gt;</code> и соответствует canonical JSON из ADR 0017.</li>
+<li>Проверить, что fingerprint не включает <code>job_id</code>, <code>project_scan_id</code>, line/column, title, description, remediation или severity.</li>
+<li>Проверить, что <code>resource_ref</code> или <code>finding_key</code> обязателен для persisted finding.</li>
+<li>Повторить scan с новым <code>job_id</code>/<code>project_scan_id</code>; ожидание: existing <code>security_findings</code> row обновляется по fingerprint, <code>last_seen_at</code> меняется, дубль не создаётся.</li>
+<li>Повторить scan с line shift при том же resource/rule; ожидание: fingerprint стабилен.</li>
+<li>Повторить scan с другим <code>rule_set_id</code> или <code>workspace_id</code>; ожидание: fingerprint отличается.</li>
+<li>Повторить scan after file rename; expectation: fingerprint changes unless adapter has documented stable <code>finding_key</code> behavior.</li>
+<li>Проверить workspace-specific finding: same rule/resource in different <code>workspace_id</code> produces different fingerprint.</li>
+<li>Проверить finding without <code>resource_ref</code>: persisted only when stable non-secret <code>finding_key</code> exists.</li>
+<li>Для <code>job_events.payload</code> проверить <code>schema_version = job_events.payload.v1</code>.</li>
+<li>Для <code>workflow_statuses.summary_payload</code> проверить <code>schema_version = workflow_status.summary.v1</code>.</li>
+<li>Проверить, что payload/result не содержит секреты, tokens, приватные ключи или raw Terraform source.</li>
+</ul>
+<h3 id="status-aggregation">Status aggregation</h3>
+<ul>
+<li>Проверить, что каждый worker handler пишет <code>job_events</code> для ключевых transitions: <code>claimed</code>, <code>started</code>, <code>progress</code>, <code>succeeded|failed</code>.</li>
+<li>Проверить, что <code>status-monitor</code> агрегирует jobs одного <code>job_group_id</code> в <code>workflow_statuses</code>.</li>
+<li>Проверить, что <code>GET /api/status/workflows/{job_group_id}</code> возвращает единый aggregate status.</li>
+<li>Проверить, что <code>GET /api/project-scans/{id}</code> возвращает aggregate status из <code>status-monitor</code>, а не требует агрегации на стороне UI.</li>
+<li>Проверить, что parent <code>project_scan</code> job не ждёт child <code>security_validation_scan</code> job, но workflow остаётся <code>running</code> до завершения child jobs.</li>
+</ul>
+<h3 id="toolchain-coverage">Toolchain coverage</h3>
+<ul>
+<li>Для <code>project-scanner</code> проверить, что runtime flow включает <code>terraform validate</code> и <code>TFLint</code>.</li>
+<li>Для <code>security-validator</code> проверить, что <code>Trivy</code> запускается только при наличии в <code>project_security_scan_settings.enabled_modules</code>.</li>
+<li>Проверить, что <code>terraform</code>, <code>TFLint</code> и <code>Trivy</code> запускаются через tool profile runtime из ADR 0018, а не через parser logic внутри scanner service.</li>
+<li>Проверить version discovery для каждого required tool и выбор active <code>tool_profiles</code> по <code>tool</code>, discovered version and configured version policy.</li>
+<li>Проверить default <code>certified_only</code> policy: certified version runs, unsupported version returns controlled <code>tool_version_unsupported</code>, missing binary returns <code>tool_not_found</code>.</li>
+<li>Проверить <code>compatible_range</code> policy: compatible but uncertified version may run and result payload marks <code>compatibility_status = compatible</code>, <code>certification_status = uncertified</code>.</li>
+<li>Проверить <code>latest_best_effort</code> policy requires explicit opt-in and marks results as uncertified.</li>
+<li>Проверить, что <code>jobs.project_scan.result.v1</code>, <code>jobs.security_validation_scan.result.v1</code> and <code>project_scans.result.v1</code> include tool/profile metadata and do not include raw tool output.</li>
+<li>Проверить profile validation fixtures: sample stdout/stderr plus expected normalized DTO produce stable normalized results and expected fingerprint components.</li>
+<li>Проверить negative profile fixtures: missing required fields, unsupported schema, parse failure and secret-like values produce controlled validation errors or redacted diagnostics.</li>
+<li>Проверить, что tool profile files cannot contain shell fragments, arbitrary scripts, eval behavior or commands outside explicit version discovery and scan command templates.</li>
+<li>Проверить migration to fresh tool version without code changes: add/update profile file, validate fixtures, import, activate, run scan and confirm normalized DTO/fingerprint stability.</li>
+<li>Проверить <code>tool-profile-analyzer</code>: captured output can produce a candidate profile and validation fixtures, but generated profiles use <code>source_type = generated_candidate</code>, are inactive by default and are never selected until explicit validation and activation.</li>
+<li>Проверить analyzer diagnostics for fingerprint-affecting fields: unresolved <code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code> or <code>check_type</code> blocks activation until fixtures validate them.</li>
+<li>Проверить bundled profile fixtures для <code>terraform validate</code> success/error, <code>TFLint</code> finding, <code>Trivy config</code> finding, secret-like redaction, unsupported version, missing binary and malformed output.</li>
+<li>Для extension adapters проверить, что <code>gitleaks</code>, <code>checkov</code>, <code>opa</code> и <code>conftest</code> могут быть зарегистрированы в <code>scanning.security_scan.modules</code> без изменения API contract, but are not mandatory MVP acceptance.</li>
+</ul>
+<h3 id="storage-invariants">Storage invariants</h3>
+<ul>
+<li>Проверить unique constraints из <code>data-model.md</code>.</li>
+<li>Проверить, что migrations are stage-owned: Stage 01 does not create target tables for later stages without the owning code/API/worker behavior and tests.</li>
+<li>Проверить, что <code>repositories.provider + repositories.provider_host + repositories.full_path</code> unique, а <code>repositories.full_path</code> не unique globally.</li>
+<li>Проверить FK/delete behavior для <code>projects</code>, <code>workspaces</code>, <code>project_scans</code>, <code>job_locks</code>, <code>role_bindings</code> и <code>scim_identities</code>.</li>
+<li>Проверить, что expired <code>job_locks</code> не блокируют новые operations.</li>
+<li>Проверить, что logical migration versions синхронизированы между supported dialect directories.</li>
+<li>Для Stage 01 storage contract suite запускается на SQLite и PostgreSQL.</li>
+<li>Для Stage 10 тот же storage contract suite запускается на MySQL и MSSQL.</li>
+<li>Запустить PostgreSQL storage contract suite against Aurora PostgreSQL writer endpoint before declaring Aurora PostgreSQL supported.</li>
+<li>Запустить MySQL storage contract suite against Aurora MySQL writer endpoint before declaring Aurora MySQL supported.</li>
+<li>Проверить, что migrations и runtime не требуют superuser privileges on Aurora PostgreSQL.</li>
+<li>Проверить, что Aurora MySQL tests используют InnoDB-compatible schema assumptions.</li>
+<li>Проверить, что Babelfish for Aurora PostgreSQL не проходит как <code>mssql</code> adapter target без отдельного compatibility decision.</li>
+</ul>
+<p>Implemented baseline coverage:</p>
+<ul>
+<li><code>make test</code> runs <code>gofmt</code> check, <code>go vet ./...</code> and <code>go test ./...</code>;</li>
+<li>shared storage contract tests run for SQLite in every <code>go test ./...</code> run;</li>
+<li>the same storage contract suite runs for PostgreSQL when <code>THELPER_POSTGRES_DSN</code> is set, including the Docker <code>offline</code> test runner and GitHub Actions;</li>
+<li>PostgreSQL storage tests guard destructive cleanup and require a test database name unless <code>THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1</code> is set;</li>
+<li>tests assert that Stage 01 migrations do not create later-stage tables;</li>
+<li>tests assert synchronized logical migration versions for SQLite/PostgreSQL;</li>
+<li>tests assert idempotent Stage 01 migration application.</li>
+</ul>
+<h3 id="worker-execution">Worker execution</h3>
+<ul>
+<li>Проверить, что API/CLI создают jobs в статусе <code>queued</code>, но не выполняют long-running operations inline.</li>
+<li>Запустить отдельный <code>thelper-worker</code> и проверить atomic claim + transition <code>queued -&gt; running -&gt; succeeded|failed</code>.</li>
+<li>Запустить <code>thelper-worker</code> с теми же storage provider/DSN settings, что <code>thelper</code>, и проверить, что он применяет migrations, resolves active storage profile and consumes jobs from the active database.</li>
+<li>Проверить, что <code>leased_by</code> и worker diagnostics используют формат <code>&lt;hostname&gt;:&lt;pid&gt;:&lt;worker_uuid&gt;</code>.</li>
+<li>Запустить несколько worker-процессов и проверить, что <code>job_locks</code> не допускают конфликтующие операции с одинаковым <code>lock_key</code>.</li>
+<li>Запустить несколько worker-процессов на одном queued job и проверить, что lease получает только один worker.</li>
+<li>Проверить heartbeat update для long-running job: <code>jobs.heartbeat_at</code> and <code>jobs.lease_expires_at</code> update on ticks, while <code>job_events</code> heartbeat rows are bounded diagnostics and are not required for every tick.</li>
+<li>Проверить expired lease recovery: job возвращается в <code>queued</code> с <code>run_after</code> или становится <code>failed</code> после исчерпания <code>max_attempts</code>.</li>
+<li>Проверить retry/backoff через <code>attempt_count</code>, <code>max_attempts</code> и <code>run_after</code>.</li>
+<li>Проверить default retry policy: <code>max_attempts = 3</code>, initial backoff <code>5s</code>, multiplier <code>2</code>, max backoff <code>5m</code>, jitter в допустимых пределах.</li>
+<li>Проверить lock contention: worker не запускает handler, очищает lease, возвращает job в <code>queued</code>, выставляет <code>run_after</code> и пишет <code>job_events</code>.</li>
+<li>Проверить retention cleanup: old <code>job_events</code> и released/expired <code>job_locks</code> старше retention удаляются, active jobs/locks и <code>audit_log</code> не удаляются.</li>
+<li>Проверить, что остановка worker-процесса не останавливает <code>thelper</code> API runtime.</li>
+<li>Для SQLite проверить effective <code>workers.concurrency = 1</code>, one active worker process via database-fingerprint worker lock, <code>journal_mode = WAL</code>, <code>foreign_keys = ON</code>, configured <code>busy_timeout</code>, rejection <code>sqlite_worker_concurrency_unsupported</code> when applying higher concurrency to active SQLite profile, and stale worker lock replacement after the original process is gone.</li>
+<li>Проверить, что enqueue rejects <code>jobs.payload</code> with secret-like JSON keys, URL userinfo or unresolved <code>secretref://...</code> values before persistence.</li>
+<li>Для PostgreSQL проверить, что provider-specific concurrency может быть выше SQLite without changing SQLite provider settings.</li>
+</ul>
+<h3 id="singleton-runtime">Singleton runtime</h3>
+<ul>
+<li>Запустить <code>thelper</code>, затем открыть Tauri GUI; ожидание: GUI подключается к существующему runtime.</li>
+<li>Запустить Tauri GUI без активного <code>thelper</code>; ожидание: GUI запускает local <code>thelper</code>, а <code>Web UI</code> подключается к этому же runtime.</li>
+<li>Попробовать запустить второй <code>thelper</code>; ожидание: процесс обнаруживает существующий runtime и не создаёт второй активный экземпляр.</li>
+<li>Проверить runtime lock file: содержит <code>instance_id</code>, <code>pid</code>, <code>host</code>, <code>api_listen_address</code>, <code>started_at</code>, <code>updated_at</code>, <code>config_database_fingerprint</code>.</li>
+<li>Проверить <code>/api/health</code>: возвращает тот же <code>health_status.v1</code> DTO shape, что и Stage 01, без breaking schema change.</li>
+<li>Проверить, что runtime lock <code>config_database_fingerprint</code> совпадает с safe <code>/api/health.database_fingerprint</code>.</li>
+<li>Проверить stale lock replacement: если PID отсутствует и health probe fails, новый runtime заменяет stale lock.</li>
+<li>Проверить fail-closed behavior: если PID и health probe дают противоречивое состояние, второй runtime не стартует и возвращает диагностическую ошибку.</li>
+</ul>
+<h3 id="frontend-ui-contract">Frontend UI contract</h3>
+<ul>
+<li>Проверить, что <code>Web UI</code> и <code>GUI</code> используют route tree из <code>docs/frontend-ui-contract.md</code>.</li>
+<li>Проверить, что route, доступный в <code>Web UI</code>, доступен в <code>GUI</code> для того же release scope, unless explicitly marked local-only or unavailable by backend API scope.</li>
+<li>Проверить, что frontend clients используют один typed API client and documented backend API only.</li>
+<li>Проверить, что list-heavy screens are compact and table-first: projects, repositories, findings, jobs, modules, audit and auth administration lists.</li>
+<li>Проверить, что object detail pages use content headers and tabs for subviews instead of unrelated page shells.</li>
+<li>Проверить, что long-running operations show <code>job_id</code>, status, latest event and links to job/status details.</li>
+<li>Проверить, что <code>GUI</code> uses runtime lock file plus <code>GET /api/health</code> for local discovery/readiness and authenticated <code>/api/status</code> for detailed runtime state.</li>
+<li>Проверить, что Tauri packaging/signing policy and update/distribution channel policy are documented before release artifact publication.</li>
+</ul>
+<h3 id="scanner-fixtures">Scanner fixtures</h3>
+<ul>
+<li><code>basic_tf_project</code>: директория с <code>main.tf</code>.</li>
+<li><code>nested_tf_project</code>: parent с <code>main.tf</code> и nested <code>child/main.tf</code>.</li>
+<li><code>git_repo_marker_directory</code>: <code>.git/</code> directory.</li>
+<li><code>git_repo_marker_file</code>: <code>.git</code> regular file для worktree/submodule, первая непустая строка начинается с <code>gitdir:</code>.</li>
+<li><code>git_repo_marker_file_invalid</code>: <code>.git</code> regular file без первой непустой строки <code>gitdir:</code>.</li>
+<li><code>git_marker_negative_gitignore</code>: <code>.gitignore</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitattributes</code>: <code>.gitattributes</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitmodules</code>: <code>.gitmodules</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>git_marker_negative_github_dir</code>: <code>.github/</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitlab_ci</code>: <code>.gitlab-ci.yml</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitkeep</code>: <code>.gitkeep</code> без <code>.git/</code> и без <code>.git</code> file.</li>
+<li><code>ignored_directory</code>: директория, исключённая <code>.t-helper.ignore</code>.</li>
+<li><code>negative_ignore_pattern</code>: rule <code>!pattern</code>, сохранённая без применения в exclude-only MVP matcher.</li>
+<li><code>symlinked_directory</code>: symlinked directory skipped when <code>follow_symlinks = false</code>.</li>
+</ul>
+<h3 id="stage-04-scanner-registry-behavior">Stage 04 scanner registry behavior</h3>
+<ul>
+<li>Проверить, что global scanner не открывает <code>*.tf</code> файлы для discovery и использует только directory entry names.</li>
+<li>Проверить, что global scanner creates/updates only <code>projects</code> and enqueues <code>project_discovery</code> jobs, then continues traversal without waiting for them.</li>
+<li>Проверить, что <code>.git</code> regular file читается только <code>project_discovery</code> job до implementation limit и валидируется по первой непустой строке <code>gitdir:</code>.</li>
+<li>Проверить, что global scanner не читает <code>.git</code>, <code>.git/config</code> и не вызывает <code>git</code> CLI.</li>
+<li>Проверить <code>follow_symlinks = false</code>: symlinked directories skipped, <code>directories_skipped</code> and <code>symlinks_skipped</code> updated.</li>
+<li>Проверить filesystem-only Git repository fallback identity from project discovery: <code>provider = generic</code>, <code>provider_host = local</code>, <code>root_path_id = &lt;containing root path&gt;</code>, <code>full_path = &lt;root_path-relative path&gt;</code>, <code>clone_url = null</code>; одинаковые <code>full_path</code> в разных root paths не должны merge в одну repository card.</li>
+<li>Проверить same-repository relationship: multiple local Terraform projects in one Git repository remain separate <code>projects</code> rows, share <code>repository_id</code> when known, and get <code>project_links.link_type = same_repository</code>.</li>
+<li>Проверить idempotent upsert keys: repeated scan updates <code>projects.last_seen_at</code> by <code>root_path_id + relative_path</code> and does not create duplicate <code>repositories</code> for the same generic local path.</li>
+<li>Проверить missing behavior: previously discovered project absent from completed scan gets <code>projects.status = missing</code> and is not deleted.</li>
+<li>Проверить default project listing: <code>GET /api/projects</code> без <code>status</code> возвращает только <code>active</code>, <code>status=missing|disabled|all</code> возвращает соответствующие non-active records.</li>
+<li>Проверить missing project scan guard: <code>POST /api/project-scans</code> for <code>projects.status = missing</code> returns controlled validation error.</li>
+<li>Проверить rediscovery: later global scan of same <code>root_path_id + relative_path</code> changes <code>projects.status</code> from <code>missing</code> to <code>active</code>.</li>
+<li>Проверить progressive field population: global scan fills only filesystem registry fields, project discovery fills <code>repository_id</code>/<code>project_links</code>, repository manager enriches repository card, and project scan data is not written as summary fields on <code>projects</code>.</li>
+<li>Проверить partial directory errors: per-directory error writes <code>job_events</code>, increments <code>errors_count</code>, and job may still finish <code>succeeded</code> when at least one root path was processed successfully.</li>
+<li>Проверить all-root failure: when every requested root path fails before useful traversal, job finishes <code>failed</code>.</li>
+<li>Проверить MVP symlink contract: requests/config attempting <code>follow_symlinks = true</code> are rejected with controlled validation error until Stage 09 runtime hardening.</li>
+</ul>
+<h3 id="stage-05-repository-enrichment">Stage 05 repository enrichment</h3>
+<ul>
+<li>Проверить enrich in place: generic <code>provider = generic</code>, <code>provider_host = local</code> repository gets provider-aware identity and keeps the same <code>repositories.id</code> when no provider-aware card exists.</li>
+<li>Проверить relink and supersede: when provider-aware repository card already exists, projects are relinked to it and generic repository becomes <code>status = superseded</code> with <code>superseded_by_repository_id</code>.</li>
+<li>Проверить, что project rows are never merged during repository enrichment.</li>
+<li>Проверить, что <code>superseded</code> repository rejects clone/pull/sync/webhook/polling operations with controlled validation error.</li>
+<li>Проверить default repository listing: <code>GET /api/repos</code> without <code>status</code> returns only <code>active</code>, while explicit <code>status</code> filters can include <code>superseded</code>, <code>missing</code> or <code>disabled</code>.</li>
+</ul>
+<h3 id="stage-05-path-safety">Stage 05 path safety</h3>
+<ul>
+<li>Проверить rejection for <code>../</code> in <code>target_directory</code>, <code>new_target_directory</code>, repository name and provider path.</li>
+<li>Проверить symlink inside root cannot make <code>local_path</code> escape selected <code>root_path</code>.</li>
+<li>Проверить case-insensitive collision on case-insensitive filesystem.</li>
+<li>Проверить Unicode normalization before uniqueness and containment checks.</li>
+<li>Проверить existing empty directory accepted only after containment/conflict checks.</li>
+<li>Проверить existing non-empty non-Git directory returns controlled validation error.</li>
+<li>Проверить existing Git repository with expected remote turns clone into pull.</li>
+<li>Проверить existing Git repository with different remote rejects clone.</li>
+</ul>
+<h3 id="api-compatibility">API compatibility</h3>
+<ul>
+<li>Проверить, что <code>GET /api/scans/{job_id}</code> returns global scan job during MVP.</li>
+<li>Проверить, что new frontend client code uses canonical <code>GET /api/jobs/{id}</code> or status endpoints.</li>
+<li>Проверить, что compatibility endpoint removal requires documented deprecation cycle.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/test-plan.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

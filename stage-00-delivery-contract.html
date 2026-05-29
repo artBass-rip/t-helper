@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 00 Delivery Contract - T-Helper documentation.">
+    <title>Stage 00 Delivery Contract - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/stage-00-delivery-contract.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>stage-00-delivery-contract.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-00-delivery-contract">Stage 00 Delivery Contract</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#canonical-inputs">Canonical Inputs</a>
+<a class="toc-level-2" href="#accepted-delivery-decisions">Accepted Delivery Decisions</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#stage-01-scaffolding-checklist">Stage 01 Scaffolding Checklist</a>
+<a class="toc-level-2" href="#implementation-style-guide">Implementation Style Guide</a>
+<a class="toc-level-2" href="#ci-skeleton-checklist">CI Skeleton Checklist</a>
+<a class="toc-level-2" href="#stage-01-03-backlog">Stage 01-03 Backlog</a>
+<a class="toc-level-3" href="#stage-01">Stage 01</a>
+<a class="toc-level-3" href="#stage-02">Stage 02</a>
+<a class="toc-level-3" href="#stage-03">Stage 03</a>
+<a class="toc-level-2" href="#validation-notes">Validation Notes</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-00-delivery-contract">Stage 00 Delivery Contract</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<p>Stage 00 is complete as a documentation and decision stage. It does not create executable product scaffolding, Go modules, CI workflows, database migrations or test harnesses. Those deliverables start in Stage 01.</p>
+<h2 id="canonical-inputs">Canonical Inputs</h2>
+<ul>
+<li><code>docs/requirements.md</code></li>
+<li><code>docs/architecture.md</code></li>
+<li><code>docs/roadmap.md</code></li>
+<li><code>docs/traceability.md</code></li>
+<li><code>docs/test-plan.md</code></li>
+<li><code>docs/configuration.md</code></li>
+<li><code>docs/development.md</code></li>
+<li><code>docs/local-dev-environment.md</code></li>
+<li><code>docs/implementation-specs/stage-00-delivery-contract.md</code></li>
+<li><code>docs/adr/</code></li>
+<li><code>config.example.json</code></li>
+</ul>
+<h2 id="accepted-delivery-decisions">Accepted Delivery Decisions</h2>
+<p>The canonical decision register is <code>docs/implementation-specs/stage-00-delivery-contract.md</code>.</p>
+<p>Stage 00 confirms these delivery rules for implementation:</p>
+<ul>
+<li>Stage 01 may start with no remaining MVP blockers.</li>
+<li><code>projects.repository_id</code> is the single project-to-repository relationship field across storage, API and payload contracts.</li>
+<li><code>scanning.global_scan</code> is the only external config key for global scan roots; storage/API/domain code uses <code>root_paths</code>.</li>
+<li><code>secretref://env/...</code> is the only MVP secret reference resolver contract.</li>
+<li>Literal secrets are rejected for sensitive persisted settings.</li>
+<li>Resolved secrets never appear in config storage, API responses, jobs, events, audit records, workflow summaries, findings or logs.</li>
+<li>MVP public lifecycle uses non-destructive state transitions and no public hard delete endpoints.</li>
+<li>Stage-owned migrations introduce physical tables only when the owning stage ships behavior and tests for the corresponding invariants.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<p>Stage 00 is accepted when:</p>
+<ul>
+<li>every open decision in <code>docs/roadmap.md</code> is classified as accepted, deferred, platform blocker, stage-local blocker or out of scope in the Stage 00 decision register;</li>
+<li>all ADRs required before scaffolding are accepted;</li>
+<li>the Stage 01 repository layout and migration naming contract is fixed in ADR 0007;</li>
+<li>config key compatibility is fixed in ADR 0008;</li>
+<li>secret resolution is fixed in ADR 0009;</li>
+<li>local SQLite/PostgreSQL development expectations are documented;</li>
+<li>traceability covers every MVP capability and acceptance criterion;</li>
+<li><code>config.example.json</code> uses <code>scanning.global_scan</code> and contains no literal secret values;</li>
+<li>implementation specs use <code>ACC-MVP-*</code> and <code>ACC-PLATFORM-*</code> acceptance identifiers where applicable;</li>
+<li>Stage 01 can begin without implicit architecture choices.</li>
+</ul>
+<h2 id="stage-01-scaffolding-checklist">Stage 01 Scaffolding Checklist</h2>
+<p>Stage 01 must create the executable scaffold using the accepted Stage 00 contracts:</p>
+<ul>
+<li>initialize one Go module at the repository root;</li>
+<li>create entrypoints <code>cmd/thelper</code>, <code>cmd/thelper-worker</code> and <code>cmd/thelper-ctl</code>;</li>
+<li>create the package layout from ADR 0007 under <code>internal/</code>;</li>
+<li>keep <code>cmd/*</code> packages limited to bootstrap and wiring;</li>
+<li>add dialect-specific migration directories for <code>sqlite</code>, <code>postgres</code>, <code>mysql</code> and <code>mssql</code>;</li>
+<li>implement only Stage 01-owned migrations and seed data;</li>
+<li>add shared storage contract tests for SQLite and PostgreSQL;</li>
+<li>gate PostgreSQL tests with <code>THELPER_POSTGRES_DSN</code>;</li>
+<li>add <code>GET /api/health</code> as safe unauthenticated metadata only;</li>
+<li>reject any alias for <code>scanning.global_scan</code>;</li>
+<li>ensure sensitive config paths accept only <code>secretref://env/...</code>.</li>
+</ul>
+<h2 id="implementation-style-guide">Implementation Style Guide</h2>
+<p>Stage 01 and later code must follow these repository-level rules:</p>
+<ul>
+<li>prefer standard library and accepted ADR stack choices before adding dependencies;</li>
+<li>keep domain logic out of HTTP handlers, CLI parsing and storage adapters;</li>
+<li>pass <code>context.Context</code> through API, CLI, worker and storage boundaries;</li>
+<li>return typed domain/application errors that API and CLI layers translate into documented responses;</li>
+<li>keep storage adapters behind interfaces owned by application/domain packages;</li>
+<li>treat migrations as append-only once merged;</li>
+<li>make config import strict: unknown keys, aliases and literal sensitive values fail validation before partial persistence;</li>
+<li>keep job payloads stable, versioned and free of raw secrets;</li>
+<li>use table-driven tests for validation, config mapping, storage contracts and API error mapping;</li>
+<li>keep local-only assumptions explicit in config, tests and runtime checks.</li>
+</ul>
+<h2 id="ci-skeleton-checklist">CI Skeleton Checklist</h2>
+<p>Actual CI workflow files are Stage 01 deliverables. The initial CI skeleton must run these gates once code exists:</p>
+<ul>
+<li>formatting and static checks for Go packages;</li>
+<li><code>go test ./...</code>;</li>
+<li>SQLite storage contract tests;</li>
+<li>PostgreSQL storage contract tests with <code>THELPER_POSTGRES_DSN</code>;</li>
+<li>config validation tests for canonical keys and rejected aliases;</li>
+<li>secret masking and literal-secret rejection tests;</li>
+<li>migration tests from empty databases;</li>
+<li>CLI smoke checks for <code>thelper-ctl</code>;</li>
+<li>API smoke check for <code>GET /api/health</code>;</li>
+<li>artifact upload for test results when the runner supports it.</li>
+</ul>
+<h2 id="stage-01-03-backlog">Stage 01-03 Backlog</h2>
+<h3 id="stage-01">Stage 01</h3>
+<ul>
+<li>Backend HTTP skeleton.</li>
+<li>Storage abstraction.</li>
+<li>SQLite and PostgreSQL adapters.</li>
+<li>Dialect-specific migration runner.</li>
+<li>Health endpoint.</li>
+<li>Local logging and correlation ID foundation.</li>
+</ul>
+<h3 id="stage-02">Stage 02</h3>
+<ul>
+<li>Runtime config import into <code>config_entries</code>.</li>
+<li><code>module_states</code> registry and initial module seed.</li>
+<li><code>thelper-ctl -reconfigure</code>.</li>
+<li><code>thelper-ctl -reload</code>.</li>
+<li><code>thelper-ctl -restart &lt;module&gt;</code>.</li>
+<li>Singleton runtime lock and health behavior.</li>
+</ul>
+<h3 id="stage-03">Stage 03</h3>
+<ul>
+<li><code>jobs</code>, <code>job_locks</code>, <code>job_events</code> and <code>workflow_statuses</code>.</li>
+<li>Worker claim, lease, heartbeat, retry and expired lease recovery.</li>
+<li>Worker handlers for <code>config_reload</code> and <code>module_restart</code>.</li>
+<li>Status monitor foundation.</li>
+<li>Runtime/status APIs required by frontend MVP.</li>
+</ul>
+<h2 id="validation-notes">Validation Notes</h2>
+<p>Stage 00 validation is documentation-only:</p>
+<ul>
+<li><code>config.example.json</code> must parse as JSON;</li>
+<li>no legacy short repository relationship field contract should remain outside historical explanatory text;</li>
+<li>no external config alias should be introduced for <code>scanning.global_scan</code>;</li>
+<li>every ADR under <code>docs/adr/</code> must have <code>Status: Accepted</code>;</li>
+<li>local environment files may exist, but product containers are not required until the relevant implementation stages create product code.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/stage-00-delivery-contract.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

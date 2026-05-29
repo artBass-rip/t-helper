@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 15: Distributed Deployment - T-Helper documentation.">
+    <title>Stage 15: Distributed Deployment - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-15-distributed-deployment.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-15-distributed-deployment.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-15-distributed-deployment">Stage 15: Distributed Deployment</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#hard-dependencies">Hard dependencies</a>
+<a class="toc-level-2" href="#conditional-dependencies">Conditional dependencies</a>
+<a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-15-distributed-deployment">Stage 15: Distributed Deployment</h1>
+<h2 id="цель">Цель</h2>
+<p>Подготовить систему к multi-node и HA deployment без ломки доменных контрактов и без расхождения с монолитным режимом.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><code>docs/architecture.md</code></li>
+<li><code>docs/roadmap.md</code></li>
+<li><code>docs/technology-stack.md</code></li>
+<li><code>docs/data-model.md</code></li>
+<li><code>docs/payload-schemas.md</code></li>
+<li><code>docs/access-control.md</code></li>
+<li><code>docs/implementation-specs/stage-09-runtime-observability-hardening.md</code></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li>вынос <code>global-scanner</code>;</li>
+<li>вынос <code>project-scanner</code>;</li>
+<li>вынос <code>repository-manager</code>;</li>
+<li>вынос <code>security-validator</code>;</li>
+<li>вынос <code>auth</code>;</li>
+<li>optional вынос <code>status-monitor</code>;</li>
+<li>межмодульные contracts;</li>
+<li>service discovery и health model;</li>
+<li>worker groups, queues, locks ownership;</li>
+<li>HA topology.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>изменение MVP product scenarios;</li>
+<li>distributed-only user API;</li>
+<li>second configuration source of truth;</li>
+<li>incompatible payload schema changes.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>distributed runtime architecture package;</li>
+<li>inter-module contracts;</li>
+<li>deployment manifests/instructions;</li>
+<li>HA/failover test suite;</li>
+<li>security model for inter-module calls.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>monolithic and distributed modes share API/storage contracts;</li>
+<li>jobs, locks, payload schemas and module states remain compatible;</li>
+<li>retry, timeout and idempotency policies are documented;</li>
+<li>status-monitor ownership is defined for multi-node mode;</li>
+<li>inter-module auth/auditability is formalized;</li>
+<li>failover tests pass.</li>
+</ul>
+<h2 id="hard-dependencies">Hard dependencies</h2>
+<ul>
+<li>Stage 09 runtime and observability hardening.</li>
+</ul>
+<h2 id="conditional-dependencies">Conditional dependencies</h2>
+<ul>
+<li>Stage 10 storage adapter expansion is required only for distributed release scopes that include MySQL/MSSQL or additional adapters.</li>
+<li>Stage 11 security tooling is required only for distributed release scopes that include those additional tools/policy packs.</li>
+<li>Stage 13 SCIM full sync is required only for distributed release scopes that include full SCIM sync.</li>
+<li>Stage 14 repository webhook sync is required only for distributed release scopes that include webhook ingress.</li>
+</ul>
+<h2 id="platform-blockers">Platform blockers</h2>
+<ul>
+<li>service discovery mechanism;</li>
+<li>deployment target stack;</li>
+<li>inter-module authentication mechanism;</li>
+<li>queue/worker group ownership model.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 15.</li>
+<li>Acceptance: <code>ACC-PLATFORM-005</code>.</li>
+<li>Platform criteria are defined in <code>docs/roadmap.md</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>distributed extraction before runtime hardening multiplies runtime complexity;</li>
+<li>informal inter-module contracts diverge from monolith;</li>
+<li>races around jobs/locks in multi-node setup.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-15-distributed-deployment.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

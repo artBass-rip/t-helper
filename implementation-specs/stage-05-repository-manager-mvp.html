@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 05: Repository Manager MVP - T-Helper documentation.">
+    <title>Stage 05: Repository Manager MVP - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-05-repository-manager-mvp.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-05-repository-manager-mvp.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-05-repository-manager-mvp">Stage 05: Repository Manager MVP</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#implementation-status">Implementation status</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#entry-baseline">Entry baseline</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#implementation-sequencing">Implementation sequencing</a>
+<a class="toc-level-2" href="#repository-enrichment-contract">Repository enrichment contract</a>
+<a class="toc-level-3" href="#enrich-in-place">Enrich in place</a>
+<a class="toc-level-3" href="#relink-and-supersede">Relink and supersede</a>
+<a class="toc-level-2" href="#repository-operation-conflict-policy">Repository operation conflict policy</a>
+<a class="toc-level-3" href="#clone-pre-create-locking">Clone pre-create locking</a>
+<a class="toc-level-2" href="#local-path-safety-examples">Local path safety examples</a>
+<a class="toc-level-2" href="#acceptance-checklist">Acceptance checklist</a>
+<a class="toc-level-2" href="#acceptance-matrix">Acceptance matrix</a>
+<a class="toc-level-2" href="#stage-local-blockers">Stage-local blockers</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-05-repository-manager-mvp">Stage 05: Repository Manager MVP</h1>
+<h2 id="цель">Цель</h2>
+<p>Добавить управляемые repository operations поверх registry, не нарушая инварианты путей, идемпотентности и сериализации конкурентных действий.</p>
+<h2 id="implementation-status">Implementation status</h2>
+<p>Stage 05 is implemented as the current repository manager MVP baseline. The remaining repository work is split into later stages:</p>
+<ul>
+<li>Stage 05A: additional managed providers and recursive GitLab group clone;</li>
+<li>Stage 05B: polling-based sync and scheduler integration;</li>
+<li>Stage 14: webhook-based sync.</li>
+</ul>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><code>docs/requirements.md</code></li>
+<li><code>docs/architecture.md</code></li>
+<li><code>docs/api.md</code></li>
+<li><code>docs/data-model.md</code></li>
+<li><code>docs/payload-schemas.md</code></li>
+<li><code>docs/test-plan.md</code></li>
+<li><code>docs/adr/0013-repository-identity.md</code></li>
+<li><code>docs/adr/0015-repository-provider-integration-profiles.md</code></li>
+<li><code>docs/adr/0016-repository-provider-url-parsing.md</code></li>
+</ul>
+<h2 id="entry-baseline">Entry baseline</h2>
+<p>Stage 05 starts from a completed Stage 04 scanner/registry baseline:</p>
+<ul>
+<li><code>repositories</code> already exists with <code>provider</code>, <code>provider_host</code>, <code>full_path</code>, lifecycle fields and uniqueness indexes for provider-aware and generic local identities;</li>
+<li>Stage 04 <code>project_discovery</code> can create generic local repository cards and <code>project_links</code>;</li>
+<li><code>GET /api/repos</code> and <code>GET /api/repos/{id}</code> are read-only Stage 04 routes;</li>
+<li>the job system already accepts <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code> payload schemas and maps them to <code>repository_operation</code> workflow status;</li>
+<li>worker runtime and <code>job_locks</code> exist;</li>
+<li>the module registry contains <code>repository-manager</code>.</li>
+</ul>
+<p>Closed Stage 05 gaps in the implementation:</p>
+<ul>
+<li><code>POST /api/repos/clone</code>, <code>POST /api/repos/pull</code> and <code>POST /api/repos/sync</code> are executable routes;</li>
+<li><code>repository_provider_instances</code>, <code>repository_credentials</code> and <code>repository_operation_reservations</code> exist for provider profiles, credentials and clone pre-create identity/path reservations;</li>
+<li>Stage 05 credential usages are executable for <code>git_transport</code>; <code>provider_api</code> and <code>webhook</code> usages are persisted and validated as profile metadata for Stage 05A/Stage 14 workflows, not invoked by Stage 05 single-repository clone/pull/sync operations;</li>
+<li>Stage 05 hardening migration adds repository/provider and repository/default credential FK parity plus credential lookup indexes across SQLite and Postgres;</li>
+<li>provider URL parsing and path normalization are implemented as repository-manager domain services;</li>
+<li>repository operation conflict lookup is cross-operation for <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code>, with clone pre-create identity/path checks.</li>
+<li>repository operation reservation cleanup is available as an explicit storage primitive and still runs opportunistically before new reservations.</li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li>модуль <code>repository-manager</code>;</li>
+<li>полноценная модель <code>repositories</code>;</li>
+<li>provider-aware clone adapters для <code>generic</code> Git и одного managed provider: <code>gitlab</code> или <code>github</code>;</li>
+<li>repository identity <code>provider + provider_host + full_path</code>;</li>
+<li>repository card enrichment for Stage 04 generic filesystem-discovered repositories;</li>
+<li>GitKraken-like provider integration profiles with multi-host support;</li>
+<li>multi-credential support per provider host with usage validation;</li>
+<li><code>clone</code>, <code>pull</code>, <code>sync</code>;</li>
+<li><code>job_locks</code> для сериализации;</li>
+<li>API и jobs repository operations.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>project/security scan orchestration после clone/pull;</li>
+<li>UI clone workflow;</li>
+<li>расширенные auth providers;</li>
+<li>distributed execution repository-manager.</li>
+<li>webhook-based sync;</li>
+<li>polling-based sync;</li>
+<li>recursive GitLab group/subgroups clone;</li>
+<li><code>bitbucket</code> и <code>azure_devops</code> adapters.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>repository-manager module;</li>
+<li>provider adapter для <code>generic</code> Git;</li>
+<li>provider adapter для одного managed provider: <code>github</code>;</li>
+<li>provider instance/profile API and storage;</li>
+<li>repository credentials API and storage using <code>secretref://...</code>;</li>
+<li>normalized repository identity handling with <code>provider_host</code>;</li>
+<li>repository lifecycle fields: <code>status</code>, <code>discovery_source</code>, <code>superseded_by_repository_id</code>, <code>identity_confirmed_at</code>;</li>
+<li>repo operation jobs и payload handlers;</li>
+<li>safe path normalization;</li>
+<li>repository API;</li>
+<li>concurrency tests.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>clone/pull/sync создают jobs и выполняются через worker;</li>
+<li>repository cards are unique by <code>provider + provider_host + full_path</code>;</li>
+<li>repository manager enriches repository cards and relinks project relations when needed, but never merges separate <code>projects</code> rows;</li>
+<li>adapters normalize <code>provider_host</code> and <code>full_path</code> before repository lookup or creation;</li>
+<li><code>clone_url</code> is nullable, non-unique transport metadata and is not used for lookup/upsert/deduplication;</li>
+<li>persisted <code>clone_url</code> is safe-normalized and contains no credentials, tokens, passwords or userinfo;</li>
+<li>different SSH/HTTPS transport URLs for the same <code>provider + provider_host + full_path</code> resolve to the same repository card;</li>
+<li>one provider can have multiple configured hosts/provider instances;</li>
+<li>one provider instance can have multiple credentials with different usages/permissions;</li>
+<li>repository operation jobs carry <code>credential_id</code>, not raw secret refs or resolved secrets;</li>
+<li>selected credentials are validated for provider instance ownership, required usage and transport protocol compatibility;</li>
+<li>Git operations run non-interactively and repository operation failure messages are redacted before being persisted on repository cards;</li>
+<li>released/expired clone pre-create reservations are pruned after the retention window;</li>
+<li>provider URL parsing follows ADR 0016 and equivalent HTTPS/SSH/scp-like URLs resolve to the same repository identity;</li>
+<li><code>local_path</code> всегда внутри выбранного <code>root_path</code>;</li>
+<li>path traversal отклоняется на API и domain layer;</li>
+<li>новый root path при clone сохраняется в <code>root_paths</code>;</li>
+<li>конфликтующие repo operations сериализуются через <code>job_locks</code> and the MVP conflict policy below;</li>
+<li>provider-aware operations reject <code>status = superseded</code> repositories with controlled validation error.</li>
+<li>Stage 05 MVP <code>repo_sync</code> is pull-only: the worker runs the same Git pull path as <code>repo_pull</code> and records <code>operation = repo_sync</code>; project/security scan orchestration is intentionally outside this stage.</li>
+</ul>
+<h2 id="implementation-sequencing">Implementation sequencing</h2>
+<p>Stage 05 should be implemented in this order to keep the risk surface small:</p>
+<ol>
+<li>Add repository-manager storage migrations and stores for <code>repository_provider_instances</code> and <code>repository_credentials</code>, including <code>secretref://env/...</code> validation and masked API responses.</li>
+<li>Add provider URL parsing and repository identity normalization tests before wiring clone/pull/sync. The MVP managed provider must be selected explicitly in the implementation branch: <code>gitlab</code> or <code>github</code>.</li>
+<li>Add clone target normalization and containment checks as a domain service used by both API handlers and worker handlers.</li>
+<li>Add repository operation enqueue APIs with idempotency and conflict handling.</li>
+<li>Add worker handlers for <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code>, then enable the <code>repository-manager</code> module.</li>
+<li>Add filesystem/Git integration tests after pure normalization, credential and conflict tests are passing.</li>
+</ol>
+<h2 id="repository-enrichment-contract">Repository enrichment contract</h2>
+<p>Stage 04 <code>project_discovery</code> may create conservative local cards:</p>
+<ul>
+<li><code>provider = generic</code></li>
+<li><code>provider_host = local</code></li>
+<li><code>full_path = &lt;root_path-relative normalized repository path&gt;</code></li>
+<li><code>status = active</code></li>
+<li><code>discovery_source = filesystem</code></li>
+<li><code>identity_confirmed_at = null</code></li>
+</ul>
+<p>When Stage 05 resolves provider-aware identity for the same local repository, repository manager applies one of two flows.</p>
+<h3 id="enrich-in-place">Enrich in place</h3>
+<p>If a matching provider-aware card does not already exist:</p>
+<ul>
+<li>update the existing generic repository row in place;</li>
+<li>set <code>provider</code>, <code>provider_host</code>, <code>full_path</code>, safe <code>clone_url</code>, <code>default_branch</code> and provider metadata from resolved identity;</li>
+<li>set <code>discovery_source = provider</code> or <code>clone</code>, depending on the operation source;</li>
+<li>set <code>identity_confirmed_at = now</code>;</li>
+<li>keep the same <code>repositories.id</code>;</li>
+<li>keep existing <code>projects.repository_id</code> relations and <code>project_links</code>.</li>
+</ul>
+<h3 id="relink-and-supersede">Relink and supersede</h3>
+<p>If a matching provider-aware card already exists:</p>
+<ul>
+<li>keep the provider-aware card as the canonical repository row;</li>
+<li>update projects pointing to the generic row so they point to the provider-aware row;</li>
+<li>preserve separate project records and existing <code>project_links</code>, updating <code>project_links.repository_id</code> where applicable;</li>
+<li>set the generic row to <code>status = superseded</code>;</li>
+<li>set <code>superseded_by_repository_id</code> to the canonical provider-aware repository id;</li>
+<li>do not hard delete the generic row in MVP.</li>
+</ul>
+<p>In both flows, project rows remain separate. A repository identity match never collapses multiple Terraform projects into one project record.</p>
+<h2 id="repository-operation-conflict-policy">Repository operation conflict policy</h2>
+<p>MVP policy for concurrent <code>clone</code>, <code>pull</code> and <code>sync</code> operations is intentionally strict and predictable:</p>
+<ul>
+<li>at most one active repository operation job may exist for one <code>lock_key = repository:&lt;repository_id&gt;</code>;</li>
+<li>this check is cross-operation: an active <code>repo_clone</code> blocks <code>repo_pull</code> and <code>repo_sync</code> for the same repository, and the same applies to every other pair among <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code>;</li>
+<li>implementation must not rely only on a helper that searches by exact <code>job_type + lock_key</code>; repository operation conflict lookup must search all active repository operation job types for the same <code>lock_key</code>;</li>
+<li><code>clone</code> must also use pre-create conflict checks before <code>repository_id</code> is available;</li>
+<li>active means <code>jobs.status in (queued, running)</code>;</li>
+<li>exact replay with the same <code>Idempotency-Key</code> and same payload returns the existing <code>job_ref</code>;</li>
+<li>replay with the same <code>Idempotency-Key</code> and different payload returns a controlled conflict or validation error;</li>
+<li>a new request without the same <code>Idempotency-Key</code> returns <code>409 conflict</code> when another active repository operation exists for the same repository;</li>
+<li>conflict errors use machine-readable code <code>repository_operation_already_running</code>;</li>
+<li>conflict error details include <code>repository_id</code>, <code>lock_key</code>, <code>active_job_id</code> and <code>active_job_type</code>;</li>
+<li>MVP does not merge, replace, cancel, supersede or auto-chain conflicting repository operation jobs;</li>
+<li>clone may degrade to pull only when the target already contains the expected Git repository and no active repository operation exists for that repository.</li>
+</ul>
+<h3 id="clone-pre-create-locking">Clone pre-create locking</h3>
+<p><code>POST /api/repos/clone</code> must serialize clone creation before filesystem side effects and before relying on an existing <code>repository_id</code>.</p>
+<p>Required API/domain flow:</p>
+<ol>
+<li>Normalize request input into canonical <code>provider</code>, <code>provider_host</code>, <code>full_path</code>, <code>protocol</code>, selected <code>root_path</code> and normalized target path.</li>
+<li>Check active jobs/locks by normalized repository identity using <code>repository-identity:&lt;provider&gt;:&lt;provider_host&gt;:&lt;full_path&gt;</code>.</li>
+<li>Check active jobs/locks by normalized local target using <code>repository-path:&lt;root_path_id&gt;:&lt;normalized_target_path&gt;</code>.</li>
+<li>Upsert or find <code>repositories</code> by <code>provider + provider_host + full_path</code>.</li>
+<li>Create the job with final <code>lock_key = repository:&lt;repository_id&gt;</code>.</li>
+<li>Worker execution acquires the final repository lock <code>repository:&lt;repository_id&gt;</code>.</li>
+<li>Before writing to disk, the worker also holds the normalized target path lock <code>repository-path:&lt;root_path_id&gt;:&lt;normalized_target_path&gt;</code> or an equivalent repository-manager storage lock, then re-validates the target path against the persisted <code>root_path</code> and expected repository identity.</li>
+</ol>
+<p>The identity lock prevents duplicate clone jobs for the same Git repository before a stable repository row exists. The path lock prevents two different repositories from writing into the same local directory. The final <code>repository:&lt;repository_id&gt;</code> lock remains the common serialization key for later <code>pull</code> and <code>sync</code>.</p>
+<p>Pre-create and worker-side identity/path locks may be represented as queued job lock keys, multiple held <code>job_locks</code>, transactional conflict rows or an equivalent repository-manager storage primitive. They must expire or be released safely when enqueue or execution fails so a failed clone request cannot permanently block later operations. If a repository-manager reservation expires while the owning <code>repo_clone</code> job is still queued or running, the API must still reject a second clone into the same normalized target path by inspecting active clone jobs before creating/updating a second repository card.</p>
+<p>Conflict errors from pre-create locking use machine-readable codes:</p>
+<ul>
+<li><code>repository_operation_already_running</code> for identity conflicts;</li>
+<li><code>repository_target_path_busy</code> for target path conflicts.</li>
+</ul>
+<h2 id="local-path-safety-examples">Local path safety examples</h2>
+<p>Repository manager must normalize and validate every clone target before creating jobs or filesystem side effects.</p>
+<p>Required cases:</p>
+<ul>
+<li><code>../</code> path traversal in <code>target_directory</code>, <code>new_target_directory</code>, repository name or provider path must be rejected before path creation;</li>
+<li>a symlink inside <code>root_path</code> must not allow <code>local_path</code> to escape the selected root after symlink evaluation;</li>
+<li>case-insensitive filesystems must not allow duplicate logical targets that differ only by case when the host filesystem treats them as the same path;</li>
+<li>Unicode paths must be normalized consistently before uniqueness checks and root containment checks;</li>
+<li>existing empty directory may be used as clone target only after containment and conflict checks;</li>
+<li>existing non-empty directory without expected Git metadata must return a controlled validation error;</li>
+<li>existing Git repository with the expected remote may turn clone into pull;</li>
+<li>existing Git repository with a different remote must reject clone unless an explicit future takeover workflow is documented.</li>
+</ul>
+<p>The implementation must include domain-level tests for the same path safety rules in addition to HTTP API tests. Worker handlers must repeat containment checks immediately before filesystem writes, because queued jobs may run after root paths or symlinks have changed.</p>
+<h2 id="acceptance-checklist">Acceptance checklist</h2>
+<p>Stage 05 is considered complete only when the implementation and tests cover the following checklist:</p>
+<ul>
+<li>provider profile APIs validate <code>api_base_url</code> and <code>web_base_url</code> as safe HTTPS URLs without userinfo and with a host matching normalized <code>provider_host</code>;</li>
+<li>managed provider <code>clone_url</code> is used for identity extraction and mismatch validation, while the selected <code>protocol</code> controls the persisted transport URL;</li>
+<li>HTTP clone requests reject credentials embedded in URLs and exact <code>Idempotency-Key</code> replay returns the existing <code>job_ref</code>;</li>
+<li>active <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code> conflict checks are cross-operation for the same <code>repository:&lt;id&gt;</code> lock key and are backed by a storage-level active repository operation uniqueness guard;</li>
+<li>clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects;</li>
+<li>worker execution repeats target containment checks and rejects symlink escapes that appear after enqueue;</li>
+<li>existing empty target directories are accepted after containment/conflict checks, existing non-empty non-Git directories are rejected, matching existing Git remotes degrade clone to pull, and mismatched Git remotes are rejected;</li>
+<li>provider-aware enrichment keeps generic repository IDs when no canonical provider card exists, and relinks projects/project links plus supersedes the generic row when a canonical card already exists;</li>
+<li>repository operation job payloads contain <code>credential_id</code> only and never raw <code>secretref</code> values or resolved secrets;</li>
+<li>repository operation failure messages are redacted before persistence.</li>
+</ul>
+<h2 id="acceptance-matrix">Acceptance matrix</h2>
+<table>
+<thead><tr><th>Requirement</th><th>Implementation</th><th>Test coverage</th></tr></thead>
+<tbody>
+<tr><td>Provider profile APIs validate safe HTTPS <code>api_base_url</code>/<code>web_base_url</code> without userinfo and with matching <code>provider_host</code>.</td><td><code>internal/repository/store.go</code> provider instance normalization; <code>internal/httpapi/repository.go</code> provider instance routes.</td><td><code>TestProviderInstanceValidatesProfileURLs</code>, <code>TestStage05ProviderProfileAPIValidatesSafeHTTPSURLs</code>.</td></tr>
+<tr><td>Managed provider <code>clone_url</code> is used for identity extraction and mismatch validation; selected <code>protocol</code> controls persisted transport URL.</td><td><code>internal/repository/domain.go</code> <code>NormalizeIdentity</code>, <code>ParseCloneURL</code>, <code>TransportURL</code>.</td><td><code>TestNormalizeIdentityGitHubEquivalentURLs</code>, <code>TestNormalizeIdentityUsesSelectedProtocolForManagedTransport</code>, <code>TestNormalizeIdentityRejectsExplicitURLMismatch</code>.</td></tr>
+<tr><td>HTTP clone rejects credentials embedded in URLs and exact <code>Idempotency-Key</code> replay returns the existing <code>job_ref</code>.</td><td><code>internal/httpapi/repository.go</code> clone normalization and <code>cloneIdempotentReplay</code>.</td><td><code>TestStage05RepositoryCloneValidationCodeAndIdempotentReplay</code>.</td></tr>
+<tr><td>Active <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code> conflict checks are cross-operation for <code>repository:&lt;id&gt;</code>.</td><td><code>internal/jobs/store.go</code> <code>ActiveRepositoryOperation</code> and <code>EnqueueRepositoryOperation</code>; <code>jobs_active_repository_operation_lock_uidx</code>; repository operation enqueue paths.</td><td><code>TestEnqueueRepositoryOperationRejectsActiveCrossOperationLock</code>, <code>TestStage05PullAndSyncConflictAcrossRepositoryOperationTypes</code>, <code>TestStage05ConcurrentPullRequestsCreateSingleActiveRepositoryJob</code>, <code>TestStage05CloneConflictWithActivePullDoesNotMutateRepository</code>.</td></tr>
+<tr><td>Clone pre-create locking rejects duplicate normalized repository identities and duplicate normalized target paths before filesystem side effects.</td><td><code>repository_operation_reservations</code>, <code>IdentityReservationKey</code>, <code>TargetReservationKey</code>, clone API reservation flow.</td><td><code>TestStage05RepositoryCloneValidationCodeAndIdempotentReplay</code>, <code>TestStage05CloneRejectsBusyTargetPathForDifferentRepository</code>, <code>TestStage05CloneConflictDoesNotCreateNewRootPath</code>.</td></tr>
+<tr><td>Active clone jobs keep target paths busy even after a pre-create reservation expires before worker start.</td><td><code>internal/httpapi/repository.go</code> active clone target-path lookup before repository upsert.</td><td><code>TestStage05CloneRejectsBusyTargetPathAfterReservationExpiry</code>.</td></tr>
+<tr><td>Released/expired clone pre-create reservations can be explicitly cleaned after retention.</td><td><code>internal/repository/store.go</code> <code>CleanupOperationReservations</code>; migration cleanup indexes.</td><td><code>TestCleanupOperationReservationsPrunesWithoutNewReservation</code>, <code>TestReserveOperationKeysPrunesOldReleasedReservations</code>.</td></tr>
+<tr><td>Worker repeats target containment checks and rejects symlink escapes that appear after enqueue.</td><td><code>internal/repository/handlers.go</code> <code>handleClone</code>; <code>internal/repository/domain.go</code> <code>NormalizeTarget</code>.</td><td><code>TestOperationHandlerCloneRejectsSymlinkEscapeChangedAfterEnqueue</code>, <code>TestNormalizeTargetRejectsSymlinkEscapeInExistingParent</code>.</td></tr>
+<tr><td>Existing empty target directories are accepted, non-empty non-Git directories are rejected, matching Git remotes degrade clone to pull, and mismatched remotes are rejected.</td><td><code>internal/repository/handlers.go</code> clone worker filesystem and remote checks.</td><td><code>TestOperationHandlerCloneUsesExistingEmptyTargetDirectory</code>, <code>TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError</code>, <code>TestOperationHandlerCloneExistingExpectedRemoteRunsPull</code>, <code>TestOperationHandlerCloneExistingDifferentRemoteRejects</code>.</td></tr>
+<tr><td>Provider-aware enrichment keeps generic repository IDs or relinks/supersedes generic rows when a canonical card exists, without merging project rows.</td><td><code>internal/repository/store.go</code> <code>UpsertRepositoryForClone</code>, <code>supersedeGenericRepository</code>.</td><td><code>TestUpsertRepositoryEnrichesGenericRepositoryInPlace</code>, <code>TestUpsertRepositoryRelinksAndSupersedesGenericRepository</code>.</td></tr>
+<tr><td>Repository operation job payloads contain <code>credential_id</code> only and never raw <code>secretref</code> values or resolved secrets.</td><td><code>internal/httpapi/repository.go</code> repo operation payload construction; worker resolves secrets only at execution time.</td><td><code>TestStage05RepositoryOperationPayloadsDoNotCarrySecretRefs</code>.</td></tr>
+<tr><td>Existing repository operations validate explicit and default credentials before enqueue.</td><td><code>internal/httpapi/repository.go</code> existing operation enqueue validation.</td><td><code>TestStage05PullValidatesDefaultCredentialBeforeEnqueue</code>.</td></tr>
+<tr><td>Store-level repository upsert validates provider instance and credential ownership/protocol invariants.</td><td><code>internal/repository/store.go</code> <code>validateRepositoryOperationReferences</code>.</td><td><code>TestUpsertRepositoryValidatesProviderInstanceIdentity</code>, <code>TestUpsertRepositoryValidatesCredentialOwnershipAndProtocol</code>.</td></tr>
+<tr><td>Repository operation failure messages are redacted before persistence.</td><td><code>internal/repository/handlers.go</code> <code>recordRepositoryFailure</code>, <code>redactRepositoryMessage</code>.</td><td><code>TestGitCommandEnvIsNonInteractiveAndRepositoryMessagesAreRedacted</code>, <code>TestOperationHandlerCloneNonEmptyTargetRejectsAndRecordsLastError</code>.</td></tr>
+<tr><td>Clone target selection is unambiguous and path traversal is rejected at API/domain boundaries.</td><td><code>internal/httpapi/repository.go</code> <code>cloneTargetDirectory</code>; <code>internal/repository/domain.go</code> <code>NormalizeTarget</code>, <code>NormalizeFullPath</code>.</td><td><code>TestStage05CloneRejectsAmbiguousTargetDirectoryFields</code>, <code>TestNormalizeTargetRejectsTraversal</code>, <code>TestNormalizeFullPathRejectsUnsafeSegmentsBeforeCleaning</code>.</td></tr>
+<tr><td>Superseded repositories reject provider-aware operations with controlled validation errors.</td><td><code>internal/httpapi/repository.go</code> existing operation enqueue validation; <code>internal/repository/handlers.go</code> worker validation.</td><td><code>TestStage05PullRejectsSupersededRepository</code>.</td></tr>
+</tbody></table>
+<h2 id="stage-local-blockers">Stage-local blockers</h2>
+<ul>
+<li>none for starting implementation.</li>
+<li>MVP managed provider selection: <code>github</code>.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 05.</li>
+<li>Acceptance: <code>ACC-MVP-014</code>, <code>ACC-MVP-021</code>, <code>ACC-MVP-022</code>.</li>
+<li>API: <code>GET /api/repos</code>, <code>GET/PUT /api/repo-provider-instances</code>, <code>GET/PUT /api/repo-credentials</code>, <code>POST /api/repos/clone|pull|sync</code>.</li>
+<li>Data model: <code>repositories</code>, <code>repository_provider_instances</code>, <code>repository_credentials</code>, <code>jobs</code>, <code>job_locks</code>, <code>root_paths</code>.</li>
+<li>ADR: <code>0013</code>, <code>0015</code>, <code>0016</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>ошибки path normalization приведут к записи за пределы root;</li>
+<li>provider adapters разойдутся по payload/transport behavior;</li>
+<li>расширение provider set после MVP может нарушить URL parsing contract, если adapters не используют ADR 0016.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-05-repository-manager-mvp.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

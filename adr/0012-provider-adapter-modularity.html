@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0012: Provider adapter modularity - T-Helper documentation.">
+    <title>ADR 0012: Provider adapter modularity - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0012-provider-adapter-modularity.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0012-provider-adapter-modularity.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0012-provider-adapter-modularity">ADR 0012: Provider adapter modularity</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0012-provider-adapter-modularity">ADR 0012: Provider adapter modularity</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>All external providers must be implemented as separate pluggable modules or libraries behind stable internal interfaces.</p>
+<p>This rule applies at minimum to:</p>
+<ul>
+<li>database/storage providers: <code>sqlite</code>, <code>postgresql</code>, <code>mysql</code>, <code>mssql</code>;</li>
+<li>managed database engine flavors: Aurora PostgreSQL through <code>postgresql</code>, Aurora MySQL through <code>mysql</code>;</li>
+<li>authentication providers: local auth and future external IAM/SSO providers;</li>
+<li>SCIM providers;</li>
+<li>repository providers: <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>;</li>
+<li>policy/tool providers where runtime integration is provider-specific.</li>
+</ul>
+<p>Provider-specific code must not be embedded directly in HTTP handlers, CLI commands or domain logic. Provider modules/libraries are selected through configuration and registered in provider registries.</p>
+<p>Database providers are implemented as storage adapter libraries under the storage layer. Auth providers are implemented as auth provider libraries under the auth module. Repository providers are implemented as repository-manager provider libraries.</p>
+<p>Provider modules/libraries must expose capability metadata such as provider name, supported engine flavor or protocol, health/check support and whether reload/restart is required after configuration changes.</p>
+<p>Repository provider adapters must follow repository identity normalization from ADR 0013: <code>provider + provider_host + full_path</code>. URL parsing follows ADR 0016.</p>
+<h2 id="rationale">Rationale</h2>
+<p>Provider-specific behavior changes independently from core domain contracts. Keeping providers behind small interfaces prevents storage, auth and repository integrations from leaking into API handlers, CLI commands, migrations orchestration or business services.</p>
+<p>This is also required for on-premise delivery, where different installations may enable different database, auth and repository integrations.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 01 storage adapters must be pluggable libraries selected by storage configuration.</li>
+<li>Stage 07 auth providers must be pluggable libraries selected by auth configuration.</li>
+<li>Unknown provider names are validation errors.</li>
+<li>Provider capability metadata must be visible enough for diagnostics and controlled errors.</li>
+<li>Tests must include provider registry validation and at least one fake/provider test double where practical.</li>
+<li>Repository provider tests must cover identity normalization across providers and self-hosted provider instances.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0012-provider-adapter-modularity.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

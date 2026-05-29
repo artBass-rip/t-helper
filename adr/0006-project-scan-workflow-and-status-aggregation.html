@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0006: Project scan workflow and status aggregation - T-Helper documentation.">
+    <title>ADR 0006: Project scan workflow and status aggregation - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0006-project-scan-workflow-and-status-aggregation.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0006-project-scan-workflow-and-status-aggregation.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0006-project-scan-workflow-and-status-aggregation">ADR 0006: Project scan workflow and status aggregation</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#status-aggregation-rules">Status aggregation rules</a>
+<a class="toc-level-2" href="#project-scan-workflow">Project scan workflow</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0006-project-scan-workflow-and-status-aggregation">ADR 0006: Project scan workflow and status aggregation</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Project scans use a non-blocking parent-child job workflow.</p>
+<p><code>POST /api/project-scans</code> creates:</p>
+<ul>
+<li>one <code>project_scans</code> row;</li>
+<li>one parent <code>jobs.job_type = project_scan</code> job;</li>
+<li>a <code>job_group_id</code> with value <code>project_scan:&lt;project_scan_id&gt;</code>.</li>
+</ul>
+<p>The parent <code>project_scan</code> job performs project-level checks and creates child <code>security_validation_scan</code> jobs when project security settings enable security modules. Parent jobs do not wait for child jobs.</p>
+<p>Each job emits status events and metrics. A logical <code>status-monitor</code> module aggregates job, workflow, worker and module status into read models consumed by UI and internal services.</p>
+<p>No <code>security_scans</code> persistent entity is introduced.</p>
+<h2 id="rationale">Rationale</h2>
+<p>This keeps one public project scan endpoint while preserving module separation between <code>project-scanner</code> and <code>security-validator</code>.</p>
+<p>Non-blocking parent orchestration avoids holding worker slots while child jobs run. A dedicated status aggregation path prevents UI and internal services from duplicating workflow status logic.</p>
+<h2 id="status-aggregation-rules">Status aggregation rules</h2>
+<p>Workers write facts:</p>
+<ul>
+<li><code>jobs.status</code>;</li>
+<li><code>jobs.result_payload</code>;</li>
+<li><code>job_events</code>;</li>
+<li>domain results such as <code>security_findings</code>.</li>
+</ul>
+<p><code>status-monitor</code> owns aggregates:</p>
+<ul>
+<li><code>workflow_statuses</code>;</li>
+<li>aggregate <code>project_scans.status</code>;</li>
+<li>aggregate <code>project_scans.result_payload</code>.</li>
+</ul>
+<p>UI and internal services must read status through aggregate read models and documented status/project scan endpoints.</p>
+<h2 id="project-scan-workflow">Project scan workflow</h2>
+<ol>
+<li>API creates <code>project_scans</code>.</li>
+<li>API creates parent <code>project_scan</code> job.</li>
+<li>Parent job runs project-level checks.</li>
+<li>Parent job creates child <code>security_validation_scan</code> job(s), if required.</li>
+<li>Parent job completes without waiting for child jobs.</li>
+<li>Child jobs execute independently.</li>
+<li><code>status-monitor</code> aggregates all jobs with the same <code>job_group_id</code>.</li>
+</ol>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li><code>jobs</code> needs <code>parent_job_id</code> and <code>job_group_id</code>.</li>
+<li><code>job_events</code> and <code>workflow_statuses</code> are required read-model support entities.</li>
+<li><code>GET /api/project-scans/{id}</code> returns aggregate status.</li>
+<li>Status endpoints expose workflow, job, worker and module status from the aggregation layer.</li>
+<li>Stage 03 implements the basic status-monitor read model for jobs/workers/modules.</li>
+<li>Stage 06 uses the status-monitor for project scan workflow aggregation.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0006-project-scan-workflow-and-status-aggregation.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

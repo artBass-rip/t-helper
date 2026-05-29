@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0007: Implementation repository layout and migrations - T-Helper documentation.">
+    <title>ADR 0007: Implementation repository layout and migrations - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0007-implementation-repository-layout-and-migrations.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0007-implementation-repository-layout-and-migrations.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0007-implementation-repository-layout-and-migrations">ADR 0007: Implementation repository layout and migrations</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0007-implementation-repository-layout-and-migrations">ADR 0007: Implementation repository layout and migrations</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>The initial code scaffold uses one Go module with three executable entrypoints:</p>
+<ul>
+<li><code>cmd/thelper</code> - backend runtime and HTTP API process;</li>
+<li><code>cmd/thelper-worker</code> - background worker process;</li>
+<li><code>cmd/thelper-ctl</code> - administrative CLI.</li>
+</ul>
+<p>The repository layout is:</p>
+<pre><code class="language-text">cmd/
+  thelper/
+  thelper-worker/
+  thelper-ctl/
+internal/
+  app/
+    server/
+    worker/
+    ctl/
+  httpapi/
+  config/
+  storage/
+    migrations/
+      sqlite/
+      postgres/
+      mysql/
+      mssql/
+    sqlite/
+    postgres/
+    mysql/
+    mssql/
+  domain/
+    projects/
+    repositories/
+    jobs/
+    modules/
+    auth/
+    security/
+  services/
+    scanner/
+    repomanager/
+    projectscanner/
+    securityvalidator/
+    statusmonitor/
+  runtime/
+  authz/
+  audit/
+  log/
+  testkit/
+web/
+docs/</code></pre>
+<p><code>cmd/*</code> packages only perform bootstrap and wiring. HTTP handlers call application services and do not contain domain logic. Domain packages do not depend on concrete storage adapters. Worker handlers use the same application services as API/CLI entrypoints where possible.</p>
+<p>SQL migrations are stored under dialect-specific directories:</p>
+<pre><code class="language-text">internal/storage/migrations/
+  sqlite/
+  postgres/
+  mysql/
+  mssql/</code></pre>
+<p>Migration naming uses synchronized, monotonically increasing six-digit prefixes in every dialect directory:</p>
+<pre><code class="language-text">sqlite/000001_create_system_tables.sql
+postgres/000001_create_system_tables.sql
+mysql/000001_create_system_tables.sql
+mssql/000001_create_system_tables.sql</code></pre>
+<p>If a logical migration version exists for one supported dialect, the same version must exist for every supported dialect in that release line. SQL content may differ by dialect.</p>
+<p>After a migration is merged and may have been applied, it is append-only. Changes must be delivered by a new migration.</p>
+<p>Seed data for system permissions, system roles, role permissions and default module registry belongs to migrations or migration-adjacent seed steps that are versioned with the schema.</p>
+<h2 id="rationale">Rationale</h2>
+<p>The layout keeps runtime, worker and CLI bootstrap separate while sharing domain and application code. Keeping adapters below <code>internal/storage</code> prevents storage-specific decisions from leaking into domain logic.</p>
+<p>Migration ordering must be deterministic before Stage 01, because storage contracts are the foundation for config, jobs, registry, auth and findings.</p>
+<p>The project uses one logical schema contract with multiple physical implementations. This allows PostgreSQL, MySQL and MSSQL to use their native SQL features without forcing SQLite compatibility into production-oriented schemas.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 01 scaffolding follows this package layout unless a superseding ADR is accepted.</li>
+<li>Migration tests must run against a clean SQLite database and a clean PostgreSQL database.</li>
+<li>Stage 10 adds the same migration contract tests for clean MySQL and MSSQL databases.</li>
+<li>Dialect-specific migrations are allowed and expected.</li>
+<li>Storage compatibility is verified by shared behavior/contract tests across adapters, not by comparing DDL text.</li>
+<li>Critical constraints must be enforced in storage where supported and duplicated in application validation where a backend cannot enforce them consistently.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0007-implementation-repository-layout-and-migrations.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

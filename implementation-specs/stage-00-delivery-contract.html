@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 00: Delivery Contract - T-Helper documentation.">
+    <title>Stage 00: Delivery Contract - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-00-delivery-contract.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-00-delivery-contract.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-00-delivery-contract">Stage 00: Delivery Contract</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#decision-register">Decision register</a>
+<a class="toc-level-2" href="#decision-classes">Decision classes</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#stage-local-blockers">Stage-local blockers</a>
+<a class="toc-level-2" href="#platform-blockers">Platform blockers</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-00-delivery-contract">Stage 00: Delivery Contract</h1>
+<h2 id="цель">Цель</h2>
+<p>Закрыть продуктовые и engineering-развилки до начала code scaffolding, чтобы последующие stages выполнялись по согласованному Definition of Done.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><code>docs/requirements.md</code></li>
+<li><code>docs/architecture.md</code></li>
+<li><code>docs/roadmap.md</code></li>
+<li><code>docs/traceability.md</code></li>
+<li><code>docs/test-plan.md</code></li>
+<li><code>docs/adr/</code></li>
+<li><code>config.example.json</code></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li>Definition of Done для MVP и platform release;</li>
+<li>финализация открытых решений: <code>terragrunt.hcl</code>, baseline policy packs, минимальные external auth providers, lifecycle связей <code>project</code> / <code>environment</code> / <code>workspace</code>;</li>
+<li>правила ведения roadmap, traceability и implementation specs;</li>
+<li>структура будущего code repository, package layout, style guide и CI skeleton;</li>
+<li>проверка, что scaffolding следует принятым ADR без временных обходных решений;</li>
+<li>фиксация политики секретов для <code>secretref://...</code>, masking и ошибок resolution.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>реализация backend/frontend кода;</li>
+<li>миграции БД;</li>
+<li>запуск scanner/repository/security/auth модулей;</li>
+<li>изменение уже принятых ADR без отдельного ADR supersede process.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>утверждённый Definition of Done;</li>
+<li>список закрытых и оставшихся blocked decisions;</li>
+<li>Stage 00 decision register с accepted/deferred/out-of-scope статусами;</li>
+<li>нормализованная модель идентификаторов <code>repository_id</code>;</li>
+<li>ADR по package layout, migration naming, config key compatibility и secret resolution;</li>
+<li>локальный development contract для SQLite/PostgreSQL storage tests;</li>
+<li>начальный backlog для Stage 01-03;</li>
+<li>правила secret reference handling;</li>
+<li>CI/scaffolding checklist.</li>
+</ul>
+<p>Stage 00 deliverables are documentation and decision deliverables. Executable repository scaffolding, CI files, Go module creation and migration/test harness implementation are owned by Stage 01.</p>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>все открытые решения из <code>docs/roadmap.md</code> имеют статус: accepted, deferred или explicitly out of scope;</li>
+<li><code>projects.repository_id</code> используется как единое имя связи проекта с репозиторием в storage/API/payload контрактах;</li>
+<li><code>scanning.global_scan</code> зафиксирован как единый внешний config key и мапится во внутренние <code>root_paths</code>;</li>
+<li>package layout и migration naming/versioning зафиксированы отдельным ADR;</li>
+<li>secret resolver contract зафиксирован отдельным ADR;</li>
+<li>локальный PostgreSQL dev/test setup описан в <code>docs/development.md</code>;</li>
+<li><code>docs/traceability.md</code> покрывает каждый MVP capability;</li>
+<li><code>config.example.json</code> валиден и не содержит literal-секретов;</li>
+<li>implementation specs используют <code>ACC-MVP-*</code> и <code>ACC-PLATFORM-*</code> identifiers;</li>
+<li>команда может начать Stage 01 без неявных архитектурных решений.</li>
+</ul>
+<h2 id="decision-register">Decision register</h2>
+<table>
+<thead><tr><th>Decision</th><th>Status</th><th>Resolution</th></tr></thead>
+<tbody>
+<tr><td>Current repository state</td><td>Accepted</td><td>Historical Stage 00 baseline: проект был documentation-only/documentation-first; реализация ещё не была начата, поэтому Stage 01 was the first code scaffolding stage. Current repository state is updated by the Stage 01 completion record.</td></tr>
+<tr><td>Stage 00 delivery boundary</td><td>Accepted</td><td>Stage 00 is complete as a documentation/decision contract. Repository layout, style guide and CI are specified by ADRs/docs; executable scaffolding, actual CI files and test harnesses are Stage 01 implementation deliverables.</td></tr>
+<tr><td>MVP breadth</td><td>Accepted</td><td>MVP intentionally remains a broad platform slice through Stage 08: backend, storage, jobs/workers, scanner, repository manager, tool profiles, local scanners, auth/RBAC, audit, Web UI and local GUI. This is an accepted delivery trade-off to avoid temporary contracts between stages; teams must manage it through strict stage ownership and acceptance tests rather than by shrinking the documented MVP.</td></tr>
+<tr><td><code>terragrunt.hcl</code> support</td><td>Deferred</td><td>Не входит в MVP; extension point допускается без discovery/scan behavior.</td></tr>
+<tr><td>Baseline local security rules and policy packs</td><td>Deferred</td><td>Stage 06 реализует registration/storage; bundled policy content переносится в Stage 11 unless approved earlier.</td></tr>
+<tr><td>Minimal external auth providers</td><td>Deferred</td><td>Stage 07 обязан поставить local auth и provider interface; конкретные external providers утверждаются отдельно.</td></tr>
+<tr><td>SCIM MVP scope</td><td>Accepted</td><td>Stage 07 поставляет SCIM contract/stub; полноценный SCIM sync workflow переносится в Stage 13/platform.</td></tr>
+<tr><td><code>project</code> / <code>environment</code> / <code>workspace</code> lifecycle</td><td>Accepted for MVP</td><td>Stage 04 поставляет entities/read API/FK; automatic linking rules остаются conservative и требуют явного импорта/редактирования до отдельного решения.</td></tr>
+<tr><td>Full <code>.gitignore</code> semantics</td><td>Deferred</td><td>MVP matcher exclude-only; <code>!pattern</code> импортируется и хранится без применения до Stage 09.</td></tr>
+<tr><td><code>repo_id</code> vs <code>repository_id</code></td><td>Accepted</td><td>Используется единое имя <code>repository_id</code>.</td></tr>
+<tr><td><code>scanning.global_scan</code> spelling</td><td>Accepted</td><td>Используется единый внешний config key <code>scanning.global_scan</code>; внутреннее доменное имя - <code>root_paths</code>.</td></tr>
+<tr><td>Package layout and migration naming</td><td>Accepted</td><td>См. ADR 0007.</td></tr>
+<tr><td>Dialect-specific SQL migrations</td><td>Accepted</td><td>Shared logical migration versions with dialect-specific SQL for <code>sqlite</code>, <code>postgres</code>, <code>mysql</code>, <code>mssql</code>; Stage 01 implements SQLite/PostgreSQL, Stage 10 adds MySQL/MSSQL.</td></tr>
+<tr><td>Secret resolver contract</td><td>Accepted</td><td>См. ADR 0009; MVP resolver - <code>secretref://env/...</code>.</td></tr>
+<tr><td>Local PostgreSQL development environment</td><td>Accepted</td><td>См. <code>docs/development.md</code>.</td></tr>
+<tr><td>Singleton runtime lock/health</td><td>Accepted</td><td>См. ADR 0010.</td></tr>
+<tr><td>Health endpoint exposure</td><td>Accepted</td><td>Confirmed delivery decision: <code>GET /api/health</code> is unauthenticated safe metadata for local runtime discovery; detailed runtime state remains authenticated under <code>/api/status</code>.</td></tr>
+<tr><td>Runtime auth session API</td><td>Accepted</td><td>Stage 07 includes login, logout, current session, password reset and password change endpoints in addition to administrative auth/RBAC APIs.</td></tr>
+<tr><td>Bootstrap admin recovery model</td><td>Accepted</td><td>Stage 07 keeps the strict first-run bootstrap policy from <code>data-model.md</code>: unused bootstrap credentials expire after 24 hours, are not recreated automatically and recovery of an unclaimed empty auth state requires documented destructive reset/reinitialization. This operational trade-off is accepted to avoid an unauthenticated persistent recovery path in MVP.</td></tr>
+<tr><td>Bulk <code>PUT</code> semantics</td><td>Accepted</td><td>Confirmed delivery decision: MVP bulk <code>PUT</code> endpoints are non-destructive upserts by stable identity or <code>id</code>; omitted records are not deleted.</td></tr>
+<tr><td>Public delete endpoints</td><td>Accepted</td><td>Confirmed delivery decision: delete permissions are seeded for future lifecycle APIs, but public <code>DELETE</code> endpoints are out of scope for MVP.</td></tr>
+<tr><td>MVP lifecycle without public DELETE</td><td>Accepted</td><td>MVP user-facing lifecycle is expressed through explicit state fields such as <code>enabled</code>, <code>active</code>, <code>disabled</code>, <code>missing</code> or <code>superseded</code>, and through non-destructive <code>PUT</code> updates. UI and API must not imply hard deletion; future delete/archive endpoints require an explicit API contract and migration/test update.</td></tr>
+<tr><td>Project records and Git relationships</td><td>Accepted</td><td>Global scan creates separate project records only; <code>project_discovery</code> determines Git relationships; multiple projects from one Git repository are linked through <code>project_links</code> and are not merged.</td></tr>
+<tr><td>Missing project lifecycle</td><td>Accepted</td><td>Missing projects are not deleted, are hidden from default project listing, reject project scan operations, and auto-return to <code>active</code> when rediscovered.</td></tr>
+<tr><td>MVP symlink traversal</td><td>Accepted</td><td>Stage 04 supports only <code>follow_symlinks = false</code>; optional <code>follow_symlinks = true</code> is deferred to Stage 09 runtime hardening.</td></tr>
+<tr><td>Repository enrichment</td><td>Accepted</td><td>Stage 05 enriches generic repository cards in place where possible, or relinks projects and marks generic cards <code>superseded</code>; project rows are never merged.</td></tr>
+<tr><td>Repository manager MVP scope</td><td>Accepted</td><td>Stage 05 включает <code>generic</code> Git и один managed provider из <code>gitlab</code>/<code>github</code>; <code>bitbucket</code>, <code>azure_devops</code> и recursive GitLab group clone переносятся в repository extensions, polling sync - в Stage 05B, webhook sync - в Stage 14.</td></tr>
+<tr><td>Repository operation conflict policy</td><td>Accepted</td><td>Stage 05 rejects a new <code>clone</code>, <code>pull</code> or <code>sync</code> request with <code>409 conflict</code> when another <code>queued</code> or <code>running</code> repository operation exists for the same <code>repository:&lt;id&gt;</code> lock key, except exact <code>Idempotency-Key</code> replay, which returns the existing job reference.</td></tr>
+<tr><td>Clone pre-create conflict policy</td><td>Accepted</td><td><code>POST /api/repos/clone</code> must check normalized repository identity and normalized target path locks before a stable <code>repository_id</code> exists, then create the job with final <code>lock_key = repository:&lt;repository_id&gt;</code>.</td></tr>
+<tr><td>Security validator MVP scope</td><td>Accepted</td><td>Stage 06 требует <code>terraform validate</code>, <code>TFLint</code>, findings model и <code>Trivy</code> как обязательный MVP local security scanner; <code>Checkov</code>, <code>Gitleaks</code>, <code>OPA</code> и <code>Conftest</code> являются adapters outside mandatory MVP acceptance.</td></tr>
+<tr><td>Stage 06 split</td><td>Accepted</td><td>Stage 06A delivers the full ADR 0018 toolchain profile runtime, registry, validator, certified profiles and optional analyzer; Stage 06B delivers project/security scanner orchestration on top of Stage 06A.</td></tr>
+<tr><td>Stage 06 certified tool profiles</td><td>Accepted</td><td>Stage 06A uses ADR 0018 <code>certified_only</code> profiles for <code>terraform</code>, <code>TFLint</code> and <code>Trivy</code>; initial validation fixtures must cover success, failure, unsupported/missing tools, malformed output and secret redaction cases before Stage 06B acceptance.</td></tr>
+<tr><td>Storage migration profiles</td><td>Accepted</td><td>Storage config хранится в profile slots <code>current</code> и <code>migration</code>; active DB switches only through successful <code>thelper-ctl -migrate-db</code>, preserving old DB metadata and leaving old DB deletion manual. This must be implemented fully, not as a temporary simplified MVP behavior.</td></tr>
+<tr><td>Stage-owned migrations</td><td>Accepted</td><td><code>docs/data-model.md</code> is the target model; physical migrations are introduced strictly by stage, and a table appears only when that stage ships code, API/worker behavior and tests for its invariants.</td></tr>
+<tr><td>SQLite worker limits</td><td>Accepted</td><td>Worker settings are provider/profile-specific; SQLite MVP requires one worker process, concurrency <code>1</code>, WAL, foreign keys and busy timeout without affecting PostgreSQL settings.</td></tr>
+<tr><td>Worker identity, backoff and retention defaults</td><td>Accepted</td><td>См. ADR 0011.</td></tr>
+<tr><td>Initial module registry contents</td><td>Accepted</td><td>Seed includes <code>core</code>, <code>worker-runtime</code>, <code>config-manager</code>, <code>module-runtime</code>, <code>status-monitor</code>, <code>global-scanner</code>, <code>repository-manager</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>auth</code>, <code>web</code>.</td></tr>
+<tr><td>Provider adapter modularity</td><td>Accepted</td><td>Database, auth, SCIM, repository and provider-specific integrations are pluggable modules/libraries behind stable internal interfaces. См. ADR 0012.</td></tr>
+<tr><td>Repository identity</td><td>Accepted</td><td>Repository identity is <code>provider + provider_host + full_path</code>; <code>clone_url</code> is transport metadata, not identity. См. ADR 0013.</td></tr>
+<tr><td>Local password hashing</td><td>Accepted</td><td>Local auth uses Argon2id PHC hashes in <code>local_user_credentials</code>, reset tokens are hash-only, and lockout defaults are fixed. См. ADR 0014.</td></tr>
+<tr><td>Repository provider integration profiles</td><td>Accepted</td><td>Git integrations use multi-host provider profiles and multi-credential records with <code>secretref://...</code> secret refs. См. ADR 0015.</td></tr>
+<tr><td>Repository provider URL parsing</td><td>Accepted</td><td>Provider adapters normalize GitLab/GitHub/Bitbucket/Azure DevOps URLs into canonical identity fields. См. ADR 0016.</td></tr>
+<tr><td>Security finding fingerprint</td><td>Accepted</td><td>Findings use <code>fp:v1:&lt;sha256 canonical_json&gt;</code> over stable identity components. См. ADR 0017.</td></tr>
+<tr><td>External toolchain profiles</td><td>Accepted</td><td>Stage 06A external CLI compatibility uses versioned tool profiles, certified compatibility, explicit activation and optional profile analyzer. См. ADR 0018.</td></tr>
+<tr><td>Stage 08 admin UI scope</td><td>Accepted</td><td>Stage 08 includes full MVP administrative screens for auth/RBAC/configuration/security rule sets in both Web UI and local GUI. Stage 12 is hardening/extension scope, not the first full admin UI delivery.</td></tr>
+<tr><td>Stage 08 UI delivery contract</td><td>Accepted</td><td><code>docs/frontend-ui-contract.md</code> is the accepted Stage 08 entry contract for route map, navigation model, operational density and local Tauri runtime discovery/start policy. Packaging/signing/update channel decisions remain exit decisions before release artifact publication.</td></tr>
+</tbody></table>
+<h2 id="decision-classes">Decision classes</h2>
+<p>Stage 00 owns the delivery decision taxonomy. The statement that no remaining blocked decisions exist means there are no unresolved decisions that block the start of Stage 01 or the MVP scaffolding sequence. Later stages may still have stage-local or platform decisions that must be resolved before that stage starts, before that stage reaches DoD, or before the platform release is declared.</p>
+<ul>
+<li><code>MVP blocker</code> - must be resolved before Stage 01 starts or before MVP scope can be implemented safely.</li>
+<li><code>Stage-local blocker</code> - does not block MVP start, but must be resolved before the named stage starts or reaches DoD.</li>
+<li><code>Platform blocker</code> - does not block MVP delivery, but must be resolved before the platform stage that owns the decision.</li>
+<li><code>Deferred decision</code> - explicitly outside the current delivery scope; implementation must keep the documented extension point.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>none.</li>
+</ul>
+<h2 id="stage-local-blockers">Stage-local blockers</h2>
+<table>
+<thead><tr><th>Stage</th><th>Decision</th><th>Required by</th></tr></thead>
+<tbody>
+<tr><td>Stage 08</td><td>Tauri packaging/signing and update/distribution channel policy.</td><td>Before Stage 08 release artifact publication.</td></tr>
+</tbody></table>
+<h2 id="platform-blockers">Platform blockers</h2>
+<table>
+<thead><tr><th>Stage</th><th>Decision</th><th>Required by</th></tr></thead>
+<tbody>
+<tr><td>Stage 09</td><td>Observability backend/export format.</td><td>Before runtime/observability hardening implementation starts.</td></tr>
+<tr><td>Stage 10</td><td>Approved list of additional SQL-compatible adapters beyond <code>MySQL</code> and <code>MSSQL</code>.</td><td>Before platform storage scope is committed.</td></tr>
+<tr><td>Stage 11</td><td>Baseline security rules and bundled policy packs.</td><td>Before platform security acceptance.</td></tr>
+<tr><td>Stage 11</td><td>Policy pack format for OPA/Conftest.</td><td>Before policy pack implementation starts.</td></tr>
+<tr><td>Stage 12</td><td>Final administrative UI scope for the target platform release.</td><td>Before admin UI implementation starts.</td></tr>
+<tr><td>Stage 13</td><td>SCIM sync conflict policy and external provider mapping rules.</td><td>Before SCIM full sync implementation starts.</td></tr>
+<tr><td>Stage 14</td><td>Supported provider set and ingress security policy for webhook sync.</td><td>Before webhook sync implementation starts.</td></tr>
+<tr><td>Stage 15</td><td>Service discovery mechanism.</td><td>Before distributed deployment design freeze.</td></tr>
+<tr><td>Stage 15</td><td>Deployment target stack.</td><td>Before distributed deployment design freeze.</td></tr>
+<tr><td>Stage 15</td><td>Inter-module authentication mechanism.</td><td>Before distributed deployment design freeze.</td></tr>
+<tr><td>Stage 15</td><td>Queue and worker group ownership model.</td><td>Before distributed deployment design freeze.</td></tr>
+</tbody></table>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 00.</li>
+<li>Acceptance: preparation stage, прямых <code>ACC-MVP-*</code> нет.</li>
+<li>ADR: все существующие ADR должны быть проверены перед scaffolding; Stage 00 adds ADR <code>0007</code>, <code>0008</code>, <code>0009</code>, <code>0010</code>, <code>0011</code>, <code>0012</code>, <code>0013</code>, <code>0014</code>, <code>0015</code>, <code>0016</code>, <code>0017</code> and <code>0018</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>начало реализации конкретного stage до закрытия его stage-local blockers приведёт к пересмотру data model, API или runtime behavior;</li>
+<li>отсутствие DoD сделает stages формально завершёнными, но непригодными для следующего stage.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-00-delivery-contract.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

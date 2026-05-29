@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0005: Job leasing and worker coordination - T-Helper documentation.">
+    <title>ADR 0005: Job leasing and worker coordination - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0005-job-leasing-and-worker-coordination.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0005-job-leasing-and-worker-coordination.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0005-job-leasing-and-worker-coordination">ADR 0005: Job leasing and worker coordination</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#required-job-fields">Required job fields</a>
+<a class="toc-level-2" href="#worker-behavior">Worker behavior</a>
+<a class="toc-level-2" href="#expired-leases">Expired leases</a>
+<a class="toc-level-2" href="#storage-specific-claim-semantics">Storage-specific claim semantics</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0005-job-leasing-and-worker-coordination">ADR 0005: Job leasing and worker coordination</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p><code>thelper-worker</code> processes must claim jobs through a storage-level atomic lease before executing them.</p>
+<p>Job leasing is separate from <code>job_locks</code>:</p>
+<ul>
+<li>job lease controls ownership of a specific <code>jobs.id</code>;</li>
+<li><code>job_locks</code> protect business resources such as <code>repository:&lt;repository_id&gt;</code>.</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>Multiple worker processes can see the same queued job. Without an atomic claim/lease mechanism, more than one worker could execute the same job.</p>
+<p><code>job_locks</code> are not enough because they serialize domain resources, not ownership of the job row itself.</p>
+<h2 id="required-job-fields">Required job fields</h2>
+<p>The <code>jobs</code> entity must include:</p>
+<ul>
+<li><code>attempt_count</code>;</li>
+<li><code>max_attempts</code>;</li>
+<li><code>leased_by</code>;</li>
+<li><code>lease_expires_at</code>;</li>
+<li><code>heartbeat_at</code>;</li>
+<li><code>run_after</code>;</li>
+<li><code>priority</code>.</li>
+</ul>
+<h2 id="worker-behavior">Worker behavior</h2>
+<p>Worker execution flow:</p>
+<ol>
+<li>Atomically claim one eligible queued job.</li>
+<li>Set <code>status = running</code>, <code>leased_by</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, and increment <code>attempt_count</code>.</li>
+<li>If the job has <code>lock_key</code>, acquire the corresponding <code>job_lock</code>.</li>
+<li>Execute the job handler.</li>
+<li>Periodically heartbeat while the job is running.</li>
+<li>Save <code>result_payload</code>.</li>
+<li>Release business <code>job_lock</code>, if acquired.</li>
+<li>Mark the job <code>succeeded</code> or <code>failed</code>.</li>
+</ol>
+<p>If a business lock cannot be acquired, the worker must clear the lease, return the job to <code>queued</code>, and set <code>run_after</code> using a short backoff.</p>
+<h2 id="expired-leases">Expired leases</h2>
+<p>Workers must recover expired leases:</p>
+<ul>
+<li>if <code>status = running</code> and <code>lease_expires_at</code> is in the past, the job is considered abandoned;</li>
+<li>if <code>attempt_count &lt; max_attempts</code>, the job is returned to <code>queued</code> with <code>run_after</code> backoff;</li>
+<li>if attempts are exhausted, the job is marked <code>failed</code>.</li>
+</ul>
+<h2 id="storage-specific-claim-semantics">Storage-specific claim semantics</h2>
+<p>PostgreSQL should use row-level locking such as <code>FOR UPDATE SKIP LOCKED</code>.</p>
+<p>SQLite should use a short write transaction and conditional update. The adapter must verify affected rows to ensure only one worker claimed the job.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 03 must implement claim, heartbeat, lease expiry recovery, retry/backoff, and graceful worker shutdown.</li>
+<li><code>job_locks</code> remain required for repository and other conflict-prone domain operations.</li>
+<li>Worker logs and job results must include <code>worker_id</code> for diagnostics.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0005-job-leasing-and-worker-coordination.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

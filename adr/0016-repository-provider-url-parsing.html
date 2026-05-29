@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0016: Repository provider URL parsing - T-Helper documentation.">
+    <title>ADR 0016: Repository provider URL parsing - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0016-repository-provider-url-parsing.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0016-repository-provider-url-parsing.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0016-repository-provider-url-parsing">ADR 0016: Repository provider URL parsing</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#common-rules">Common rules</a>
+<a class="toc-level-2" href="#provider-specific-rules">Provider-specific rules</a>
+<a class="toc-level-3" href="#gitlab">GitLab</a>
+<a class="toc-level-3" href="#github">GitHub</a>
+<a class="toc-level-3" href="#bitbucket">Bitbucket</a>
+<a class="toc-level-3" href="#azure-devops">Azure DevOps</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0016-repository-provider-url-parsing">ADR 0016: Repository provider URL parsing</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Repository provider adapters must parse user-supplied repository URLs into canonical identity fields:</p>
+<pre><code class="language-text">provider
+provider_host
+full_path
+protocol
+clone_url</code></pre>
+<p>Canonical repository identity remains <code>provider + provider_host + full_path</code> from ADR 0013. URL parsing must produce identical identity fields for equivalent HTTPS, SSH URL and SSH scp-like inputs.</p>
+<h2 id="common-rules">Common rules</h2>
+<p>Supported input shapes:</p>
+<pre><code class="language-text">https://host/group/repo.git
+ssh://git@host/group/repo.git
+git@host:group/repo.git
+host/group/repo</code></pre>
+<p>Normalization rules:</p>
+<ul>
+<li><code>provider_host</code> is lower-case;</li>
+<li><code>provider_host</code> includes a non-default port when required to distinguish provider instances;</li>
+<li>protocol, username, password, token, query and fragment are removed from identity fields;</li>
+<li><code>full_path</code> has no leading slash and no trailing <code>.git</code>;</li>
+<li>path separator is <code>/</code>;</li>
+<li>empty path segments are rejected;</li>
+<li><code>.</code> and <code>..</code> path segments are rejected;</li>
+<li>backslash path separators are rejected;</li>
+<li>control characters are rejected;</li>
+<li>URL userinfo is rejected for persistence and must not appear in <code>clone_url</code>;</li>
+<li>safe-normalized <code>clone_url</code> is optional transport metadata and not identity.</li>
+</ul>
+<p>Machine-readable validation error codes:</p>
+<pre><code class="language-text">provider_host_required
+unsupported_provider_url
+unsupported_url_protocol
+invalid_repository_path
+invalid_provider_host
+credential_userinfo_not_allowed
+provider_path_shape_mismatch</code></pre>
+<h2 id="provider-specific-rules">Provider-specific rules</h2>
+<h3 id="gitlab">GitLab</h3>
+<p>GitLab repository <code>full_path</code> supports nested groups:</p>
+<pre><code class="language-text">group/subgroup/project</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://gitlab.example.com/group/repo.git
+https://gitlab.example.com/group/subgroup/repo
+ssh://git@gitlab.example.com/group/subgroup/repo.git
+git@gitlab.example.com:group/subgroup/repo.git</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = gitlab
+provider_host = gitlab.example.com
+full_path = group/subgroup/repo</code></pre>
+<p>GitLab recursive group clone uses <code>group_path</code>, normalized with the same path rules, but <code>group_path</code> does not require a repository leaf and must not end with <code>.git</code>.</p>
+<h3 id="github">GitHub</h3>
+<p>GitHub and GitHub Enterprise Server repository <code>full_path</code> must have exactly two path segments:</p>
+<pre><code class="language-text">owner/repo</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://github.com/org/repo.git
+ssh://git@github.com/org/repo.git
+git@github.com:org/repo.git
+https://ghe.company.internal/org/repo</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = github
+provider_host = github.com or ghe.company.internal
+full_path = org/repo</code></pre>
+<p>More than two path segments are rejected with <code>provider_path_shape_mismatch</code>.</p>
+<h3 id="bitbucket">Bitbucket</h3>
+<p>Bitbucket Cloud repository <code>full_path</code> must have exactly two path segments:</p>
+<pre><code class="language-text">workspace/repo_slug</code></pre>
+<p>Bitbucket Data Center accepts these input shapes and normalizes all of them to <code>PROJECT_KEY/repo_slug</code>:</p>
+<pre><code class="language-text">https://bitbucket.company.local/scm/PROJ/repo.git
+ssh://git@bitbucket.company.local/PROJ/repo.git
+ssh://git@bitbucket.company.local:7999/PROJ/repo.git
+https://bitbucket.company.local/projects/PROJ/repos/repo</code></pre>
+<p>Data Center project keys are normalized to uppercase. Repository slug casing is preserved unless the provider adapter has provider-specific evidence that lower-casing is required.</p>
+<h3 id="azure-devops">Azure DevOps</h3>
+<p>Azure DevOps canonical identity treats organization as part of <code>provider_host</code> and project/repository as <code>full_path</code>:</p>
+<pre><code class="language-text">provider_host = dev.azure.com/{organization}
+full_path = {project}/{repo}</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://dev.azure.com/org/project/_git/repo
+https://org@dev.azure.com/org/project/_git/repo
+https://ssh.dev.azure.com/v3/org/project/repo
+git@ssh.dev.azure.com:v3/org/project/repo</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = azure_devops
+provider_host = dev.azure.com/org
+full_path = project/repo</code></pre>
+<p><code>ssh.dev.azure.com</code> input is normalized to the same provider host form <code>dev.azure.com/{organization}</code>.</p>
+<h2 id="rationale">Rationale</h2>
+<p>Repository identity depends on stable parsing. Without explicit provider rules, equivalent clone URLs can create duplicate repository cards or route operations to the wrong provider host.</p>
+<p>GitLab, GitHub, Bitbucket and Azure DevOps use different path shapes. Provider adapters need strict, testable parsing behavior before their implementation stage. Stage 05 MVP implements only <code>generic</code> Git plus one managed provider from <code>gitlab</code>/<code>github</code>; the remaining provider rules are still canonical for Stage 05A/platform extensions.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 05 provider adapters must implement the parsing rules for the providers included in Stage 05 MVP.</li>
+<li>Stage 05A/platform provider adapters must implement these rules before enabling <code>bitbucket</code>, <code>azure_devops</code> or the second managed provider from <code>gitlab</code>/<code>github</code>.</li>
+<li>Stage 05 no longer has a blocker for provider-specific URL parsing edge cases for its MVP provider set.</li>
+<li>API validation must return machine-readable error codes for unsupported or ambiguous URLs.</li>
+<li>Test fixtures must include positive and negative URL parsing cases for each provider.</li>
+<li><code>clone_url</code> remains safe-normalized transport metadata and must not include userinfo or secrets.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0016-repository-provider-url-parsing.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

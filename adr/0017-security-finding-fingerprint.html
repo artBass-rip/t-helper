@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0017: Security finding fingerprint - T-Helper documentation.">
+    <title>ADR 0017: Security finding fingerprint - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0017-security-finding-fingerprint.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0017-security-finding-fingerprint.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0017-security-finding-fingerprint">ADR 0017: Security finding fingerprint</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#examples">Examples</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0017-security-finding-fingerprint">ADR 0017: Security finding fingerprint</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Security findings use a versioned deterministic fingerprint:</p>
+<pre><code class="language-text">fingerprint = fp:v1:&lt;hex sha256(canonical_json(fingerprint_components))&gt;</code></pre>
+<p><code>fingerprint_components</code> uses canonical JSON:</p>
+<ul>
+<li>UTF-8;</li>
+<li>sorted object keys;</li>
+<li>no insignificant whitespace;</li>
+<li>stable string normalization;</li>
+<li>explicit <code>null</code> for nullable identity fields.</li>
+</ul>
+<p>Required components:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;security_finding.fingerprint.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;workspace_id&quot;: null,
+  &quot;rule_set_id&quot;: &quot;rule_set_opaque_id&quot;,
+  &quot;rule_namespace&quot;: &quot;trivy&quot;,
+  &quot;tool&quot;: &quot;trivy&quot;,
+  &quot;check_type&quot;: &quot;terraform.security.misconfig&quot;,
+  &quot;rule_id&quot;: &quot;AVD-AWS-0088&quot;,
+  &quot;normalized_file_path&quot;: &quot;modules/s3/main.tf&quot;,
+  &quot;resource_ref&quot;: &quot;aws_s3_bucket.example&quot;,
+  &quot;finding_key&quot;: &quot;aws_s3_bucket.example:public-read&quot;
+}</code></pre>
+<p>Fingerprint components must not include:</p>
+<ul>
+<li><code>job_id</code>;</li>
+<li><code>project_scan_id</code>;</li>
+<li>line or column;</li>
+<li>title;</li>
+<li>description;</li>
+<li>remediation;</li>
+<li>severity;</li>
+<li>raw Terraform source;</li>
+<li>secrets or secret values.</li>
+</ul>
+<p><code>resource_ref</code> or <code>finding_key</code> is required for persisted <code>security_findings</code>. If a tool cannot provide a stable resource reference, the adapter must derive a stable <code>finding_key</code> from normalized tool output without including secret material.</p>
+<p><code>normalized_file_path</code> rules:</p>
+<ul>
+<li>relative to Terraform project root;</li>
+<li><code>/</code> separator;</li>
+<li>no leading slash;</li>
+<li>no <code>.</code> or <code>..</code> path segments;</li>
+<li>no symlink-resolved absolute path;</li>
+<li>case-sensitive by default.</li>
+</ul>
+<p><code>rule_namespace</code> identifies the rule source, for example:</p>
+<pre><code class="language-text">trivy
+checkov
+tflint
+gitleaks
+opa:&lt;policy_pack_id&gt;
+conftest:&lt;policy_pack_id&gt;</code></pre>
+<h2 id="examples">Examples</h2>
+<p>Line shift:</p>
+<ul>
+<li>scan A reports <code>modules/s3/main.tf:12</code>;</li>
+<li>scan B reports the same resource/rule at <code>modules/s3/main.tf:19</code>;</li>
+<li>fingerprint remains the same because line and column are excluded.</li>
+</ul>
+<p>Renamed file:</p>
+<ul>
+<li><code>normalized_file_path = modules/s3/main.tf</code> changes to <code>modules/storage/main.tf</code>;</li>
+<li>fingerprint changes unless the adapter has a stable tool-specific <code>finding_key</code> that intentionally survives file moves and the rule contract documents that behavior.</li>
+</ul>
+<p>Changed rule set:</p>
+<ul>
+<li>same tool, rule and resource under <code>rule_set_id = baseline-1</code>;</li>
+<li>later scan uses <code>rule_set_id = baseline-2</code>;</li>
+<li>fingerprint changes because different rule sets can intentionally define different policy semantics.</li>
+</ul>
+<p>Workspace-specific finding:</p>
+<ul>
+<li>same project/rule/resource in <code>workspace_id = dev</code> and <code>workspace_id = prod</code>;</li>
+<li>fingerprints differ because workspace is part of the identity.</li>
+</ul>
+<p>Finding without <code>resource_ref</code>:</p>
+<ul>
+<li>tool output does not provide a stable Terraform resource address;</li>
+<li>adapter derives <code>finding_key</code> from normalized non-secret tool fields, for example <code>file:modules/iam/main.tf|rule:CKV_AWS_1|block:aws_iam_policy_document</code>;</li>
+<li>persisted finding is allowed only if <code>finding_key</code> is stable and contains no secret material.</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>Findings must be deduplicated across repeated scans without merging unrelated issues. Job ids, scan ids, line numbers, titles and severity can change between runs and must not define identity.</p>
+<p>Including project, workspace, rule set, rule namespace, tool, rule id, normalized file path and stable resource/finding key gives deterministic finding identity while preserving separation between different policy packs and projects.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 06 stores <code>fingerprint_schema_version</code>, <code>fingerprint_components</code>, <code>first_seen_at</code> and <code>last_seen_at</code>.</li>
+<li><code>security_findings.fingerprint</code> is unique.</li>
+<li>Repeat scans update existing finding rows instead of creating duplicates when fingerprint matches.</li>
+<li>Finding status lifecycle can distinguish new, still-open and no-longer-seen findings through <code>first_seen_at</code>, <code>last_seen_at</code> and status.</li>
+<li>Tests must verify stable fingerprints across repeated scans and changed job ids, changed scan ids and line shifts.</li>
+<li>Tests must cover renamed file, changed rule set, workspace-specific findings and findings that rely on <code>finding_key</code> without <code>resource_ref</code>.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0017-security-finding-fingerprint.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

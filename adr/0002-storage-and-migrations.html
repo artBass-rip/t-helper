@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0002: Storage and migrations - T-Helper documentation.">
+    <title>ADR 0002: Storage and migrations - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0002-storage-and-migrations.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0002-storage-and-migrations.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0002-storage-and-migrations">ADR 0002: Storage and migrations</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0002-storage-and-migrations">ADR 0002: Storage and migrations</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>MVP storage stack:</p>
+<ul>
+<li><code>SQLite</code> - default internal SQL-like storage for local setup;</li>
+<li><code>PostgreSQL</code> - default external storage for server setup.</li>
+</ul>
+<p>Platform storage targets:</p>
+<ul>
+<li><code>SQLite</code>;</li>
+<li><code>PostgreSQL</code>;</li>
+<li><code>MySQL</code>;</li>
+<li><code>MSSQL</code>.</li>
+</ul>
+<p>Managed engine compatibility:</p>
+<ul>
+<li>Amazon Aurora PostgreSQL is supported through the <code>PostgreSQL</code> adapter and migration dialect.</li>
+<li>Amazon Aurora MySQL is supported through the <code>MySQL</code> adapter and migration dialect.</li>
+<li>Aurora is an engine flavor, not a separate storage provider.</li>
+<li>Babelfish for Aurora PostgreSQL is not considered equivalent to the <code>MSSQL</code> adapter unless a separate compatibility ADR is accepted.</li>
+</ul>
+<p>PostgreSQL adapter uses <code>pgx</code>.</p>
+<p>Storage providers are implemented as pluggable adapter libraries behind the storage abstraction. Provider-specific connection handling, migrations and query semantics must remain inside the adapter package.</p>
+<p>SQL migrations use a migration framework compatible with dialect-specific migration sets for <code>SQLite</code>, <code>PostgreSQL</code>, <code>MySQL</code> and <code>MSSQL</code>; recommended default: <code>goose</code> if it satisfies the required dialect support in implementation.</p>
+<p>Migration versions are shared across dialects, but migration SQL is dialect-specific. The goal is one logical schema contract, not one portable SQL file.</p>
+<p>Embedded key-value storage is not part of the MVP storage stack.</p>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li>Local storage should stay SQL-like to keep migrations, constraints and query model close to server storage.</li>
+<li><code>SQLite</code> is simpler operationally than an embedded key-value store for this data model.</li>
+<li><code>PostgreSQL</code> remains the primary server storage backend.</li>
+<li><code>MySQL</code> and <code>MSSQL</code> are common enterprise SQL targets and should use the same logical schema contract through dialect-specific migrations.</li>
+<li>Aurora PostgreSQL and Aurora MySQL are wire-compatible managed engines for the PostgreSQL/MySQL adapters, but production readiness still requires contract tests against Aurora writer endpoints.</li>
+<li>A single cross-dialect SQL file would force the schema down to the weakest common subset and still would not guarantee identical behavior.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 01 implements <code>SQLite</code> and <code>PostgreSQL</code> adapters.</li>
+<li>Storage test suites must run against both adapters.</li>
+<li>Stage 10 implements <code>MySQL</code> and <code>MSSQL</code> adapters unless reprioritized by a later roadmap decision.</li>
+<li>Aurora PostgreSQL/Aurora MySQL compatibility must be validated by running the PostgreSQL/MySQL storage contract suites against Aurora writer endpoints.</li>
+<li>Additional storage adapters should be SQL-compatible unless explicitly approved.</li>
+<li>Contract tests, not identical DDL text, define cross-storage compatibility.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0002-storage-and-migrations.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

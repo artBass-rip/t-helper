@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0008: Global scan configuration key - T-Helper documentation.">
+    <title>ADR 0008: Global scan configuration key - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0008-configuration-key-compatibility.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0008-configuration-key-compatibility.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0008-global-scan-configuration-key">ADR 0008: Global scan configuration key</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0008-global-scan-configuration-key">ADR 0008: Global scan configuration key</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>The external configuration key for global scan roots is:</p>
+<pre><code class="language-text">scanning.global_scan</code></pre>
+<p>This is the only supported MVP spelling for the global scan roots configuration key.</p>
+<p>Internal implementation names must use the domain concept <code>root_paths</code>:</p>
+<ul>
+<li>storage table: <code>root_paths</code>;</li>
+<li>API: <code>/api/root-paths</code>;</li>
+<li>application/domain naming: <code>root_paths</code>;</li>
+<li>config import source key: <code>scanning.global_scan</code>.</li>
+</ul>
+<p>No parallel alias is introduced in the MVP. If a future release adds alias support, it must define explicit import precedence, validation and migration behavior.</p>
+<p>Strict config import must reject unknown keys and aliases, including previous draft spellings.</p>
+<h2 id="rationale">Rationale</h2>
+<p>Normalizing the key before code scaffolding avoids carrying a misspelled external contract into migrations, config import/export tests and user-facing examples.</p>
+<p>Using <code>root_paths</code> internally keeps domain, storage and API names clear and avoids leaking the configuration spelling into implementation packages.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li><code>thelper-ctl -reconfigure</code> reads <code>scanning.global_scan</code> and maps entries to <code>root_paths</code>.</li>
+<li><code>GET /api/config</code> returns the canonical external key <code>scanning.global_scan</code>.</li>
+<li><code>GET /api/root-paths</code> and <code>PUT /api/root-paths</code> remain the operational API for root paths.</li>
+<li>Tests must assert that config import/export preserves <code>scanning.global_scan</code>.</li>
+<li>Tests must assert that non-canonical aliases are rejected.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0008-configuration-key-compatibility.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

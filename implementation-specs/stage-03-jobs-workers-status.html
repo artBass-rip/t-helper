@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 03: Jobs, Workers and Status Foundation - T-Helper documentation.">
+    <title>Stage 03: Jobs, Workers and Status Foundation - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-03-jobs-workers-status.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-03-jobs-workers-status.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-03-jobs-workers-and-status-foundation">Stage 03: Jobs, Workers and Status Foundation</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#implementation-decisions">Implementation decisions</a>
+<a class="toc-level-2" href="#worker-handler-contract">Worker handler contract</a>
+<a class="toc-level-2" href="#physical-migration-contract">Physical migration contract</a>
+<a class="toc-level-2" href="#status-monitor-aggregation-contract">Status-monitor aggregation contract</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#implementation-verification">Implementation verification</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="stage-03-jobs-workers-and-status-foundation">Stage 03: Jobs, Workers and Status Foundation</h1>
+<h2 id="цель">Цель</h2>
+<p>Реализовать persistent jobs framework, worker execution model, leases, locks и базовый status-monitor.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><code>docs/adr/0003-job-worker-processes.md</code></li>
+<li><code>docs/adr/0005-job-leasing-and-worker-coordination.md</code></li>
+<li><code>docs/adr/0006-project-scan-workflow-and-status-aggregation.md</code></li>
+<li><code>docs/adr/0011-worker-defaults.md</code></li>
+<li><code>docs/data-model.md</code></li>
+<li><code>docs/payload-schemas.md</code></li>
+<li><code>docs/api.md</code></li>
+<li><code>docs/test-plan.md</code></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li><code>jobs</code>;</li>
+<li><code>job_locks</code>;</li>
+<li><code>job_events</code>;</li>
+<li><code>workflow_statuses</code>;</li>
+<li>atomic job claim;</li>
+<li>heartbeat, lease expiry recovery, retry/backoff;</li>
+<li>SQLite worker process limit enforcement;</li>
+<li>worker handlers для <code>config_reload</code> и <code>module_restart</code>;</li>
+<li>basic status-monitor для jobs/workers/modules;</li>
+<li>status API endpoints.</li>
+</ul>
+<h2 id="implementation-decisions">Implementation decisions</h2>
+<ul>
+<li>Stage 03 does not change Stage 02 synchronous contracts for <code>POST /api/modules/reload</code> and <code>POST /api/modules/restart</code>.</li>
+<li>Stage 03 implements <code>jobs.config_reload</code> and <code>jobs.module_restart</code> worker handlers as framework validation handlers and for future workflow integration.</li>
+<li>Public write endpoints that are explicitly documented as background operations in <code>docs/api.md</code> create <code>jobs</code> in <code>queued</code> and return <code>202 job_ref</code>.</li>
+<li>Existing Stage 02 synchronous lifecycle endpoints remain explicit exceptions until a later stage introduces async variants or a documented contract migration.</li>
+<li>Stage 03 does not change <code>thelper-ctl reload</code> and <code>thelper-ctl restart &lt;module&gt;</code> contracts. They remain synchronous Stage 02 lifecycle commands, return <code>config_reload.result.v1</code> / <code>module_restart.result.v1</code>, do not require a running worker and do not enqueue jobs.</li>
+<li>Any async CLI lifecycle behavior must be introduced later as an explicit command or flag and must return <code>job_ref</code> or provide a documented wait mode.</li>
+<li><code>GET /api/status</code>, <code>GET /api/status/jobs/{job_id}</code> and <code>GET /api/status/workers</code> use the <code>runtime_status.v1</code>, <code>job_status.v1</code> and <code>worker_status.v1</code> DTOs from <code>docs/api.md</code>.</li>
+<li>Stage 03 derives <code>worker_status.v1</code> from running jobs and their leases, aggregated by <code>worker_id</code>. Idle workers are not reported until a later worker heartbeat registry is introduced.</li>
+<li>For SQLite active profiles, Stage 03 enforces <code>worker_process_limit = 1</code> with a local worker process lock keyed by the active database fingerprint. The lock is separate from <code>job_locks</code>: it limits local SQLite worker process count, while <code>job_locks</code> serialize business resources.</li>
+<li><code>Idempotency-Key</code> uniqueness is scoped by operation owner, not global across all jobs. Stage 03 stores <code>idempotency_key</code> on <code>jobs</code> and enforces uniqueness on <code>(actor, job_type, idempotency_key)</code> for non-null keys. Empty actor is normalized to <code>system</code> at enqueue time.</li>
+<li><code>jobs.payload</code> is validated before persistence and rejected if it contains secret-like JSON keys, URL userinfo or unresolved <code>secretref://...</code> values.</li>
+<li><code>jobs.payload</code> is also validated against the minimum admitted job-type contract from <code>docs/payload-schemas.md</code> before persistence. This prevents a job type admitted by the physical schema from being queued with a valid <code>schema_version</code> but missing required routing/domain fields.</li>
+</ul>
+<h2 id="worker-handler-contract">Worker handler contract</h2>
+<p>Worker runtime owns job lifecycle transitions, lease heartbeat, <code>job_locks</code> acquire/release, final status writes and base <code>job_events</code>. Handlers are domain executors: they receive an already claimed job, perform the domain operation and return a result payload or classified error.</p>
+<p>The handler registry maps <code>jobs.job_type</code> to a handler. Stage 03 registers handlers for <code>config_reload</code> and <code>module_restart</code>. Unknown job types fail without retry using <code>error_code = &quot;unknown_job_type&quot;</code>.</p>
+<p>Handler input is the normalized persisted job record, not only <code>jobs.payload</code>. At minimum the runtime passes:</p>
+<ul>
+<li><code>id</code>;</li>
+<li><code>job_type</code>;</li>
+<li><code>actor</code>;</li>
+<li><code>correlation_id</code>;</li>
+<li><code>idempotency_key</code>;</li>
+<li><code>parent_job_id</code>;</li>
+<li><code>job_group_id</code>;</li>
+<li><code>lock_key</code>;</li>
+<li><code>attempt_count</code>;</li>
+<li><code>max_attempts</code>;</li>
+<li><code>payload</code>.</li>
+</ul>
+<p>Handlers also receive a context and execution environment with <code>worker_id</code>, logger and domain stores. Handlers must be context-cancellable, must pass the context into storage calls and must not start child processes or long loops that ignore cancellation.</p>
+<p>Transactional boundaries:</p>
+<ul>
+<li>claim, lease update, lock acquire/release, base event writes and final <code>jobs.status</code> updates are runtime-owned;</li>
+<li>handlers must not set <code>jobs.status</code>, <code>leased_by</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, <code>started_at</code> or <code>finished_at</code> directly;</li>
+<li>handlers may perform domain storage writes using short transactions;</li>
+<li>neither runtime nor handlers may hold one database transaction open across long-running work or while waiting on external processes.</li>
+</ul>
+<p>Runtime lifecycle for one claimed job:</p>
+<ol>
+<li>atomically claim eligible job and set <code>status = running</code>;</li>
+<li>write <code>claimed</code> event;</li>
+<li>acquire <code>job_locks</code> when <code>lock_key</code> is set;</li>
+<li>write <code>started</code> event and start runtime-owned heartbeat ticker;</li>
+<li>execute handler;</li>
+<li>stop heartbeat ticker;</li>
+<li>save handler result payload or <code>jobs.failure.result.v1</code>;</li>
+<li>release held <code>job_locks</code>;</li>
+<li>mark job <code>succeeded</code>, <code>failed</code> or requeue with retry/backoff;</li>
+<li>write final <code>succeeded</code>, <code>failed</code> or <code>retry_scheduled</code> event.</li>
+</ol>
+<p>Heartbeat is runtime-owned. Each heartbeat tick updates <code>jobs.heartbeat_at</code> and extends <code>jobs.lease_expires_at</code> while the job is still <code>running</code> and leased by the same <code>worker_id</code>. Handlers may emit <code>progress</code> or <code>child_created</code> events through runtime helpers, but they must not update <code>heartbeat_at</code> or extend leases directly.</p>
+<p>Heartbeat <code>job_events</code> are diagnostic and must not be emitted on every tick by default. Stage 03 must write heartbeat facts to <code>jobs.heartbeat_at</code>; it may emit a <code>heartbeat</code> event at job start, after stale recovery, or at a bounded diagnostic cadence. Status freshness and worker health must not depend on a heartbeat event existing for every heartbeat tick.</p>
+<p>Error classification:</p>
+<ul>
+<li><code>validation_error</code>: invalid job payload or unsupported payload value; non-retryable, job becomes <code>failed</code>;</li>
+<li><code>unknown_job_type</code>: no registered handler; non-retryable, job becomes <code>failed</code>;</li>
+<li><code>lock_contention</code>: business lock could not be acquired; handler must not run, lease is cleared and job returns to <code>queued</code> with retry/backoff;</li>
+<li><code>transient_error</code>: temporary storage/runtime/external dependency failure; retryable until <code>max_attempts</code>;</li>
+<li><code>handler_failed</code>: handler ran and the domain operation failed; retryable until <code>max_attempts</code> unless the handler marks it non-retryable;</li>
+<li><code>cancelled</code>: context cancellation or explicit job cancellation; Stage 03 internal shutdown cancellation relies on lease expiry/recovery if the handler cannot finish cleanly.</li>
+</ul>
+<p>Failed jobs store <code>jobs.failure.result.v1</code> unless a job-specific failed result schema is explicitly documented. Failure result payloads must include <code>worker_id</code>, <code>attempt</code>, <code>error_code</code> and a safe message, and must not contain secrets, raw Terraform source, tokens, passwords, private keys or unresolved secret values.</p>
+<h2 id="physical-migration-contract">Physical migration contract</h2>
+<p>Stage 03 must add paired SQLite/PostgreSQL migrations with synchronized logical version <code>000003</code>. The migrations create <code>jobs</code>, <code>job_locks</code>, <code>job_events</code> and <code>workflow_statuses</code>, then update <code>system_metadata.schema_version</code> to <code>stage-03</code>.</p>
+<p>Dialect storage rules:</p>
+<ul>
+<li>SQLite stores timestamps as UTC RFC3339Nano <code>TEXT</code>.</li>
+<li>PostgreSQL stores timestamps as <code>TIMESTAMPTZ</code>.</li>
+<li>SQLite stores JSON payloads as <code>TEXT</code> with <code>json_valid(...)</code> checks.</li>
+<li>PostgreSQL stores JSON payloads as <code>JSONB</code>.</li>
+<li>JSON columns that represent absent optional data may be nullable; required JSON payloads must default to <code>{}</code>.</li>
+</ul>
+<p><code>jobs</code> required columns:</p>
+<ul>
+<li><code>id</code>;</li>
+<li><code>job_type</code>;</li>
+<li><code>status</code>;</li>
+<li><code>attempt_count</code>;</li>
+<li><code>max_attempts</code>;</li>
+<li><code>run_after</code>;</li>
+<li><code>priority</code>;</li>
+<li><code>payload</code>;</li>
+<li><code>created_at</code>;</li>
+<li><code>updated_at</code>.</li>
+</ul>
+<p><code>jobs</code> nullable columns:</p>
+<ul>
+<li><code>actor</code>;</li>
+<li><code>correlation_id</code>;</li>
+<li><code>idempotency_key</code>;</li>
+<li><code>parent_job_id</code>;</li>
+<li><code>job_group_id</code>;</li>
+<li><code>lock_key</code>;</li>
+<li><code>leased_by</code>;</li>
+<li><code>lease_expires_at</code>;</li>
+<li><code>heartbeat_at</code>;</li>
+<li><code>result_payload</code>;</li>
+<li><code>started_at</code>;</li>
+<li><code>finished_at</code>;</li>
+<li><code>error_message</code>.</li>
+</ul>
+<p><code>jobs</code> constraints:</p>
+<ul>
+<li><code>job_type</code> must be one of the values listed in <code>docs/data-model.md</code>;</li>
+<li><code>status</code> must be one of <code>queued</code>, <code>running</code>, <code>succeeded</code>, <code>failed</code> or <code>cancelled</code>;</li>
+<li><code>attempt_count &gt;= 0</code>;</li>
+<li><code>max_attempts &gt; 0</code>;</li>
+<li><code>attempt_count &lt;= max_attempts</code>;</li>
+<li><code>priority &gt;= 0</code>;</li>
+<li><code>payload</code> must be valid JSON;</li>
+<li><code>result_payload</code> must be valid JSON when non-null;</li>
+<li><code>parent_job_id</code> references <code>jobs(id)</code> with <code>ON DELETE RESTRICT</code>.</li>
+</ul>
+<p><code>jobs</code> indexes:</p>
+<ul>
+<li>partial unique index on <code>(actor, job_type, idempotency_key)</code> where <code>idempotency_key IS NOT NULL</code>;</li>
+<li>index on <code>parent_job_id</code>;</li>
+<li>index on <code>(job_group_id, status)</code>;</li>
+<li>index on <code>(lock_key, status)</code>;</li>
+<li>worker claim index on <code>(status, run_after, priority, created_at)</code>;</li>
+<li>index on <code>lease_expires_at</code>;</li>
+<li>index on <code>(leased_by, status)</code>.</li>
+<li>read-path index for derived worker status on <code>(status, leased_by, updated_at)</code>.</li>
+</ul>
+<p>Worker claim ordering is <code>run_after ASC</code>, <code>priority DESC</code>, <code>created_at ASC</code>. The exact SQL may differ by dialect, but the index and query must support this ordering.</p>
+<p><code>job_locks</code> required columns:</p>
+<ul>
+<li><code>id</code>;</li>
+<li><code>lock_key</code>;</li>
+<li><code>job_id</code>;</li>
+<li><code>owner</code>;</li>
+<li><code>status</code>;</li>
+<li><code>created_at</code>;</li>
+<li><code>expires_at</code>.</li>
+</ul>
+<p><code>job_locks</code> nullable columns:</p>
+<ul>
+<li><code>released_at</code>.</li>
+</ul>
+<p><code>job_locks</code> constraints and indexes:</p>
+<ul>
+<li><code>status</code> must be one of <code>held</code>, <code>released</code> or <code>expired</code>;</li>
+<li><code>job_id</code> references <code>jobs(id)</code> with <code>ON DELETE RESTRICT</code>;</li>
+<li><code>expires_at</code> is required for held locks;</li>
+<li>partial unique index on <code>lock_key</code> where <code>status = 'held'</code>;</li>
+<li>index on <code>job_id</code>;</li>
+<li>index on <code>expires_at</code>.</li>
+</ul>
+<p><code>job_events</code> required columns:</p>
+<ul>
+<li><code>id</code>;</li>
+<li><code>job_id</code>;</li>
+<li><code>event_type</code>;</li>
+<li><code>created_at</code>.</li>
+</ul>
+<p><code>job_events</code> nullable columns:</p>
+<ul>
+<li><code>job_group_id</code>;</li>
+<li><code>status</code>;</li>
+<li><code>worker_id</code>;</li>
+<li><code>metric_name</code>;</li>
+<li><code>metric_value</code>;</li>
+<li><code>payload</code>.</li>
+</ul>
+<p><code>job_events</code> constraints and indexes:</p>
+<ul>
+<li><code>event_type</code> must include at least the baseline values from <code>docs/data-model.md</code>;</li>
+<li><code>payload</code> must be valid JSON when non-null;</li>
+<li><code>job_id</code> references <code>jobs(id)</code> with <code>ON DELETE RESTRICT</code>;</li>
+<li>index on <code>(job_group_id, created_at)</code>;</li>
+<li>index on <code>(job_id, created_at)</code>.</li>
+</ul>
+<p><code>workflow_statuses</code> required columns:</p>
+<ul>
+<li><code>id</code>;</li>
+<li><code>workflow_type</code>;</li>
+<li><code>workflow_id</code>;</li>
+<li><code>job_group_id</code>;</li>
+<li><code>aggregate_status</code>;</li>
+<li><code>progress_current</code>;</li>
+<li><code>progress_total</code>;</li>
+<li><code>summary_payload</code>;</li>
+<li><code>updated_at</code>.</li>
+</ul>
+<p><code>workflow_statuses</code> constraints and indexes:</p>
+<ul>
+<li><code>workflow_type</code> must include at least the baseline values from <code>docs/data-model.md</code>;</li>
+<li><code>aggregate_status</code> must be one of <code>queued</code>, <code>running</code>, <code>succeeded</code>, <code>failed</code>, <code>partial</code> or <code>cancelled</code>;</li>
+<li><code>progress_current &gt;= 0</code>;</li>
+<li><code>progress_total &gt;= 0</code>;</li>
+<li><code>progress_current &lt;= progress_total</code>;</li>
+<li><code>summary_payload</code> must be valid JSON;</li>
+<li>unique index on <code>(workflow_type, workflow_id)</code>;</li>
+<li>unique index on <code>job_group_id</code>.</li>
+<li>read-path index on <code>(updated_at, id)</code> for paginated workflow status listing;</li>
+<li>read-path index on <code>(workflow_type, aggregate_status, updated_at, id)</code> for filtered workflow status listing.</li>
+</ul>
+<p>Runtime timestamp rules:</p>
+<ul>
+<li><code>started_at</code> is set when a job is successfully claimed and started;</li>
+<li><code>finished_at</code> is set only for terminal statuses;</li>
+<li>completed jobs may retain <code>leased_by</code> for diagnostics;</li>
+<li>terminal statuses must not be treated as actively leased even if <code>lease_expires_at</code> remains populated;</li>
+<li>expired lease recovery only considers <code>status = 'running'</code> rows.</li>
+</ul>
+<h2 id="status-monitor-aggregation-contract">Status-monitor aggregation contract</h2>
+<p>Stage 03 <code>status-monitor</code> owns <code>workflow_statuses</code> and the status DTO aggregation exposed through <code>/api/status*</code>. Workers and handlers write facts to <code>jobs</code> and <code>job_events</code>; UI and internal services must not compute workflow status from those facts themselves.</p>
+<p>Every enqueued job must have <code>job_group_id</code>. For single-job workflows, enqueue generates the job ID before insert and sets:</p>
+<ul>
+<li><code>config_reload</code>: <code>job_group_id = config_operation:&lt;job_id&gt;</code>;</li>
+<li><code>module_restart</code>: <code>job_group_id = module_operation:&lt;job_id&gt;</code>;</li>
+<li>fallback: <code>job_group_id = &lt;job_type&gt;:&lt;job_id&gt;</code>.</li>
+</ul>
+<p>Stage 03 workflow type mapping:</p>
+<ul>
+<li><code>config_reload</code> -&gt; <code>config_operation</code>;</li>
+<li><code>module_restart</code> -&gt; <code>module_operation</code>;</li>
+<li><code>global_scan</code> -&gt; <code>global_scan</code>;</li>
+<li><code>project_discovery</code> -&gt; <code>project_discovery</code>;</li>
+<li><code>project_scan</code> and <code>security_validation_scan</code> -&gt; <code>project_scan</code>;</li>
+<li><code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code> -&gt; <code>repository_operation</code>;</li>
+<li><code>scim_sync</code> -&gt; <code>scim_sync</code>;</li>
+<li>future job types require a schema migration before enqueueing; once admitted by the physical schema, unrecognized types use <code>job_type</code> as fallback <code>workflow_type</code>.</li>
+</ul>
+<p>For single-job workflows, <code>workflow_id</code> is the job ID. For grouped workflows introduced by later stages, the parent/orchestrator creation path owns <code>workflow_id</code>.</p>
+<p>Aggregate status is computed from all jobs sharing one <code>job_group_id</code> using this precedence:</p>
+<ol>
+<li>if any job is <code>running</code>, aggregate is <code>running</code>;</li>
+<li>otherwise, if any job is <code>queued</code>, aggregate is <code>queued</code>;</li>
+<li>otherwise, if all jobs are <code>succeeded</code>, aggregate is <code>succeeded</code>;</li>
+<li>otherwise, if all jobs are <code>cancelled</code>, aggregate is <code>cancelled</code>;</li>
+<li>otherwise, if terminal statuses are mixed and at least one job is <code>succeeded</code>, aggregate is <code>partial</code>;</li>
+<li>otherwise, if any job is <code>failed</code>, aggregate is <code>failed</code>;</li>
+<li>otherwise, if terminal statuses are mixed without success, aggregate is <code>partial</code>.</li>
+</ol>
+<p>Active statuses (<code>running</code>, then <code>queued</code>) take precedence over terminal mixed states because the workflow is still in progress.</p>
+<p>Progress is deterministic:</p>
+<ul>
+<li><code>progress_total = count(jobs where job_group_id = ...)</code>;</li>
+<li><code>progress_current = count(jobs in terminal statuses: succeeded, failed, cancelled)</code>;</li>
+<li>single-job queued/running workflows report <code>0/1</code>;</li>
+<li>single-job terminal workflows report <code>1/1</code>.</li>
+</ul>
+<p>Latest event selection:</p>
+<ul>
+<li><code>GET /api/status/jobs/{job_id}</code> uses the latest <code>job_events</code> row for that job ordered by <code>created_at DESC, id DESC</code>;</li>
+<li><code>workflow_statuses.summary_payload.latest_event</code> uses the latest <code>job_events</code> row for the workflow's <code>job_group_id</code> ordered by <code>created_at DESC, id DESC</code>;</li>
+<li>if no event exists, <code>latest_event</code> is <code>null</code>.</li>
+</ul>
+<p>Refresh behavior:</p>
+<ul>
+<li>after every runtime lifecycle transition, worker runtime calls <code>RefreshWorkflowStatus(job_group_id)</code>;</li>
+<li><code>status-monitor</code> must also support reconciliation from <code>jobs</code> and <code>job_events</code> so read models can be rebuilt after crashes or missed inline refreshes;</li>
+<li>API/server startup and <code>GET /api/status/workflows</code> trigger reconciliation so workflow listing self-heals after crashes or missed inline refreshes even before a worker process starts;</li>
+<li>refresh writes <code>workflow_statuses</code> using <code>workflow_status.summary.v1</code>.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>filesystem scanning;</li>
+<li>repository operations;</li>
+<li>project/security scan toolchain;</li>
+<li>auth/RBAC enforcement beyond system contracts.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li><code>thelper-worker</code> execution loop;</li>
+<li><code>thelper-worker</code> storage/config bootstrap using the same storage provider, DSN and active storage profile resolution as <code>thelper</code>;</li>
+<li>job lease implementation для SQLite/PostgreSQL;</li>
+<li>lock acquire/release semantics;</li>
+<li>status-monitor read models;</li>
+<li>job/status API;</li>
+<li>worker integration tests.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>endpoints documented as background operations create jobs in <code>queued</code> and do not execute long-running work inline;</li>
+<li>Stage 02 synchronous module lifecycle endpoints continue returning their synchronous result DTOs without requiring jobs;</li>
+<li>Stage 02 synchronous <code>thelper-ctl reload</code> and <code>thelper-ctl restart &lt;module&gt;</code> commands continue returning their synchronous result DTOs without requiring a running worker or creating jobs;</li>
+<li>только один worker может claim один job;</li>
+<li>heartbeat обновляется для running jobs;</li>
+<li>expired leases восстанавливаются через retry/backoff или failure после <code>max_attempts</code>;</li>
+<li><code>job_locks</code> не допускают конфликтующие active operations;</li>
+<li>status endpoints читают aggregate read models.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>нет Stage 03 blockers после ADR 0011.</li>
+</ul>
+<h2 id="implementation-verification">Implementation verification</h2>
+<p>Status: completed.</p>
+<p>Code coverage:</p>
+<ul>
+<li>Storage and migrations: <code>internal/storage/migrations/*000003*</code>, <code>internal/jobs/store.go</code>, <code>internal/jobs/status.go</code>;</li>
+<li>Worker runtime: <code>internal/jobs/runtime.go</code>, <code>internal/app/worker/app.go</code>;</li>
+<li>HTTP API: <code>internal/httpapi/jobs.go</code>, <code>internal/httpapi/router.go</code>;</li>
+<li>CLI/API lifecycle compatibility: <code>internal/app/ctl</code>, <code>internal/httpapi</code>, <code>internal/app/server</code>.</li>
+</ul>
+<p>Verification:</p>
+<ul>
+<li><code>go test ./internal/jobs ./internal/httpapi ./internal/app/worker ./internal/storage/migrations</code>;</li>
+<li><code>go test ./...</code>;</li>
+<li>PostgreSQL jobs/storage contracts run in CI and local environments when <code>THELPER_POSTGRES_DSN</code> is set.</li>
+</ul>
+<p>Regression coverage added for 100% Stage 03 closure:</p>
+<ul>
+<li>lock-contention jobs are requeued without <code>started_at</code> and without <code>started</code> events;</li>
+<li>unknown admitted job types fail without retry using <code>jobs.failure.result.v1</code> and <code>error_code = &quot;unknown_job_type&quot;</code>;</li>
+<li>non-SQLite worker profiles do not require the local SQLite worker process lock.</li>
+<li>admitted job payloads are rejected before persistence when required job-type fields are missing or unsupported Stage 03 values are requested;</li>
+<li>workflow status listing reconciles missing <code>workflow_statuses</code> read models before returning results.</li>
+<li><code>workers.enabled = false</code> prevents <code>thelper-worker</code> from claiming queued jobs;</li>
+<li>derived <code>worker_status.v1</code> is one row per <code>worker_id</code> with <code>running_job_count</code> for concurrent worker slots;</li>
+<li>unknown admitted job types fail without acquiring business <code>job_locks</code> and without writing <code>started</code> events.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 03.</li>
+<li>Acceptance: <code>ACC-MVP-009</code>, <code>ACC-MVP-010</code>, <code>ACC-MVP-014</code>, <code>ACC-MVP-021</code>.</li>
+<li>API: <code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>, <code>GET /api/status*</code>.</li>
+<li>Data model: <code>jobs</code>, <code>job_locks</code>, <code>job_events</code>, <code>workflow_statuses</code>.</li>
+<li>ADR: <code>0003</code>, <code>0005</code>, <code>0006</code>, <code>0011</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>race conditions между workers;</li>
+<li>разные claim semantics в SQLite и PostgreSQL;</li>
+<li>UI начнёт агрегировать статус самостоятельно вместо <code>status-monitor</code>.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-03-jobs-workers-status.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

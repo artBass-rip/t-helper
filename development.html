@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Development setup - T-Helper documentation.">
+    <title>Development setup - T-Helper Docs</title>
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>development.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#development-setup">Development setup</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#postgresql-test-environment">PostgreSQL test environment</a>
+<a class="toc-level-2" href="#test-policy">Test policy</a>
+<a class="toc-level-2" href="#migration-layout">Migration layout</a>
+<a class="toc-level-2" href="#stage-05-runtime-behavior">Stage 05 runtime behavior</a>
+<a class="toc-level-2" href="#code-quality-and-optimization-contract">Code quality and optimization contract</a>
+<a class="toc-level-2" href="#project-pages">Project Pages</a>
+<a class="toc-level-2" href="#secret-references-in-development">Secret references in development</a>
+<a class="toc-level-2" href="#stage-01-implementation-checklist">Stage 01 implementation checklist</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="development-setup">Development setup</h1>
+<h2 id="purpose">Purpose</h2>
+<p>This document defines the local development contract for the current Stage 05 repository manager MVP baseline and storage tests.</p>
+<p>The Docker-based developer environment, product/dependency containers, manual testing profile and OS-family test matrix are defined in <a href="local-dev-environment.html"><code>local-dev-environment.md</code></a>.</p>
+<p>Stage 05 has delivered the executable backend scaffold, persisted runtime configuration, module lifecycle, singleton runtime policy, jobs/workers/status, global scanning, Terraform project discovery, scanner/registry HTTP APIs and repository manager clone/pull/sync APIs. The current local baseline is:</p>
+<ul>
+<li><code>make test</code>;</li>
+<li><code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
+<li><code>docker compose --profile offline -f docker-compose.test.yml run --rm test-runner</code>.</li>
+</ul>
+<p><code>make test</code> is the fast pre-PR quality gate. It runs a <code>gofmt</code> check, <code>go vet ./...</code> and <code>go test ./...</code>. Use <code>make race</code> for manual or nightly race detector runs.</p>
+<p>The Docker <code>offline</code> test runner starts PostgreSQL and runs the same Go test suite with <code>THELPER_POSTGRES_DSN</code> set. DSN-backed tests run with <code>go test -p 1 ./...</code> so destructive contract tests in different packages do not reset the same test database concurrently.</p>
+<h2 id="postgresql-test-environment">PostgreSQL test environment</h2>
+<p>PostgreSQL tests run when <code>THELPER_POSTGRES_DSN</code> is set. SQLite tests run by default.</p>
+<p>Recommended local PostgreSQL baseline:</p>
+<ul>
+<li>PostgreSQL version: <code>16</code> or <code>17</code></li>
+<li>database: <code>t_helper_test</code></li>
+<li>user: <code>t_helper</code></li>
+<li>password: local-only test password</li>
+<li>host: <code>127.0.0.1</code></li>
+<li>port: <code>5432</code> or a project-specific override</li>
+</ul>
+<p>Recommended DSN variable:</p>
+<pre><code class="language-text">THELPER_POSTGRES_DSN=postgres://t_helper:local_password@127.0.0.1:5432/t_helper_test?sslmode=disable</code></pre>
+<p>CI must set <code>THELPER_POSTGRES_DSN</code> and run the storage test suite against both SQLite and PostgreSQL.</p>
+<h2 id="test-policy">Test policy</h2>
+<ul>
+<li>SQLite storage tests are mandatory for every local test run.</li>
+<li>PostgreSQL storage tests are mandatory in CI and optional locally unless <code>THELPER_POSTGRES_DSN</code> is set.</li>
+<li>PostgreSQL storage tests perform destructive cleanup only against a configured test database. The database name must contain <code>test</code> or the caller must set <code>THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1</code>.</li>
+<li>MySQL storage tests run when <code>THELPER_MYSQL_DSN</code> is set after the MySQL adapter is implemented.</li>
+<li>MSSQL storage tests run when <code>THELPER_MSSQL_DSN</code> is set after the MSSQL adapter is implemented.</li>
+<li>Aurora PostgreSQL contract tests run against a writer endpoint through <code>THELPER_POSTGRES_DSN</code>.</li>
+<li>Aurora MySQL contract tests run against a writer endpoint through <code>THELPER_MYSQL_DSN</code>.</li>
+<li>Migration tests start from an empty database.</li>
+<li>Tests that need destructive database cleanup must operate only on the configured test database.</li>
+<li>Test fixtures must not contain real secrets.</li>
+</ul>
+<h2 id="migration-layout">Migration layout</h2>
+<p>Migrations are dialect-specific while sharing logical migration versions:</p>
+<pre><code class="language-text">internal/storage/migrations/
+  sqlite/
+  postgres/
+  mysql/
+  mssql/</code></pre>
+<p>The same logical migration number must exist in every dialect directory supported by the current release line. Contract tests verify behavior parity across adapters.</p>
+<p>The current release line ships synchronized SQLite/PostgreSQL logical migration versions:</p>
+<ul>
+<li><code>000001_create_system_tables.sql</code> for Stage 01 system metadata;</li>
+<li><code>000002_stage02_config_modules_runtime.sql</code> for Stage 02 config, storage profiles, module state and imported system ignore rules;</li>
+<li><code>000003_stage03_jobs_workers_status.sql</code> for jobs, job locks, job events and workflow statuses;</li>
+<li><code>000004_stage04_scanner_registry.sql</code> for root paths, projects, project links, minimal repositories, environments and workspaces;</li>
+<li><code>000005_stage04_root_path_source.sql</code> for root path source tracking;</li>
+<li><code>000006_stage05_repository_manager.sql</code> for provider instances, credentials and repository operation reservations;</li>
+<li><code>000007_stage05_repository_manager_hardening.sql</code> for Stage 05 repository manager hardening and indexes.</li>
+</ul>
+<p>The <code>mysql</code> and <code>mssql</code> directories are reserved for Stage 10 adapter expansion and contain no current SQL migrations.</p>
+<p>Stage 01 migrations create only:</p>
+<ul>
+<li><code>system_metadata</code>;</li>
+<li>migration metadata managed by the migration framework.</li>
+</ul>
+<p>Stage 02 migrations create:</p>
+<ul>
+<li><code>config_entries</code>;</li>
+<li><code>storage_profiles</code>;</li>
+<li><code>storage_provider_settings</code>;</li>
+<li><code>module_states</code>;</li>
+<li>imported system <code>ignore_rules</code>.</li>
+</ul>
+<p>Stage 03 migrations create:</p>
+<ul>
+<li><code>jobs</code>;</li>
+<li><code>job_locks</code>;</li>
+<li><code>job_events</code>;</li>
+<li><code>workflow_statuses</code>.</li>
+</ul>
+<p>Stage 04 migrations create:</p>
+<ul>
+<li><code>root_paths</code>;</li>
+<li><code>projects</code>;</li>
+<li><code>project_links</code>;</li>
+<li>minimal <code>repositories</code>;</li>
+<li><code>environments</code>;</li>
+<li><code>workspaces</code>.</li>
+</ul>
+<p>Stage 05 migrations create or harden:</p>
+<ul>
+<li>repository provider instance metadata;</li>
+<li>repository credentials with <code>secretref://...</code> values only;</li>
+<li>repository operation reservation/index support;</li>
+<li>repository enrichment and conflict-prevention fields needed by clone, pull and sync workflows.</li>
+</ul>
+<p>Stage 01-05 migrations must not create later-stage tables such as <code>users</code>, <code>groups</code>, <code>security_findings</code>, <code>project_scans</code>, tool profiles or policy-pack tables owned by Stage 06 and later.</p>
+<h2 id="stage-05-runtime-behavior">Stage 05 runtime behavior</h2>
+<ul>
+<li><code>cmd/thelper</code> applies Stage 01-05 migrations, starts the HTTP runtime and exposes <code>GET /api/health</code>, <code>GET/PUT /api/config</code>, <code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>, <code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>, <code>GET /api/status*</code>, Stage 04 scanner/registry endpoints and Stage 05 repository manager endpoints.</li>
+<li><code>GET /api/health</code> returns <code>health_status.v1</code> with <code>instance_id</code>, <code>mode</code>, safe <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code>.</li>
+<li><code>database_fingerprint</code> is derived from safe storage locator components and must not expose DSNs, filesystem paths, usernames, passwords or userinfo.</li>
+<li>SQLite runs through a single open DB connection so connection local PRAGMA settings remain effective. Stage 01 sets foreign keys, busy timeout and WAL for file-backed SQLite databases.</li>
+<li><code>cmd/thelper-worker</code> executes queued jobs through persistent leases, heartbeats, retry/backoff and <code>job_locks</code>.</li>
+<li><code>cmd/thelper-ctl providers</code> lists the registered Stage 01 storage providers.</li>
+<li><code>cmd/thelper-ctl -reconfigure</code> imports <code>config.json</code> and <code>.t-helper.ignore</code> into Stage 02-owned tables.</li>
+<li><code>cmd/thelper-ctl -reload</code> applies reloadable keys synchronously and updates <code>module_states</code> when <code>modules.enabled</code> changes.</li>
+<li><code>cmd/thelper-ctl -restart &lt;module&gt;</code> restarts one available module synchronously and returns a Stage 02 result DTO.</li>
+<li><code>cmd/thelper-ctl -migrate-db</code> promotes a prepared <code>migration</code> storage profile only after successful schema/data copy.</li>
+<li>Stage 04 scanner endpoints expose root paths, ignore rules, scans, projects, project links, repositories, environments and workspaces.</li>
+<li>Global scan detects Terraform projects by <code>*.tf</code> filenames and does not parse Terraform source contents during discovery.</li>
+<li>Global scan enqueues coalesced <code>project_discovery</code> jobs for Git repository association without blocking the global scan result.</li>
+<li>Symlinked directories and <code>.git/</code> directories are skipped in Stage 04.</li>
+<li>Traversal stops below a discovered Terraform project.</li>
+<li>Stage 04 ignore matching is exclude-only. <code>!pattern</code> rules are preserved but not applied until full <code>.gitignore</code> semantics are implemented in a later hardening stage.</li>
+<li>Stage 05 repository endpoints expose provider instances, credentials, repository list/detail and <code>clone</code>, <code>pull</code>, <code>sync</code> job creation.</li>
+<li>Stage 05 repository operations use normalized repository identity, path containment checks, credential references and <code>job_locks</code> for conflicting operation serialization.</li>
+</ul>
+<h2 id="code-quality-and-optimization-contract">Code quality and optimization contract</h2>
+<ul>
+<li>HTTP handlers implement <code>httpapi.RouteRegistrar</code> and register their own routes through <code>RegisterRoutes(chi.Router)</code>.</li>
+<li><code>internal/httpapi/router_test.go</code> is the route smoke-test for the current executable API surface.</li>
+<li>Store code should use <code>storage.WithTx</code> in new or materially changed transaction paths unless a method needs custom retry/isolation behavior.</li>
+<li>Performance work must add benchmarks or another repeatable measurement before changing hot paths. Current job benchmarks live in <code>internal/jobs/store_benchmark_test.go</code>.</li>
+<li>The optimization register is maintained in <a href="code-optimization.html"><code>code-optimization.md</code></a>.</li>
+</ul>
+<h2 id="project-pages">Project Pages</h2>
+<ul>
+<li><code>docs/index.html</code> is the default Russian GitHub Pages entrypoint.</li>
+<li><code>docs/en.html</code> is the English language variant.</li>
+<li>Both pages share <code>docs/pages.css</code> and <code>docs/pages.js</code>.</li>
+<li><code>docs/build-pages.js</code> renders every <code>docs/**/*.md</code> file to a styled dependency-free HTML page for the published artifact and rewrites internal Markdown links to generated HTML links.</li>
+<li><code>.github/workflows/pages.yml</code> publishes the <code>docs</code> directory through GitHub Actions to the <code>gh-pages</code> branch.</li>
+<li>Repository Pages settings must use source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
+<li>The Pages landing page is documentation/presentation only and is separate from the Stage 08 React/Tauri frontend deliverable.</li>
+</ul>
+<h2 id="secret-references-in-development">Secret references in development</h2>
+<p>Development configuration should use <code>secretref://env/...</code> for sensitive values.</p>
+<p>Example:</p>
+<pre><code class="language-json">{
+  &quot;external_databases&quot;: {
+    &quot;username&quot;: &quot;secretref://env/THELPER_POSTGRES_USER&quot;,
+    &quot;password&quot;: &quot;secretref://env/THELPER_POSTGRES_PASSWORD&quot;
+  }
+}</code></pre>
+<p>Resolved secret values must not be written to <code>config_entries</code>, logs, job payloads, job events, result payloads or audit records.</p>
+<h2 id="stage-01-implementation-checklist">Stage 01 implementation checklist</h2>
+<ul>
+<li>Scaffold <code>cmd/thelper</code>, <code>cmd/thelper-worker</code> and <code>cmd/thelper-ctl</code> - done.</li>
+<li>Add <code>internal/storage/migrations</code> - done.</li>
+<li>Add SQLite migration test coverage - done.</li>
+<li>Add PostgreSQL migration test coverage gated by <code>THELPER_POSTGRES_DSN</code> - done.</li>
+<li>Keep MySQL and MSSQL migration directories reserved for Stage 10 adapters - done.</li>
+<li>Seed only Stage 01-owned bootstrap metadata through versioned migrations or migration-adjacent seed steps - done through <code>system_metadata</code>.</li>
+<li>Seed the default module registry in Stage 02 with <code>module_states</code>.</li>
+<li>Seed system permissions, roles and role permissions in Stage 07 with the auth/RBAC schema.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="index.html">Русская страница</a>
+      <a href="en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

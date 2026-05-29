@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0004: Frontend, Tauri and singleton runtime policy - T-Helper documentation.">
+    <title>ADR 0004: Frontend, Tauri and singleton runtime policy - T-Helper Docs</title>
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0004-frontend-and-tauri-runtime-policy.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0004-frontend-and-tauri-runtime-policy.md</span>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0004-frontend-tauri-and-singleton-runtime-policy">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <article class="markdown-body">
+        <h1 id="adr-0004-frontend-tauri-and-singleton-runtime-policy">ADR 0004: Frontend, Tauri and singleton runtime policy</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Frontend stack:</p>
+<ul>
+<li><code>React</code>;</li>
+<li><code>TypeScript</code>;</li>
+<li><code>Vite</code>;</li>
+<li><code>TanStack Router</code>;</li>
+<li><code>TanStack Query</code>;</li>
+<li><code>Zod</code>;</li>
+<li><code>React Hook Form</code>;</li>
+<li><code>Ant Design</code>.</li>
+</ul>
+<p>Desktop GUI uses <code>Tauri</code> and the same React/TypeScript codebase.</p>
+<p>Only one <code>t-helper</code> runtime may be active in a local installation.</p>
+<p>Runtime startup policy:</p>
+<ul>
+<li>if <code>thelper</code> is already running for <code>Web UI</code>, Tauri GUI connects to that runtime;</li>
+<li>if <code>thelper</code> is not running, Tauri GUI starts local <code>thelper</code>;</li>
+<li>after Tauri starts <code>thelper</code>, <code>Web UI</code> connects to the same runtime;</li>
+<li>starting a second <code>thelper</code> must detect the existing runtime and avoid creating another active process.</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li><code>Web UI</code> and <code>GUI</code> must use one documented backend API.</li>
+<li>A singleton runtime avoids split-brain local state and conflicting local databases.</li>
+<li>Tauri should be a local delivery shell, not a separate backend mode.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Tauri must implement local runtime discovery/startup logic.</li>
+<li><code>thelper</code> must expose a health/lock mechanism suitable for runtime discovery.</li>
+<li>GUI-specific backend endpoints are not allowed.</li>
+</ul>
+      </article>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../index.html">Русская страница</a>
+      <a href="../en.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0004-frontend-and-tauri-runtime-policy.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>
