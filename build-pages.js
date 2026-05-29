@@ -85,7 +85,7 @@ const languages = {
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".git") {
+    if (entry.name === ".git" || (dir === docsRoot && entry.name === "en")) {
       continue;
     }
 
@@ -632,7 +632,8 @@ function relationLinks(title, docs, currentMdPath, lang = "ru") {
 function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, incomingDocs, lang }) {
   const locale = languages[lang];
   const prefix = assetPrefix(relativeMdPath, lang);
-  const sourceHref = `https://github.com/artBass-rip/t-helper/blob/master/docs/${relativeMdPath
+  const sourceRelativeMdPath = `${lang === "en" ? "en/" : ""}${relativeMdPath}`;
+  const sourceHref = `https://github.com/artBass-rip/t-helper/blob/master/docs/${sourceRelativeMdPath
     .split(path.sep)
     .join("/")}`;
   const toc = headings
@@ -778,6 +779,20 @@ function findFiles(dir, extension) {
   return files;
 }
 
+function localizedMarkdown(relativeMdPath, lang, fallback) {
+  if (lang !== "en") {
+    return fallback;
+  }
+
+  const englishPath = path.join(docsRoot, "en", relativeMdPath);
+
+  if (!fs.existsSync(englishPath)) {
+    return fallback;
+  }
+
+  return fs.readFileSync(englishPath, "utf8");
+}
+
 if (outRoot !== docsRoot) {
   copyTree(docsRoot, outRoot);
 }
@@ -788,12 +803,21 @@ const docs = markdownFiles
   .map((mdPath) => {
     const relativeMdPath = toPosix(path.relative(docsRoot, mdPath));
     const markdown = fs.readFileSync(mdPath, "utf8");
+    const markdownByLang = {
+      ru: markdown,
+      en: localizedMarkdown(relativeMdPath, "en", markdown),
+    };
 
     return {
       relativeMdPath,
-      title: extractTitle(markdown, relativeMdPath),
+      title: extractTitle(markdownByLang.ru, relativeMdPath),
+      titles: {
+        ru: extractTitle(markdownByLang.ru, relativeMdPath),
+        en: extractTitle(markdownByLang.en, relativeMdPath),
+      },
       group: docGroup(relativeMdPath),
       markdown,
+      markdownByLang,
     };
   })
   .sort((left, right) => {
@@ -827,6 +851,7 @@ for (const lang of Object.keys(languages)) {
   for (const doc of docs) {
     const targetPath = path.join(outRoot, htmlPathForDoc(doc.relativeMdPath, lang));
     const currentDir = path.posix.dirname(doc.relativeMdPath);
+    const markdown = doc.markdownByLang[lang] || doc.markdown;
 
     renderContext = {
       currentDir: currentDir === "." ? "" : currentDir,
@@ -835,10 +860,10 @@ for (const lang of Object.keys(languages)) {
       lang,
     };
 
-    const rendered = renderMarkdown(doc.markdown);
+    const rendered = renderMarkdown(markdown);
     const html = docShell({
       relativeMdPath: doc.relativeMdPath,
-      title: rendered.title || doc.title,
+      title: rendered.title || doc.titles[lang] || doc.title,
       body: rendered.body,
       headings: rendered.headings,
       docs,

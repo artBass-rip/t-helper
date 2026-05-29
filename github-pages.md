@@ -16,6 +16,9 @@ implemented exclusively by AI.
 - generated `*.html` documentation pages in the artifact root - Russian
   documentation shell.
 - generated `en/**/*.html` documentation pages - English documentation shell.
+- `docs/**/*.md` outside `docs/en/` - Russian Markdown documentation sources.
+- `docs/en/**/*.md` - corresponding English Markdown documentation sources
+  with the same relative paths.
 - `docs/pages.css` - shared responsive styles.
 - `docs/pages.js` - shared reveal and hero interaction behavior.
 - `docs/.nojekyll` - disables Jekyll processing for the Pages artifact.
@@ -30,14 +33,17 @@ Generated document pages also include a static RU/EN switcher for the same
 document path. This keeps the published site usable even when JavaScript is
 unavailable.
 
-Markdown documents under `docs/**/*.md` are the canonical sources. During
-publication, `docs/build-pages.js` generates Russian and English HTML shells
-for every Markdown file, rewrites internal Markdown links to the generated
+Markdown documents under `docs/` are the canonical Russian sources. Matching
+Markdown documents under `docs/en/` are the canonical English sources for the
+same document paths. During publication, `docs/build-pages.js` generates
+Russian pages from `docs/<path>.md` and English pages from
+`docs/en/<path>.md`, rewrites internal Markdown links to the generated
 same-language HTML pages and links inline document references such as
 `docs/api.md` when the target exists. The published Pages site therefore shows
 documentation as complete styled pages with common navigation, local table of
 contents, related documents, backlinks and a full documentation catalog. The
-raw `.md` sources remain available from each generated document page.
+raw same-language `.md` source remains available from each generated document
+page.
 
 ## Deployment
 
@@ -62,7 +68,8 @@ The workflow permissions are intentionally limited to:
 
 ## Maintenance contract
 
-- Keep Russian and English content aligned when updating page copy.
+- Keep Russian and English Markdown sources aligned when updating
+  documentation or page copy.
 - Keep the AI-only implementation notice visible before the hero content in
   both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target

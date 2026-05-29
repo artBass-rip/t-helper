@@ -64,6 +64,8 @@
 <li><code>docs/en.html</code> - English landing page.</li>
 <li>generated <code>*.html</code> documentation pages in the artifact root - Russian documentation shell.</li>
 <li>generated <code>en/**/*.html</code> documentation pages - English documentation shell.</li>
+<li><code>docs/**/*.md</code> outside <code>docs/en/</code> - Russian Markdown documentation sources.</li>
+<li><code>docs/en/**/*.md</code> - corresponding English Markdown documentation sources with the same relative paths.</li>
 <li><code>docs/pages.css</code> - shared responsive styles.</li>
 <li><code>docs/pages.js</code> - shared reveal and hero interaction behavior.</li>
 <li><code>docs/.nojekyll</code> - disables Jekyll processing for the Pages artifact.</li>
@@ -75,7 +77,7 @@
 <li>English to Russian: <code>index.html</code>.</li>
 </ul>
 <p>Generated document pages also include a static RU/EN switcher for the same document path. This keeps the published site usable even when JavaScript is unavailable.</p>
-<p>Markdown documents under <code>docs/**/*.md</code> are the canonical sources. During publication, <code>docs/build-pages.js</code> generates Russian and English HTML shells for every Markdown file, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw <code>.md</code> sources remain available from each generated document page.</p>
+<p>Markdown documents under <code>docs/</code> are the canonical Russian sources. Matching Markdown documents under <code>docs/en/</code> are the canonical English sources for the same document paths. During publication, <code>docs/build-pages.js</code> generates Russian pages from <code>docs/&lt;path&gt;.md</code> and English pages from <code>docs/en/&lt;path&gt;.md</code>, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw same-language <code>.md</code> source remains available from each generated document page.</p>
 <h2 id="deployment">Deployment</h2>
 <p>The <code>github-pages</code> workflow publishes the <code>docs</code> directory to the <code>gh-pages</code> branch on pushes to <code>master</code> and on manual <code>workflow_dispatch</code> runs.</p>
 <p>Repository settings must use:</p>
@@ -91,7 +93,7 @@
 </ul>
 <h2 id="maintenance-contract">Maintenance contract</h2>
 <ul>
-<li>Keep Russian and English content aligned when updating page copy.</li>
+<li>Keep Russian and English Markdown sources aligned when updating documentation or page copy.</li>
 <li>Keep the AI-only implementation notice visible before the hero content in both language variants.</li>
 <li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
 <li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
