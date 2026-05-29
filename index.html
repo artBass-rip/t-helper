@@ -83,11 +83,12 @@
       <section class="section status-section" id="status" aria-labelledby="status-title">
         <div class="section-heading" data-reveal>
           <p class="eyebrow">Текущий baseline</p>
-          <h2 id="status-title">Stage 04: scanner и registry MVP</h2>
+          <h2 id="status-title">Stage 05: repository manager MVP</h2>
           <p>
             Реализована backend foundation: entrypoints, storage adapters,
             migrations, runtime config, module lifecycle, jobs/workers/status,
-            global scanning и scanner/registry HTTP API.
+            global scanning, scanner/registry HTTP API и clone/pull/sync
+            workflows для репозиториев.
           </p>
         </div>
 
@@ -109,8 +110,8 @@
           </article>
           <article>
             <span>04</span>
-            <h3>Jobs</h3>
-            <p>Очередь фоновых задач с leases, heartbeat, retry/backoff и status read models.</p>
+            <h3>Repositories</h3>
+            <p>Provider profiles, masked credentials, clone/pull/sync jobs и path safety.</p>
           </article>
         </div>
       </section>
@@ -153,11 +154,11 @@
         <ol class="roadmap" data-reveal>
           <li>
             <span>Stage 05</span>
-            Repository manager MVP: clone, pull, sync, credentials и path safety.
+            Completed: repository manager MVP with generic Git plus GitHub, credentials and operation serialization.
           </li>
           <li>
-            <span>Stage 06</span>
-            Project scanner и security validator на локальных toolchain profiles.
+            <span>Stage 06A/06B</span>
+            External toolchain profiles, project scanner и security validator на локальных CLI.
           </li>
           <li>
             <span>Stage 07-08</span>
@@ -208,8 +209,6 @@
             <span>Development</span>
             Локальная разработка и тестовый контракт.
           </a>
-<<<<<<< Updated upstream
-=======
           <a href="access-control.html">
             <span>Access control</span>
             Auth, SCIM, RBAC, permissions и audit scope.
@@ -238,7 +237,6 @@
             <span>Optimization</span>
             Выполненные оптимизации, quality gate и дальнейший backlog.
           </a>
->>>>>>> Stashed changes
         </div>
       </section>
     </main>

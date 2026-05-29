@@ -13,30 +13,32 @@ implemented exclusively by AI.
 
 - `docs/index.html` - Russian landing page and default GitHub Pages entrypoint.
 - `docs/en.html` - English landing page.
+- generated `*.html` documentation pages in the artifact root - Russian
+  documentation shell.
+- generated `en/**/*.html` documentation pages - English documentation shell.
 - `docs/pages.css` - shared responsive styles.
 - `docs/pages.js` - shared reveal and hero interaction behavior.
 - `docs/.nojekyll` - disables Jekyll processing for the Pages artifact.
 - `.github/workflows/pages.yml` - GitHub Actions deployment workflow.
 
-The language switcher uses plain static links:
+The landing language switcher uses plain static links:
 
 - Russian to English: `en.html`;
 - English to Russian: `index.html`.
 
-This keeps the published site usable even when JavaScript is unavailable.
+Generated document pages also include a static RU/EN switcher for the same
+document path. This keeps the published site usable even when JavaScript is
+unavailable.
 
-<<<<<<< Updated upstream
-=======
 Markdown documents under `docs/**/*.md` are the canonical sources. During
-publication, `docs/build-pages.js` generates sibling `*.html` pages for every
-Markdown file, rewrites internal Markdown links to the generated HTML pages and
-links inline document references such as `docs/api.md` when the target exists.
-The published Pages site therefore shows documentation as complete styled
-pages with common navigation, local table of contents, related documents,
-backlinks and a full documentation catalog. The raw `.md` sources remain
-available from each generated document page.
+publication, `docs/build-pages.js` generates Russian and English HTML shells
+for every Markdown file, rewrites internal Markdown links to the generated
+same-language HTML pages and links inline document references such as
+`docs/api.md` when the target exists. The published Pages site therefore shows
+documentation as complete styled pages with common navigation, local table of
+contents, related documents, backlinks and a full documentation catalog. The
+raw `.md` sources remain available from each generated document page.
 
->>>>>>> Stashed changes
 ## Deployment
 
 The `github-pages` workflow publishes the `docs` directory to the `gh-pages`
@@ -65,13 +67,10 @@ The workflow permissions are intentionally limited to:
   both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target
   file is intentionally linked on GitHub.
-<<<<<<< Updated upstream
-=======
 - Keep generated document pages buildable with the repository-local Node.js
   script; do not require package installation for Pages publication.
 - Keep cross-document references as relative Markdown links or inline
   `docs/...md` references so the Pages generator can produce HTML links and
   backlinks.
->>>>>>> Stashed changes
 - Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI
   contracts remain in `docs/frontend-ui-contract.md`.

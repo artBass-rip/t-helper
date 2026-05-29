@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 02: Config, Modules and Runtime Lifecycle - T-Helper documentation.">
+    <title>Stage 02: Config, Modules and Runtime Lifecycle - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../../implementation-specs/stage-02-config-modules-runtime.html">
+    <link rel="alternate" hreflang="en" href="stage-02-config-modules-runtime.html">
+    <link rel="stylesheet" href="../../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../../en.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../../en.html#docs">Docs</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../../implementation-specs/stage-02-config-modules-runtime.html">RU</a>
+        <a class="is-active" href="stage-02-config-modules-runtime.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-02-config-modules-runtime.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../../en.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-02-config-modules-runtime.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-02-config-modules-and-runtime-lifecycle">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#цель">Цель</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#verification">Verification</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#риски">Риски</a>
+<a class="toc-level-2" href="#notes-for-later-stages">Notes for Later Stages</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="stage-02-config-modules-and-runtime-lifecycle">Stage 02: Config, Modules and Runtime Lifecycle</h1>
+<h2 id="status">Status</h2>
+<p>Completed.</p>
+<p>Stage 02 implements synchronous config/module lifecycle operations. It does not create Stage 03 <code>jobs</code>; reload/restart responses use Stage 02 result DTOs and persist runtime observability in <code>module_states</code>.</p>
+<h2 id="цель">Цель</h2>
+<p>Реализовать persisted runtime configuration, module lifecycle и local singleton runtime policy.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><a href="../configuration.html"><code>docs/configuration.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/data-model.md</code></a></li>
+<li><a href="../interfaces.html"><code>docs/interfaces.md</code></a></li>
+<li><a href="../api.html"><code>docs/api.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/technology-stack.md</code></a></li>
+<li><a href="../adr/0004-frontend-and-tauri-runtime-policy.html"><code>docs/adr/0004-frontend-and-tauri-runtime-policy.md</code></a></li>
+<li><a href="../adr/0008-configuration-key-compatibility.html"><code>docs/adr/0008-configuration-key-compatibility.md</code></a></li>
+<li><a href="../adr/0009-secret-resolution.html"><code>docs/adr/0009-secret-resolution.md</code></a></li>
+<li><a href="../adr/0010-singleton-runtime-lock-and-health.html"><code>docs/adr/0010-singleton-runtime-lock-and-health.md</code></a></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li><code>config_entries</code>;</li>
+<li><code>module_states</code>;</li>
+<li>import через <code>thelper-ctl -reconfigure</code>;</li>
+<li>reload через <code>thelper-ctl -reload</code>;</li>
+<li><code>thelper-ctl -restart &lt;module&gt;</code>;</li>
+<li>module registry с lifecycle <code>start</code>, <code>stop</code>, <code>reload</code>, <code>health</code>;</li>
+<li>initial module registry seed: <code>core</code>, <code>worker-runtime</code>, <code>config-manager</code>, <code>module-runtime</code>, <code>status-monitor</code>, <code>global-scanner</code>, <code>repository-manager</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>auth</code>, <code>web</code>;</li>
+<li>singleton runtime lock/health mechanism;</li>
+<li>masking secrets в <code>GET /api/config</code>;</li>
+<li>policy для <code>secretref://...</code>.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>long-running job execution;</li>
+<li>scanner/repository/security/auth handlers;</li>
+<li>frontend runtime startup implementation;</li>
+<li>distributed service discovery.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>config validation/import pipeline;</li>
+<li>strict config schema validation with unknown key rejection;</li>
+<li>module registry;</li>
+<li>initial module registry seed;</li>
+<li>module state persistence;</li>
+<li>config/module API endpoints;</li>
+<li>CLI commands для reconfigure/reload/restart;</li>
+<li>full storage profile migration command <code>thelper-ctl -migrate-db</code>;</li>
+<li>singleton runtime discovery contract using the existing <code>health_status.v1</code> response schema.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li><code>thelper-ctl -reconfigure</code> атомарно импортирует config и ignore rules;</li>
+<li><code>PUT /api/config</code> imports config atomically without clearing imported system <code>ignore_rules</code>, because <code>.t-helper.ignore</code> is not part of the HTTP payload;</li>
+<li>unknown config keys and deprecated aliases are rejected with <code>validation_error</code>;</li>
+<li>config/module HTTP JSON payloads reject malformed JSON, unknown fields where strict request structs are used, <code>null</code> object payloads and trailing payload;</li>
+<li>only <code>scanning.global_scan</code> is accepted for global scan roots;</li>
+<li>storage profile slots <code>current</code> and <code>migration</code> are implemented fully;</li>
+<li>active database switches only through successful <code>thelper-ctl -migrate-db</code>;</li>
+<li>initial import with <code>external_databases.enabled = true</code> stages the external database as <code>migration</code> target while keeping <code>database</code> as active <code>current</code>;</li>
+<li>later storage target imports after a successful migration do not overwrite the active <code>current</code> profile before the next successful <code>thelper-ctl -migrate-db</code>;</li>
+<li>failed DB migration does not change the active <code>current</code> profile;</li>
+<li>SQLite -&gt; PostgreSQL <code>thelper-ctl -migrate-db</code> is covered end-to-end for Stage 02-owned tables using <code>secretref://env/...</code> credentials;</li>
+<li>runtime читает конфигурацию из БД, а не из файлов;</li>
+<li>reload returns accepted keys, actually applied Stage 02 keys and restart-required keys; accepted-but-not-applied reloadable keys must not be misreported as applied;</li>
+<li>module restart обновляет <code>module_states</code>;</li>
+<li><code>modules.enabled</code> отклоняет unknown module names;</li>
+<li>registered but unavailable modules возвращаются в <code>GET /api/modules</code> со state <code>unavailable</code>;</li>
+<li>restart/reload для unavailable module возвращает controlled error;</li>
+<li>sensitive literal values are rejected;</li>
+<li>secrets не сохраняются и не возвращаются в открытом виде;</li>
+<li><code>GET /api/config</code> returns masked sensitive values and never returns resolved secrets;</li>
+<li>Stage 02 extends the existing Stage 01 <code>GET /api/health</code> endpoint with singleton runtime lock/probe semantics and must not introduce a breaking <code>health_status.v1</code> response schema change;</li>
+<li>runtime lock metadata <code>config_database_fingerprint</code> matches the safe <code>database_fingerprint</code> returned by <code>/api/health</code>;</li>
+<li>повторный local runtime не создаёт второй активный процесс.</li>
+</ul>
+<h2 id="verification">Verification</h2>
+<p>Stage 02 baseline commands:</p>
+<pre><code class="language-text">go test -timeout 60s ./...
+go test -race -timeout 90s ./...
+go vet ./...
+go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
+docker compose --profile offline -f docker-compose.test.yml run --rm test-runner
+go test -cover ./...</code></pre>
+<p>Covered Stage 02 checks:</p>
+<ul>
+<li>strict config import rejects unknown top-level and nested keys;</li>
+<li><code>scanning.global_scan</code> is the only accepted global scan roots key;</li>
+<li>sensitive literals for <code>external_databases.username/password</code> are rejected;</li>
+<li><code>GET /api/config</code> masks secret refs and never resolves secrets;</li>
+<li><code>thelper-ctl -reconfigure</code> imports config and ignore rules atomically;</li>
+<li>storage target changes update <code>migration</code> profile without changing active <code>current</code>;</li>
+<li>initial external database import on an empty bootstrap store keeps SQLite as <code>current</code> and stages PostgreSQL as <code>migration</code>;</li>
+<li>repeated SQLite target migrations after a successful promotion keep active <code>current</code> stable until the next successful <code>migrate-db</code>;</li>
+<li><code>thelper-ctl -migrate-db</code> switches active database only after successful target migration/copy;</li>
+<li>failed migration leaves active <code>current</code> unchanged;</li>
+<li>SQLite -&gt; PostgreSQL migration is tested with <code>secretref://env/...</code>;</li>
+<li>runtime applies persisted <code>current</code> storage profile and runtime settings from DB on startup;</li>
+<li>module registry seeds all initial modules and persists <code>module_states</code>;</li>
+<li><code>modules.enabled</code> controls available module running/stopped state;</li>
+<li>unavailable modules are returned as <code>unavailable</code>;</li>
+<li>module restart/reload uses lifecycle <code>stop/start/reload/health</code> hooks and returns controlled errors for unavailable modules;</li>
+<li>config reload validates request JSON and applies <code>modules.enabled</code> changes to persisted <code>module_states</code>;</li>
+<li>explicit unknown reload keys are returned in <code>failed_keys</code> and are not reported as accepted or applied;</li>
+<li>module lifecycle failures persist <code>state = failed</code> with <code>last_error</code> in <code>module_states.details</code>;</li>
+<li>PostgreSQL storage profile DSNs are built with URL-escaped credentials and <code>net.JoinHostPort</code> host formatting;</li>
+<li>runtime startup fails closed on unexpected <code>current</code> storage profile read errors and only falls back to bootstrap storage when no current profile exists;</li>
+<li>singleton lock writes <code>config_database_fingerprint</code> matching <code>/api/health</code> <code>database_fingerprint</code> and fails closed on ambiguous live PID/health state.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>нет Stage 02 blockers после ADR 0010 и Stage 00 initial module registry decision.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 02.</li>
+<li>Acceptance: <code>ACC-MVP-007</code>, <code>ACC-MVP-008</code>, <code>ACC-MVP-009</code>, <code>ACC-MVP-010</code>.</li>
+<li>API: <code>GET/PUT /api/config</code>, <code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>.</li>
+<li>Data model: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, imported system <code>ignore_rules</code>.</li>
+<li>ADR: <code>0004</code>, <code>0008</code>, <code>0009</code>, <code>0010</code>.</li>
+</ul>
+<h2 id="риски">Риски</h2>
+<ul>
+<li>расхождение file import и runtime source of truth;</li>
+<li>неявное сохранение секретов в <code>config_entries</code>;</li>
+<li>module lifecycle станет in-memory only и потеряет observability.</li>
+</ul>
+<h2 id="notes-for-later-stages">Notes for Later Stages</h2>
+<p><code>thelper-ctl -migrate-db</code> copies Stage 02-owned tables:</p>
+<ul>
+<li><code>system_metadata</code> and migration metadata through adapter migrations;</li>
+<li><code>config_entries</code>;</li>
+<li><code>storage_profiles</code>;</li>
+<li><code>storage_provider_settings</code>;</li>
+<li><code>module_states</code>;</li>
+<li><code>ignore_rules</code>.</li>
+</ul>
+<p>When later stages introduce their own persistent tables, they must extend the storage migration copy/verification contract in the same stage that owns those tables. Examples: Stage 03 owns <code>jobs</code>, <code>job_locks</code>, <code>job_events</code> and workflow state; Stage 06 owns findings; Stage 07 owns auth/RBAC/audit.</p>
+<p><code>mysql</code> and <code>mssql</code> remain Stage 10 adapter-expansion targets. Stage 02 accepts their config spelling for forward-compatible validation, but current MVP runtime registry can migrate only between implemented adapters (<code>sqlite</code>, <code>postgres</code>).</p>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="../adr/0004-frontend-and-tauri-runtime-policy.html"><span>ADR</span>ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="../adr/0008-configuration-key-compatibility.html"><span>ADR</span>ADR 0008: Global scan configuration key</a>
+<a href="../adr/0009-secret-resolution.html"><span>ADR</span>ADR 0009: Secret resolution</a>
+<a href="../adr/0010-singleton-runtime-lock-and-health.html"><span>ADR</span>ADR 0010: Singleton runtime lock and health</a>
+<a href="../api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="../configuration.html"><span>Core Docs</span>Конфигурация</a>
+<a href="../data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="../interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="../technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="README.html">Пакет ТЗ по stage внедрения</a>
+<a href="stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="stage-02-config-modules-runtime.html" aria-current="page">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="../adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="../adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="../adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="../adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="../adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="../adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="../adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="../adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="../adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="../adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="../adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="../adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="../adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="../adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="../adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="../adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="../adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="../adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="../adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../../implementation-specs/stage-02-config-modules-runtime.html">Русская страница</a>
+      <a href="stage-02-config-modules-runtime.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/implementation-specs/stage-02-config-modules-runtime.md">Source Markdown</a>
+    </footer>
+
+    <script src="../../pages.js"></script>
+  </body>
+</html>

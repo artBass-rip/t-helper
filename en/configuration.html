@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Конфигурация - T-Helper documentation.">
+    <title>Конфигурация - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../configuration.html">
+    <link rel="alternate" hreflang="en" href="configuration.html">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../configuration.html">RU</a>
+        <a class="is-active" href="configuration.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/configuration.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>configuration.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#конфигурация">Конфигурация</a>
+<a class="toc-level-2" href="#источник-истины">Источник истины</a>
+<a class="toc-level-2" href="#пример-configjson">Пример config.json</a>
+<a class="toc-level-2" href="#секции-configjson">Секции config.json</a>
+<a class="toc-level-3" href="#systemsettings">system_settings</a>
+<a class="toc-level-3" href="#database">database</a>
+<a class="toc-level-3" href="#externaldatabases">external_databases</a>
+<a class="toc-level-3" href="#workers">workers</a>
+<a class="toc-level-3" href="#scanning">scanning</a>
+<a class="toc-level-3" href="#repositories">repositories</a>
+<a class="toc-level-3" href="#modules">modules</a>
+<a class="toc-level-2" href="#t-helperignore">.t-helper.ignore</a>
+<a class="toc-level-2" href="#reloadability">Reloadability</a>
+<a class="toc-level-2" href="#валидация">Валидация</a>
+<a class="toc-level-2" href="#masked-config-output">Masked config output</a>
+<a class="toc-level-2" href="#storage-migration-command">Storage migration command</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="конфигурация">Конфигурация</h1>
+<h2 id="источник-истины">Источник истины</h2>
+<p>После первичного импорта source of truth для runtime-конфигурации - БД.</p>
+<p>Файлы используются только как вход для <code>thelper-ctl -reconfigure</code>:</p>
+<ul>
+<li><code>config.json</code></li>
+<li><code>.t-helper.ignore</code></li>
+</ul>
+<p><code>config.example.json</code> поставляется как валидный референс для структуры <code>config.json</code>.</p>
+<p><code>thelper</code> не должен читать эти файлы как runtime source of truth после успешного импорта.</p>
+<p>Настройки storage backend являются особой частью конфигурации. <code>config.json</code> может использоваться для первичного чтения и для подготовки migration target, но runtime выбирает активную БД по записям в storage configuration table. В этой таблице хранятся минимум два profile slot:</p>
+<ul>
+<li><code>current</code> - БД, которая используется активным runtime сейчас;</li>
+<li><code>migration</code> - БД, на которую может быть выполнена миграция через <code>thelper-ctl -migrate-db</code>.</li>
+</ul>
+<p><code>thelper-ctl -reconfigure</code> может обновлять runtime config и profile slot <code>migration</code>, но не переключает активную БД. Переключение с <code>current</code> на <code>migration</code> разрешено только после успешного <code>thelper-ctl -migrate-db</code>, который создаёт/обновляет схему, переносит данные, проверяет результат и актуализирует статусы profiles. Информация о старой БД сохраняется в storage configuration table; сама старая БД не удаляется автоматически и может быть использована администратором для ручного отката.</p>
+<h2 id="пример-configjson">Пример <code>config.json</code></h2>
+<p>Комментарии в примерах допускаются только в документации. Файл, который читает <code>thelper-ctl -reconfigure</code>, должен быть валидным JSON без комментариев.</p>
+<pre><code class="language-json">{
+  &quot;system_settings&quot;: {
+    &quot;app_name&quot;: &quot;t-helper&quot;,
+    &quot;version&quot;: &quot;1.0.0&quot;,
+    &quot;mode&quot;: &quot;server&quot;
+  },
+  &quot;database&quot;: {
+    &quot;database_type&quot;: &quot;sqlite&quot;,
+    &quot;database_path&quot;: &quot;/var/lib/t-helper/t-helper.db&quot;
+  },
+  &quot;external_databases&quot;: {
+    &quot;enabled&quot;: false,
+    &quot;provider&quot;: &quot;postgresql&quot;,
+    &quot;engine_flavor&quot;: &quot;standard&quot;,
+    &quot;host&quot;: &quot;postgres.example.internal&quot;,
+    &quot;port&quot;: 5432,
+    &quot;username&quot;: &quot;secretref://env/THELPER_POSTGRES_USER&quot;,
+    &quot;password&quot;: &quot;secretref://env/THELPER_POSTGRES_PASSWORD&quot;,
+    &quot;database_name&quot;: &quot;t_helper&quot;
+  },
+  &quot;scanning&quot;: {
+    &quot;global_scan&quot;: [
+      {
+        &quot;name&quot;: &quot;Platform Terraform&quot;,
+        &quot;root_path&quot;: &quot;/srv/t-helper/scan-roots/platform&quot;,
+        &quot;schedule&quot;: true,
+        &quot;frequency&quot;: &quot;daily&quot;
+      },
+      {
+        &quot;name&quot;: &quot;Application Terraform&quot;,
+        &quot;root_path&quot;: &quot;/srv/t-helper/scan-roots/applications&quot;,
+        &quot;schedule&quot;: true,
+        &quot;frequency&quot;: &quot;weekly&quot;
+      }
+    ],
+    &quot;security_scan&quot;: {
+      &quot;modules&quot;: [
+        &quot;trivy&quot;
+      ]
+    },
+    &quot;toolchain&quot;: {
+      &quot;version_policy&quot;: &quot;certified_only&quot;,
+      &quot;profile_paths&quot;: []
+    }
+  },
+  &quot;repositories&quot;: {
+    &quot;default_auth_type&quot;: &quot;ssh&quot;,
+    &quot;poll_interval_default&quot;: &quot;15m&quot;,
+    &quot;auto_sync_default&quot;: false
+  },
+  &quot;security&quot;: {
+    &quot;active_rule_set_id&quot;: null
+  },
+  &quot;api&quot;: {
+    &quot;listen_address&quot;: &quot;127.0.0.1:8080&quot;
+  },
+  &quot;auth&quot;: {
+    &quot;local_enabled&quot;: true
+  },
+  &quot;workers&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;concurrency&quot;: 1
+  },
+  &quot;modules&quot;: {
+    &quot;enabled&quot;: [
+      &quot;core&quot;,
+      &quot;worker-runtime&quot;,
+      &quot;config-manager&quot;,
+      &quot;module-runtime&quot;,
+      &quot;status-monitor&quot;,
+      &quot;global-scanner&quot;,
+      &quot;project-scanner&quot;,
+      &quot;security-validator&quot;,
+      &quot;repository-manager&quot;,
+      &quot;auth&quot;,
+      &quot;web&quot;
+    ]
+  },
+  &quot;logging&quot;: {
+    &quot;level&quot;: &quot;info&quot;,
+    &quot;format&quot;: &quot;json&quot;,
+    &quot;log_path&quot;: &quot;/var/log/t-helper&quot;
+  }
+}</code></pre>
+<h2 id="секции-configjson">Секции <code>config.json</code></h2>
+<h3 id="systemsettings"><code>system_settings</code></h3>
+<ul>
+<li><code>app_name</code> - имя приложения; для стандартной поставки <code>t-helper</code>;</li>
+<li><code>version</code> - версия схемы/поставки конфигурации;</li>
+<li><code>mode</code> - режим запуска, <code>server</code> или <code>local</code>.</li>
+</ul>
+<h3 id="database"><code>database</code></h3>
+<p>Описывает внутреннее хранилище, которое используется, когда <code>external_databases.enabled = false</code>.</p>
+<ul>
+<li><code>database_type</code> - <code>sqlite</code>;</li>
+<li><code>database_path</code> - путь к каталогу или файлу внутреннего хранилища.</li>
+</ul>
+<h3 id="externaldatabases"><code>external_databases</code></h3>
+<p>Описывает внешний storage target. Если <code>enabled = true</code>, все обязательные поля внешнего подключения должны быть заданы. В Stage 02 это создаёт или обновляет <code>migration</code> profile; runtime начинает использовать внешнюю БД только после успешного <code>thelper-ctl -migrate-db</code> и последующего запуска с promoted <code>current</code> profile.</p>
+<ul>
+<li><code>enabled</code> - включает внешний storage backend;</li>
+<li><code>provider</code> - <code>postgresql</code>, <code>mysql</code> или <code>mssql</code>;</li>
+<li><code>engine_flavor</code> - optional operational hint for compatible managed engines; supported values: <code>standard</code>, <code>aurora</code>;</li>
+<li><code>host</code> - IP-адрес или FQDN;</li>
+<li><code>port</code> - TCP-порт провайдера;</li>
+<li><code>username</code> - имя пользователя или закодированное представление секрета, если используется secret codec;</li>
+<li><code>password</code> - пароль или ссылка/закодированное представление секрета;</li>
+<li><code>database_name</code> - имя базы данных.</li>
+</ul>
+<p><code>provider = postgresql</code> покрывает PostgreSQL-compatible engines, включая Amazon Aurora PostgreSQL. <code>provider = mysql</code> покрывает MySQL-compatible engines, включая Amazon Aurora MySQL. Aurora не является отдельным provider/dialect: для неё используются <code>postgresql</code> или <code>mysql</code> migrations/adapters.</p>
+<p><code>provider = mssql</code> предназначен для native Microsoft SQL Server-compatible engines. Babelfish for Aurora PostgreSQL не считается эквивалентом <code>mssql</code> adapter без отдельного compatibility decision.</p>
+<p>Все database providers реализуются как подключаемые storage adapter libraries. Unknown provider должен приводить к <code>validation_error</code> без частичного применения конфигурации.</p>
+<p><code>database</code> и <code>external_databases</code> в файле импорта описывают initial <code>current</code> profile и optional <code>migration</code> profile. Для пустой установки с <code>external_databases.enabled = true</code> <code>database</code> остаётся initial <code>current</code> profile, а <code>external_databases</code> создаёт <code>migration</code> target. Они не являются reloadable runtime settings и не должны переключать активный storage backend без <code>thelper-ctl -migrate-db</code>.</p>
+<h3 id="workers"><code>workers</code></h3>
+<p>Описывает отдельные worker-процессы, выполняющие background jobs.</p>
+<ul>
+<li><code>enabled</code> - включает обработку queued jobs через <code>thelper-worker</code>;</li>
+<li><code>concurrency</code> - максимальное число jobs, одновременно выполняемых одним worker process.</li>
+</ul>
+<p><code>thelper</code> не должен выполнять long-running jobs inline. Он создаёт jobs и отдаёт их на выполнение отдельным <code>thelper-worker</code> процессам. Если <code>workers.enabled = false</code>, <code>thelper-worker</code> exits without claiming queued jobs; existing jobs remain persisted for a later enabled worker or explicit operator action.</p>
+<p>Worker execution defaults are provider-specific. <code>workers.concurrency</code> в top-level config остаётся compatibility/default value для текущего active provider, но effective limits, busy timeout, lease defaults и concurrency policy должны храниться и применяться отдельно для каждого database provider/profile.</p>
+<p>Минимальные MVP defaults:</p>
+<ul>
+<li><code>sqlite</code>: one active worker process, <code>concurrency = 1</code>, <code>journal_mode = WAL</code>, <code>foreign_keys = ON</code>, <code>busy_timeout = 5s</code>;</li>
+<li><code>postgresql</code>: multiple worker processes allowed, concurrency is installation-specific and can be increased after load testing.</li>
+</ul>
+<p><code>thelper-worker</code> enforces the SQLite process limit with a local worker lock file under <code>.artifacts/runtime</code> by default. The lock is keyed by the active database fingerprint and is released on normal worker shutdown; stale locks left by dead processes are replaced.</p>
+<p>Изменение worker settings для одного provider/profile не должно менять settings другого provider/profile. Например, настройка PostgreSQL concurrency перед миграцией не должна менять SQLite local-mode concurrency.</p>
+<h3 id="scanning"><code>scanning</code></h3>
+<p>Описывает глобальные настройки сканирования. Настройки project-level scan и security/validation scan хранятся относительно отдельного проекта и не должны задаваться глобальными default-параметрами в <code>config.json</code>.</p>
+<ul>
+<li><code>global_scan</code> - список корневых путей для глобального сканирования;</li>
+<li><code>global_scan[].root_path</code> - абсолютный корневой путь, который обходит <code>global-scanner</code>;</li>
+<li><code>global_scan[].schedule</code> - включает запуск по расписанию для конкретного пути;</li>
+<li><code>global_scan[].frequency</code> - <code>daily</code>, <code>weekly</code> или <code>monthly</code>;</li>
+<li><code>security_scan.modules</code> - список доступных security/validation модулей и policy engines, которые можно подключать в настройках отдельного проекта. MVP example включает только обязательный <code>trivy</code>; <code>gitleaks</code>, <code>checkov</code>, <code>opa</code> и <code>conftest</code> являются extension modules outside mandatory MVP acceptance.</li>
+<li><code>scanning.toolchain.version_policy</code> - политика допуска внешних CLI tool versions: <code>certified_only</code>, <code>compatible_range</code> или <code>latest_best_effort</code>;</li>
+<li><code>scanning.toolchain.profile_paths</code> - optional локальные directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.</li>
+</ul>
+<p><code>global_scan</code> является каноническим именем поля входной конфигурации. Внутри storage эти записи мапятся на сущность <code>root_paths</code>.</p>
+<p>Для scan и clone используется один и тот же materialized список <code>root_paths</code>. При clone пользователь выбирает существующий root path, импортированный из <code>global_scan[].root_path</code> или созданный через API, либо создаёт новый root path. Если clone выполняется в новый root path, он сохраняется как новый <code>root_path</code> с <code>source = api</code>; <code>scanning.global_scan</code> как внешний config source не переписывается repository-manager'ом.</p>
+<h3 id="repositories"><code>repositories</code></h3>
+<p>Секция содержит default-параметры repository operations и не задаёт отдельный <code>repo_root</code>.</p>
+<ul>
+<li><code>default_auth_type</code> - default transport/auth hint для clone/pull/sync, не credential source;</li>
+<li><code>poll_interval_default</code> - интервал polling sync по умолчанию;</li>
+<li><code>auto_sync_default</code> - auto sync по умолчанию для новых repository cards.</li>
+</ul>
+<p>Provider hosts and repository credentials are managed through <code>repository_provider_instances</code> and <code>repository_credentials</code>, not through <code>config.json</code>. Credential secret values must be referenced through <code>secretref://...</code> and are resolved by workers at use time.</p>
+<h3 id="modules"><code>modules</code></h3>
+<p>Секция содержит список зарегистрированных runtime-модулей, которые должны быть активны в текущей установке.</p>
+<p>Initial module registry создаётся seed step на foundation stages и содержит:</p>
+<ul>
+<li><code>core</code></li>
+<li><code>worker-runtime</code></li>
+<li><code>config-manager</code></li>
+<li><code>module-runtime</code></li>
+<li><code>status-monitor</code></li>
+<li><code>global-scanner</code></li>
+<li><code>repository-manager</code></li>
+<li><code>project-scanner</code></li>
+<li><code>security-validator</code></li>
+<li><code>auth</code></li>
+<li><code>web</code></li>
+</ul>
+<p><code>modules.enabled</code> может ссылаться только на registered modules. Unknown module name должен приводить к <code>validation_error</code> без частичного применения конфигурации.</p>
+<p>Модуль может быть зарегистрирован до полной реализации. В таком случае <code>GET /api/modules</code> возвращает его с состоянием <code>unavailable</code>, а <code>restart</code>/<code>reload</code> возвращает controlled error вместо <code>404</code> или panic.</p>
+<h2 id="t-helperignore"><code>.t-helper.ignore</code></h2>
+<p>Правила применяются относительно <code>root_path</code>.</p>
+<pre><code class="language-gitignore">.terraform/
+**/.git/
+**/node_modules/
+**/.cache/</code></pre>
+<p>MVP matcher может быть exclude-only. Правила вида <code>!pattern</code> должны импортироваться и храниться без потери данных, но применяются только после реализации full <code>.gitignore</code> semantics.</p>
+<h2 id="reloadability">Reloadability</h2>
+<p>Reloadable без полного рестарта:</p>
+<ul>
+<li><code>scanning.global_scan</code>, применяется к новым global scan jobs</li>
+<li><code>scanning.security_scan.modules</code>, применяется к новым project security/validation jobs</li>
+<li><code>repositories.default_auth_type</code></li>
+<li><code>repositories.poll_interval_default</code></li>
+<li><code>repositories.auto_sync_default</code></li>
+<li><code>security.active_rule_set_id</code></li>
+<li><code>logging.level</code></li>
+<li><code>logging.format</code></li>
+<li><code>logging.log_path</code>, если backend логирования поддерживает reopen без restart</li>
+<li><code>modules.enabled</code>, если модуль поддерживает graceful start/stop</li>
+</ul>
+<p>Требуют restart отдельного модуля:</p>
+<ul>
+<li><code>api.listen_address</code></li>
+<li><code>auth.local_enabled</code></li>
+<li><code>workers.enabled</code></li>
+<li><code>workers.concurrency</code></li>
+<li>параметры provider-specific auth adapters</li>
+<li><code>system_settings.mode</code></li>
+</ul>
+<p>Не применяются через reload/restart:</p>
+<ul>
+<li><code>database.database_type</code></li>
+<li><code>database.database_path</code></li>
+<li><code>external_databases.*</code></li>
+</ul>
+<p>Эти keys обновляют только storage profile metadata для initial bootstrap или <code>migration</code> slot. Переключение active database выполняется только через <code>thelper-ctl -migrate-db</code>.</p>
+<p><code>thelper-ctl -reload</code> должен явно вернуть список принятых reloadable параметров, список фактически применённых в Stage 02 параметров и список параметров, требующих <code>thelper-ctl -restart &lt;module&gt;</code> или полного service restart. Reloadable key не должен попадать в <code>applied_keys</code>, если текущий runtime ещё не реализует его применение без restart. Explicit unknown reload keys возвращаются в <code>failed_keys</code> и не должны молчаливо считаться применёнными.</p>
+<h2 id="валидация">Валидация</h2>
+<p><code>thelper-ctl -reconfigure</code> и <code>PUT /api/config</code> используют строгий schema contract:</p>
+<ul>
+<li>unknown top-level или nested keys должны возвращать <code>validation_error</code>;</li>
+<li>malformed JSON, trailing payload после первого JSON object и <code>null</code> вместо config object должны возвращать <code>validation_error</code>;</li>
+<li>deprecated/legacy aliases не принимаются;</li>
+<li><code>scanning.global_scan</code> является единственным допустимым ключом для global scan roots;</li>
+<li><code>scanning.global_scann</code>, <code>globalScan</code>, <code>global_scan_roots</code>, <code>scan_roots</code> и любые другие aliases должны отклоняться как unknown keys;</li>
+<li>validation errors не должны частично изменять <code>config_entries</code>, <code>ignore_rules</code> или runtime state;</li>
+<li><code>PUT /api/config</code> не принимает <code>.t-helper.ignore</code> payload и поэтому не удаляет ранее imported system <code>ignore_rules</code>; очистка rules выполняется через существующий empty <code>.t-helper.ignore</code> при <code>thelper-ctl -reconfigure</code> или через Stage 04 ignore-rules API.</li>
+</ul>
+<p>Минимальные правила:</p>
+<ul>
+<li><code>system_settings.app_name</code> не должен быть пустым;</li>
+<li><code>system_settings.mode</code> принимает <code>server</code> или <code>local</code>;</li>
+<li><code>database.database_type</code> принимает <code>sqlite</code>;</li>
+<li><code>database.database_path</code> должен быть нормализованным путём;</li>
+<li>если <code>external_databases.enabled = true</code>, <code>provider</code>, <code>host</code>, <code>port</code>, <code>username</code>, <code>password</code> и <code>database_name</code> обязательны;</li>
+<li><code>external_databases.provider</code> принимает <code>postgresql</code>, <code>mysql</code> или <code>mssql</code>;</li>
+<li><code>external_databases.engine_flavor</code>, если задан, принимает <code>standard</code> или <code>aurora</code>;</li>
+<li><code>external_databases.port</code> должен быть положительным TCP-портом;</li>
+<li><code>secretref://env/...</code> в MVP означает ссылку на переменную окружения, а не literal-значение для сохранения в БД;</li>
+<li><code>scanning.global_scan[].root_path</code> должен быть абсолютным нормализованным путём;</li>
+<li><code>scanning.global_scan[].schedule</code> должен быть boolean;</li>
+<li><code>scanning.global_scan[].frequency</code> принимает <code>daily</code>, <code>weekly</code> или <code>monthly</code>;</li>
+<li><code>scanning.security_scan.modules</code> должен содержать непустые уникальные имена модулей;</li>
+<li><code>scanning.toolchain.version_policy</code> принимает <code>certified_only</code>, <code>compatible_range</code> или <code>latest_best_effort</code>; default MVP value is <code>certified_only</code>;</li>
+<li><code>scanning.toolchain.profile_paths[]</code> должен содержать абсолютные нормализованные локальные paths, если задан;</li>
+<li><code>repositories.default_auth_type</code> принимает <code>ssh</code>, <code>https</code> или <code>token</code> and is not a credential source;</li>
+<li><code>repositories.poll_interval_default</code> должен быть положительным duration;</li>
+<li><code>workers.enabled</code> должен быть boolean;</li>
+<li><code>workers.concurrency</code> должен быть положительным integer;</li>
+<li>для <code>sqlite</code> effective <code>workers.concurrency</code> должен быть <code>1</code>, а попытка применить большее значение к active SQLite profile должна возвращать <code>sqlite_worker_concurrency_unsupported</code>;</li>
+<li><code>modules.enabled</code> должен содержать только имена из initial module registry или из явно зарегистрированных extension modules;</li>
+<li><code>api.listen_address</code> должен быть валидным host:port;</li>
+<li><code>logging.level</code> принимает <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>;</li>
+<li><code>logging.format</code> принимает <code>json</code> или <code>text</code>;</li>
+<li><code>logging.log_path</code> должен быть нормализованным путём к каталогу;</li>
+<li>sensitive keys должны использовать <code>secretref://env/...</code>; literal values для sensitive keys должны возвращать <code>validation_error</code>;</li>
+<li>секреты и tokens не должны сохраняться в открытом виде в <code>config_entries.value</code>.</li>
+</ul>
+<p>Ошибочная конфигурация не должна частично применяться: импорт и reload выполняются атомарно относительно одного набора изменений.</p>
+<p>Sensitive keys:</p>
+<ul>
+<li><code>external_databases.username</code></li>
+<li><code>external_databases.password</code></li>
+<li>provider tokens и Git HTTPS tokens</li>
+<li>webhook secrets</li>
+<li>auth provider client secrets</li>
+<li>private keys или passphrases</li>
+</ul>
+<p><code>config_entries.value</code> хранит secret reference, а не resolved secret. Resolved secrets не должны попадать в <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events.payload</code>, <code>workflow_statuses.summary_payload</code>, <code>audit_log.payload</code> или logs.</p>
+<h2 id="masked-config-output">Masked config output</h2>
+<p><code>GET /api/config</code> возвращает активную runtime-конфигурацию с masked sensitive values.</p>
+<p>API response не должен раскрывать resolved secret values. <code>secretref://env/NAME</code> не является raw secret, но имя переменной окружения может раскрывать детали инфраструктуры, поэтому output mode зависит от permissions:</p>
+<ul>
+<li><code>system_admin</code> и субъекты с <code>system.config.read</code> могут видеть full secret reference, например <code>secretref://env/THELPER_POSTGRES_PASSWORD</code>, но никогда resolved value;</li>
+<li><code>viewer</code>, object-scoped readers и ответы, разрешённые только через <code>system.runtime.read</code>, получают masked metadata без имени переменной;</li>
+<li>audit, job payloads, job results, workflow payloads and logs never contain resolved values and should prefer masked metadata over full refs unless the event is explicitly administrative.</li>
+</ul>
+<p>Допустимая masked форма:</p>
+<pre><code class="language-json">{
+  &quot;masked&quot;: true,
+  &quot;ref_type&quot;: &quot;env&quot;
+}</code></pre>
+<p>Raw <code>secretref://env/...</code> может храниться в <code>config_entries.value</code>, но API output должен избегать раскрытия resolved secret и не должен показывать literal secret values.</p>
+<h2 id="storage-migration-command">Storage migration command</h2>
+<p><code>thelper-ctl -migrate-db</code> выполняет controlled migration с <code>current</code> profile на <code>migration</code> profile.</p>
+<p>Минимальный Stage 02 contract:</p>
+<ul>
+<li>проверить доступность migration DB, provider, credentials и permissions;</li>
+<li>применить schema migrations к migration DB;</li>
+<li>перенести Stage 02-owned runtime data: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, <code>ignore_rules</code> and system migration metadata;</li>
+<li>не переносить active transient locks как active state;</li>
+<li>проверить logical migration version, FK integrity и базовые counts/checksums;</li>
+<li>актуализировать profile statuses: migration становится <code>current</code>, предыдущий current сохраняется как historical/rollback candidate;</li>
+<li>поддерживать последующие migration target после successful switch без перезаписи active <code>current</code> profile;</li>
+<li>не удалять старую БД автоматически;</li>
+<li>требовать restart runtime после successful switch.</li>
+</ul>
+<p>Если migration не завершилась успешно, active <code>current</code> profile не меняется.</p>
+<p>Later stages must extend this same migration contract when they introduce their own persistent tables. For example, Stage 03 extends it for jobs/workflows, Stage 06 for findings/rule sets and Stage 07 for auth/RBAC/audit, including audit event <code>storage.migration_completed</code> once audit storage exists.</p>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="stage-00-delivery-contract.html"><span>Core Docs</span>Stage 00 Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html"><span>Implementation Specs</span>Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html"><span>Implementation Specs</span>Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html" aria-current="page">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../configuration.html">Русская страница</a>
+      <a href="configuration.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/configuration.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

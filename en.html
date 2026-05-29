@@ -47,7 +47,7 @@
             </p>
             <div class="hero-actions" aria-label="Primary actions">
               <a class="button primary" href="https://github.com/artBass-rip/t-helper/blob/master/README.md">README</a>
-              <a class="button secondary" href="architecture.html">Architecture</a>
+              <a class="button secondary" href="en/architecture.html">Architecture</a>
             </div>
           </div>
 
@@ -83,11 +83,12 @@
       <section class="section status-section" id="status" aria-labelledby="status-title">
         <div class="section-heading" data-reveal>
           <p class="eyebrow">Current baseline</p>
-          <h2 id="status-title">Stage 04: scanner and registry MVP</h2>
+          <h2 id="status-title">Stage 05: repository manager MVP</h2>
           <p>
             The backend foundation is implemented: service entrypoints, storage
             adapters, migrations, runtime config, module lifecycle,
-            jobs/workers/status, global scanning and scanner/registry HTTP API.
+            jobs/workers/status, global scanning, scanner/registry HTTP API
+            and repository clone/pull/sync workflows.
           </p>
         </div>
 
@@ -109,8 +110,8 @@
           </article>
           <article>
             <span>04</span>
-            <h3>Jobs</h3>
-            <p>Background queue with leases, heartbeat, retry/backoff and status read models.</p>
+            <h3>Repositories</h3>
+            <p>Provider profiles, masked credentials, clone/pull/sync jobs and path safety.</p>
           </article>
         </div>
       </section>
@@ -154,11 +155,11 @@
         <ol class="roadmap" data-reveal>
           <li>
             <span>Stage 05</span>
-            Repository manager MVP: clone, pull, sync, credentials and path safety.
+            Completed: repository manager MVP with generic Git plus GitHub, credentials and operation serialization.
           </li>
           <li>
-            <span>Stage 06</span>
-            Project scanner and security validator on local toolchain profiles.
+            <span>Stage 06A/06B</span>
+            External toolchain profiles, project scanner and security validator on local CLI tools.
           </li>
           <li>
             <span>Stage 07-08</span>
@@ -177,69 +178,66 @@
           <h2 id="docs-title">Canonical materials</h2>
         </div>
         <div class="doc-links" data-reveal>
-          <a href="requirements.html">
+          <a href="en/requirements.html">
             <span>Requirements</span>
             Functional and non-functional requirements.
           </a>
-          <a href="api.html">
+          <a href="en/api.html">
             <span>HTTP API</span>
             Endpoint contracts and response schemas.
           </a>
-          <a href="configuration.html">
+          <a href="en/configuration.html">
             <span>Configuration</span>
             <code>config.json</code>, <code>.t-helper.ignore</code>, reloadability and validation.
           </a>
-          <a href="architecture.html">
+          <a href="en/architecture.html">
             <span>Architecture</span>
             Modules, runtime flow, storage strategy and deployment modes.
           </a>
-          <a href="interfaces.html">
+          <a href="en/interfaces.html">
             <span>Interfaces</span>
             CLI, backend API, configuration and frontend contracts.
           </a>
-          <a href="data-model.html">
+          <a href="en/data-model.html">
             <span>Data model</span>
             Persistent entities, migrations, indexes and invariants.
           </a>
-          <a href="payload-schemas.html">
+          <a href="en/payload-schemas.html">
             <span>Payload schemas</span>
             Versioned JSON schemas for jobs and module state.
           </a>
-          <a href="development.html">
+          <a href="en/development.html">
             <span>Development</span>
             Local development and test contract.
           </a>
-<<<<<<< Updated upstream
-=======
-          <a href="access-control.html">
+          <a href="en/access-control.html">
             <span>Access control</span>
             Auth, SCIM, RBAC, permissions and audit scope.
           </a>
-          <a href="roadmap.html">
+          <a href="en/roadmap.html">
             <span>Roadmap</span>
             Stages, acceptance criteria and delivery decisions.
           </a>
-          <a href="test-plan.html">
+          <a href="en/test-plan.html">
             <span>Test plan</span>
             Coverage map for API, storage, runtime and UI contracts.
           </a>
-          <a href="traceability.html">
+          <a href="en/traceability.html">
             <span>Traceability</span>
             Requirement links to API, data model, permissions and tests.
           </a>
-          <a href="implementation-specs/README.html">
+          <a href="en/implementation-specs/README.html">
             <span>Implementation specs</span>
             Stage-by-stage delivery contracts and DoD.
           </a>
-          <a href="adr/0001-go-backend-http-stack.html">
+          <a href="en/adr/0001-go-backend-http-stack.html">
             <span>ADR</span>
             Architecture decisions for backend, storage, jobs and runtime.
           </a>
-          <a href="code-optimization.html">
+          <a href="en/code-optimization.html">
             <span>Optimization</span>
             Completed optimizations, quality gate and remaining backlog.
           </a>
->>>>>>> Stashed changes
         </div>
       </section>
     </main>

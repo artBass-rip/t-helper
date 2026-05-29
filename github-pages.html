@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="GitHub Pages - T-Helper documentation.">
     <title>GitHub Pages - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="github-pages.html">
+    <link rel="alternate" hreflang="en" href="en/github-pages.html">
     <link rel="stylesheet" href="pages.css">
   </head>
   <body class="doc-page">
@@ -23,7 +25,9 @@
         <a href="api.html">API</a>
       </nav>
       <div class="lang-switch doc-source">
-        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/github-pages.md">.md</a>
+        <a class="is-active" href="github-pages.html" aria-current="page">RU</a>
+        <a class="" href="en/github-pages.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/github-pages.md">.md</a>
       </div>
     </header>
 
@@ -58,19 +62,20 @@
 <ul>
 <li><code>docs/index.html</code> - Russian landing page and default GitHub Pages entrypoint.</li>
 <li><code>docs/en.html</code> - English landing page.</li>
+<li>generated <code>*.html</code> documentation pages in the artifact root - Russian documentation shell.</li>
+<li>generated <code>en/**/*.html</code> documentation pages - English documentation shell.</li>
 <li><code>docs/pages.css</code> - shared responsive styles.</li>
 <li><code>docs/pages.js</code> - shared reveal and hero interaction behavior.</li>
 <li><code>docs/.nojekyll</code> - disables Jekyll processing for the Pages artifact.</li>
 <li><code>.github/workflows/pages.yml</code> - GitHub Actions deployment workflow.</li>
 </ul>
-<p>The language switcher uses plain static links:</p>
+<p>The landing language switcher uses plain static links:</p>
 <ul>
 <li>Russian to English: <code>en.html</code>;</li>
 <li>English to Russian: <code>index.html</code>.</li>
 </ul>
-<p>This keeps the published site usable even when JavaScript is unavailable.</p>
-<p>&lt;&lt;&lt;&lt;&lt;&lt;&lt; Updated upstream ======= Markdown documents under <code>docs/**/*.md</code> are the canonical sources. During publication, <code>docs/build-pages.js</code> generates sibling <code>*.html</code> pages for every Markdown file, rewrites internal Markdown links to the generated HTML pages and links inline document references such as <a href="api.html"><code>docs/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw <code>.md</code> sources remain available from each generated document page.</p>
-<blockquote><p>&gt;&gt;&gt;&gt;&gt;&gt; Stashed changes</p></blockquote>
+<p>Generated document pages also include a static RU/EN switcher for the same document path. This keeps the published site usable even when JavaScript is unavailable.</p>
+<p>Markdown documents under <code>docs/**/*.md</code> are the canonical sources. During publication, <code>docs/build-pages.js</code> generates Russian and English HTML shells for every Markdown file, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw <code>.md</code> sources remain available from each generated document page.</p>
 <h2 id="deployment">Deployment</h2>
 <p>The <code>github-pages</code> workflow publishes the <code>docs</code> directory to the <code>gh-pages</code> branch on pushes to <code>master</code> and on manual <code>workflow_dispatch</code> runs.</p>
 <p>Repository settings must use:</p>
@@ -89,14 +94,8 @@
 <li>Keep Russian and English content aligned when updating page copy.</li>
 <li>Keep the AI-only implementation notice visible before the hero content in both language variants.</li>
 <li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
-</ul>
-<p>&lt;&lt;&lt;&lt;&lt;&lt;&lt; Updated upstream =======</p>
-<ul>
 <li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
 <li>Keep cross-document references as relative Markdown links or inline <code>docs/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>
-</ul>
-<blockquote><p>&gt;&gt;&gt;&gt;&gt;&gt; Stashed changes</p></blockquote>
-<ul>
 <li>Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI contracts remain in <a href="frontend-ui-contract.html"><code>docs/frontend-ui-contract.md</code></a>.</li>
 </ul>
         </article>
@@ -192,8 +191,8 @@
 
     <footer class="site-footer doc-footer">
       <span>T-Helper</span>
-      <a href="index.html">Русская страница</a>
-      <a href="en.html">English page</a>
+      <a href="github-pages.html">Русская страница</a>
+      <a href="en/github-pages.html">English page</a>
       <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/github-pages.md">Исходный Markdown</a>
     </footer>
 

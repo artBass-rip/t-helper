@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Development setup - T-Helper documentation.">
     <title>Development setup - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="development.html">
+    <link rel="alternate" hreflang="en" href="en/development.html">
     <link rel="stylesheet" href="pages.css">
   </head>
   <body class="doc-page">
@@ -23,7 +25,9 @@
         <a href="api.html">API</a>
       </nav>
       <div class="lang-switch doc-source">
-        <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">.md</a>
+        <a class="is-active" href="development.html" aria-current="page">RU</a>
+        <a class="" href="en/development.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">.md</a>
       </div>
     </header>
 
@@ -163,14 +167,8 @@
 <li><code>docs/index.html</code> is the default Russian GitHub Pages entrypoint.</li>
 <li><code>docs/en.html</code> is the English language variant.</li>
 <li>Both pages share <code>docs/pages.css</code> and <code>docs/pages.js</code>.</li>
-</ul>
-<p>&lt;&lt;&lt;&lt;&lt;&lt;&lt; Updated upstream =======</p>
-<ul>
-<li><code>docs/build-pages.js</code> renders every <code>docs/**/*.md</code> file to a styled dependency-free HTML page for the published artifact and rewrites internal Markdown links to generated HTML links.</li>
+<li><code>docs/build-pages.js</code> renders every <code>docs/**/*.md</code> file to styled dependency-free Russian and English HTML pages for the published artifact and rewrites internal Markdown links to generated same-language HTML links.</li>
 <li>Generated document pages share the same navigation shell, local table of contents, related-document links, backlinks and full documentation catalog.</li>
-</ul>
-<blockquote><p>&gt;&gt;&gt;&gt;&gt;&gt; Stashed changes</p></blockquote>
-<ul>
 <li><code>.github/workflows/pages.yml</code> publishes the <code>docs</code> directory through GitHub Actions to the <code>gh-pages</code> branch.</li>
 <li>Repository Pages settings must use source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
 <li>The Pages landing page is documentation/presentation only and is separate from the Stage 08 React/Tauri frontend deliverable.</li>
@@ -297,8 +295,8 @@
 
     <footer class="site-footer doc-footer">
       <span>T-Helper</span>
-      <a href="index.html">Русская страница</a>
-      <a href="en.html">English page</a>
+      <a href="development.html">Русская страница</a>
+      <a href="en/development.html">English page</a>
       <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">Исходный Markdown</a>
     </footer>
 

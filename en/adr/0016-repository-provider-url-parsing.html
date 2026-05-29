@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0016: Repository provider URL parsing - T-Helper documentation.">
+    <title>ADR 0016: Repository provider URL parsing - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../../adr/0016-repository-provider-url-parsing.html">
+    <link rel="alternate" hreflang="en" href="0016-repository-provider-url-parsing.html">
+    <link rel="stylesheet" href="../../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../../en.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../../en.html#docs">Docs</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../../adr/0016-repository-provider-url-parsing.html">RU</a>
+        <a class="is-active" href="0016-repository-provider-url-parsing.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0016-repository-provider-url-parsing.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../../en.html">T-Helper Docs</a>
+        <span>adr/0016-repository-provider-url-parsing.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0016-repository-provider-url-parsing">ADR 0016: Repository provider URL parsing</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#common-rules">Common rules</a>
+<a class="toc-level-2" href="#provider-specific-rules">Provider-specific rules</a>
+<a class="toc-level-3" href="#gitlab">GitLab</a>
+<a class="toc-level-3" href="#github">GitHub</a>
+<a class="toc-level-3" href="#bitbucket">Bitbucket</a>
+<a class="toc-level-3" href="#azure-devops">Azure DevOps</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="adr-0016-repository-provider-url-parsing">ADR 0016: Repository provider URL parsing</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Repository provider adapters must parse user-supplied repository URLs into canonical identity fields:</p>
+<pre><code class="language-text">provider
+provider_host
+full_path
+protocol
+clone_url</code></pre>
+<p>Canonical repository identity remains <code>provider + provider_host + full_path</code> from ADR 0013. URL parsing must produce identical identity fields for equivalent HTTPS, SSH URL and SSH scp-like inputs.</p>
+<h2 id="common-rules">Common rules</h2>
+<p>Supported input shapes:</p>
+<pre><code class="language-text">https://host/group/repo.git
+ssh://git@host/group/repo.git
+git@host:group/repo.git
+host/group/repo</code></pre>
+<p>Normalization rules:</p>
+<ul>
+<li><code>provider_host</code> is lower-case;</li>
+<li><code>provider_host</code> includes a non-default port when required to distinguish provider instances;</li>
+<li>protocol, username, password, token, query and fragment are removed from identity fields;</li>
+<li><code>full_path</code> has no leading slash and no trailing <code>.git</code>;</li>
+<li>path separator is <code>/</code>;</li>
+<li>empty path segments are rejected;</li>
+<li><code>.</code> and <code>..</code> path segments are rejected;</li>
+<li>backslash path separators are rejected;</li>
+<li>control characters are rejected;</li>
+<li>URL userinfo is rejected for persistence and must not appear in <code>clone_url</code>;</li>
+<li>safe-normalized <code>clone_url</code> is optional transport metadata and not identity.</li>
+</ul>
+<p>Machine-readable validation error codes:</p>
+<pre><code class="language-text">provider_host_required
+unsupported_provider_url
+unsupported_url_protocol
+invalid_repository_path
+invalid_provider_host
+credential_userinfo_not_allowed
+provider_path_shape_mismatch</code></pre>
+<h2 id="provider-specific-rules">Provider-specific rules</h2>
+<h3 id="gitlab">GitLab</h3>
+<p>GitLab repository <code>full_path</code> supports nested groups:</p>
+<pre><code class="language-text">group/subgroup/project</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://gitlab.example.com/group/repo.git
+https://gitlab.example.com/group/subgroup/repo
+ssh://git@gitlab.example.com/group/subgroup/repo.git
+git@gitlab.example.com:group/subgroup/repo.git</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = gitlab
+provider_host = gitlab.example.com
+full_path = group/subgroup/repo</code></pre>
+<p>GitLab recursive group clone uses <code>group_path</code>, normalized with the same path rules, but <code>group_path</code> does not require a repository leaf and must not end with <code>.git</code>.</p>
+<h3 id="github">GitHub</h3>
+<p>GitHub and GitHub Enterprise Server repository <code>full_path</code> must have exactly two path segments:</p>
+<pre><code class="language-text">owner/repo</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://github.com/org/repo.git
+ssh://git@github.com/org/repo.git
+git@github.com:org/repo.git
+https://ghe.company.internal/org/repo</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = github
+provider_host = github.com or ghe.company.internal
+full_path = org/repo</code></pre>
+<p>More than two path segments are rejected with <code>provider_path_shape_mismatch</code>.</p>
+<h3 id="bitbucket">Bitbucket</h3>
+<p>Bitbucket Cloud repository <code>full_path</code> must have exactly two path segments:</p>
+<pre><code class="language-text">workspace/repo_slug</code></pre>
+<p>Bitbucket Data Center accepts these input shapes and normalizes all of them to <code>PROJECT_KEY/repo_slug</code>:</p>
+<pre><code class="language-text">https://bitbucket.company.local/scm/PROJ/repo.git
+ssh://git@bitbucket.company.local/PROJ/repo.git
+ssh://git@bitbucket.company.local:7999/PROJ/repo.git
+https://bitbucket.company.local/projects/PROJ/repos/repo</code></pre>
+<p>Data Center project keys are normalized to uppercase. Repository slug casing is preserved unless the provider adapter has provider-specific evidence that lower-casing is required.</p>
+<h3 id="azure-devops">Azure DevOps</h3>
+<p>Azure DevOps canonical identity treats organization as part of <code>provider_host</code> and project/repository as <code>full_path</code>:</p>
+<pre><code class="language-text">provider_host = dev.azure.com/{organization}
+full_path = {project}/{repo}</code></pre>
+<p>Accepted examples:</p>
+<pre><code class="language-text">https://dev.azure.com/org/project/_git/repo
+https://org@dev.azure.com/org/project/_git/repo
+https://ssh.dev.azure.com/v3/org/project/repo
+git@ssh.dev.azure.com:v3/org/project/repo</code></pre>
+<p>Canonical result:</p>
+<pre><code class="language-text">provider = azure_devops
+provider_host = dev.azure.com/org
+full_path = project/repo</code></pre>
+<p><code>ssh.dev.azure.com</code> input is normalized to the same provider host form <code>dev.azure.com/{organization}</code>.</p>
+<h2 id="rationale">Rationale</h2>
+<p>Repository identity depends on stable parsing. Without explicit provider rules, equivalent clone URLs can create duplicate repository cards or route operations to the wrong provider host.</p>
+<p>GitLab, GitHub, Bitbucket and Azure DevOps use different path shapes. Provider adapters need strict, testable parsing behavior before their implementation stage. Stage 05 MVP implements only <code>generic</code> Git plus one managed provider from <code>gitlab</code>/<code>github</code>; the remaining provider rules are still canonical for Stage 05A/platform extensions.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 05 provider adapters must implement the parsing rules for the providers included in Stage 05 MVP.</li>
+<li>Stage 05A/platform provider adapters must implement these rules before enabling <code>bitbucket</code>, <code>azure_devops</code> or the second managed provider from <code>gitlab</code>/<code>github</code>.</li>
+<li>Stage 05 no longer has a blocker for provider-specific URL parsing edge cases for its MVP provider set.</li>
+<li>API validation must return machine-readable error codes for unsupported or ambiguous URLs.</li>
+<li>Test fixtures must include positive and negative URL parsing cases for each provider.</li>
+<li><code>clone_url</code> remains safe-normalized transport metadata and must not include userinfo or secrets.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="../implementation-specs/README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+<a href="../implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="../implementation-specs/stage-14-repository-webhook-sync.html"><span>Implementation Specs</span>Stage 14: Repository Webhook Sync</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="../implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="../implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="../implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="../implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="../implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="../implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="../implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="../implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="../implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="../implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="../implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="../implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="../implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="../implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="../implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="../implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="../implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="../implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="0016-repository-provider-url-parsing.html" aria-current="page">ADR 0016: Repository provider URL parsing</a>
+<a href="0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../../adr/0016-repository-provider-url-parsing.html">Русская страница</a>
+      <a href="0016-repository-provider-url-parsing.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/adr/0016-repository-provider-url-parsing.md">Source Markdown</a>
+    </footer>
+
+    <script src="../../pages.js"></script>
+  </body>
+</html>

@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Backend API Contracts - T-Helper documentation.">
+    <title>Backend API Contracts - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../api.html">
+    <link rel="alternate" hreflang="en" href="api.html">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../api.html">RU</a>
+        <a class="is-active" href="api.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/api.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>api.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#backend-api-contracts">Backend API Contracts</a>
+<a class="toc-level-2" href="#текущий-executable-baseline">Текущий executable baseline</a>
+<a class="toc-level-2" href="#общие-правила">Общие правила</a>
+<a class="toc-level-2" href="#общие-response-schemas">Общие response schemas</a>
+<a class="toc-level-3" href="#jobref">job_ref</a>
+<a class="toc-level-3" href="#projectscanref">project_scan_ref</a>
+<a class="toc-level-3" href="#apierror">api_error</a>
+<a class="toc-level-3" href="#listresponse">list_response</a>
+<a class="toc-level-3" href="#runtimestatus">runtime_status</a>
+<a class="toc-level-3" href="#jobstatus">job_status</a>
+<a class="toc-level-3" href="#workerstatus">worker_status</a>
+<a class="toc-level-3" href="#healthstatus">health_status</a>
+<a class="toc-level-3" href="#authsession">auth_session</a>
+<a class="toc-level-2" href="#endpoint-skeleton">Endpoint skeleton</a>
+<a class="toc-level-2" href="#repository-operation-conflicts">Repository operation conflicts</a>
+<a class="toc-level-2" href="#schema-sources">Schema sources</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="backend-api-contracts">Backend API Contracts</h1>
+<p>Документ фиксирует текущий executable HTTP API baseline и целевые API contracts для следующих roadmap stages. Канонический список capability-level interfaces остаётся в <a href="interfaces.html"><code>interfaces.md</code></a>, а правила авторизации - в <a href="access-control.html"><code>access-control.md</code></a>.</p>
+<h2 id="текущий-executable-baseline">Текущий executable baseline</h2>
+<p>Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В текущем runtime реализованы:</p>
+<ul>
+<li><code>GET /api/health</code>;</li>
+<li><code>GET /api/config</code>, <code>PUT /api/config</code>;</li>
+<li><code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>;</li>
+<li><code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>;</li>
+<li><code>GET /api/status</code>, <code>GET /api/status/workflows</code>, <code>GET /api/status/workflows/{job_group_id}</code>, <code>GET /api/status/jobs/{job_id}</code>, <code>GET /api/status/workers</code>;</li>
+<li><code>GET /api/root-paths</code>, <code>PUT /api/root-paths</code>;</li>
+<li><code>POST /api/scans</code>, <code>GET /api/scans/{job_id}</code>;</li>
+<li><code>GET /api/projects</code>, <code>GET /api/projects/{id}</code>, <code>GET /api/projects/{id}/links</code>;</li>
+<li><code>POST /api/project-scans</code> only as the Stage 04 lifecycle guard for future Stage 06 scans;</li>
+<li><code>GET /api/repos</code>, <code>GET /api/repos/{id}</code>;</li>
+<li><code>GET /api/repo-provider-instances</code>, <code>PUT /api/repo-provider-instances</code>;</li>
+<li><code>GET /api/repo-credentials</code>, <code>PUT /api/repo-credentials</code>;</li>
+<li><code>POST /api/repos/clone</code>, <code>POST /api/repos/pull</code>, <code>POST /api/repos/sync</code>;</li>
+<li><code>GET /api/ignore-rules</code>, <code>PUT /api/ignore-rules</code>;</li>
+<li><code>GET /api/environments</code>, <code>GET /api/environments/{id}</code>;</li>
+<li><code>GET /api/workspaces</code>, <code>GET /api/workspaces/{id}</code>.</li>
+</ul>
+<p>Executable route registration is type-safe: every handler implements <code>httpapi.RouteRegistrar</code>, and the current route surface is covered by <code>internal/httpapi/router_test.go</code>. API changes must update this document and the route smoke-test in the same change.</p>
+<p>The endpoint table below also includes accepted future-stage contracts. Rows whose Notes column identifies a later stage are specification targets, not current runtime routes, unless the Notes column explicitly says that the current baseline exposes a guard or compatibility endpoint.</p>
+<h2 id="общие-правила">Общие правила</h2>
+<ul>
+<li>Base path: <code>/api</code></li>
+<li>Формат тела запроса и ответа: JSON.</li>
+<li>Идентификаторы в URL opaque для API consumers.</li>
+<li>Время возвращается в UTC в RFC 3339 format.</li>
+<li>Write endpoints, которые запускают фоновые операции, возвращают <code>202 Accepted</code> и <code>job_id</code>.</li>
+<li>Write endpoints, которые меняют справочники или конфигурацию без фоновой операции, возвращают обновлённую сущность или <code>204 No Content</code>.</li>
+<li>Stage 02 synchronous module lifecycle endpoints are explicit exceptions: <code>POST /api/modules/reload</code> and <code>POST /api/modules/restart</code> keep returning synchronous result DTOs until an async variant or contract migration is documented.</li>
+<li>Повторяемые write requests должны поддерживать <code>Idempotency-Key</code>, если операция создаёт <code>job</code>. For jobs, idempotency is scoped to <code>(actor, job_type, Idempotency-Key)</code> rather than global across all job-producing endpoints.</li>
+<li>Confirmed MVP behavior: bulk <code>PUT</code> endpoints are non-destructive idempotent upserts by stable identity or <code>id</code>; omitted records are not deleted unless a future endpoint explicitly documents delete/disable semantics.</li>
+<li>Confirmed MVP behavior: public <code>DELETE</code> endpoints are out of scope; delete permissions are seeded for future lifecycle expansion and do not imply an implemented delete route.</li>
+<li>Confirmed MVP lifecycle behavior: user-facing removal/deactivation is expressed through explicit state fields and non-destructive <code>PUT</code> updates, for example <code>enabled = false</code>, <code>active = false</code>, <code>status = disabled</code>, <code>status = missing</code> or <code>status = superseded</code> depending on entity type. UI/API wording must use disable, deactivate, mark missing or supersede instead of delete unless a future endpoint explicitly defines hard delete semantics.</li>
+<li>List endpoints должны поддерживать <code>limit</code> и <code>cursor</code>; фильтры добавляются по capability.</li>
+<li>Ошибки возвращаются в едином формате <code>api_error</code>.</li>
+</ul>
+<h2 id="общие-response-schemas">Общие response schemas</h2>
+<h3 id="jobref"><code>job_ref</code></h3>
+<pre><code class="language-json">{
+  &quot;job_id&quot;: &quot;job_opaque_id&quot;,
+  &quot;status&quot;: &quot;queued&quot;,
+  &quot;schema_version&quot;: &quot;job_ref.v1&quot;
+}</code></pre>
+<h3 id="projectscanref"><code>project_scan_ref</code></h3>
+<pre><code class="language-json">{
+  &quot;project_scan_id&quot;: &quot;project_scan_opaque_id&quot;,
+  &quot;job_id&quot;: &quot;job_opaque_id&quot;,
+  &quot;job_group_id&quot;: &quot;project_scan:project_scan_opaque_id&quot;,
+  &quot;status&quot;: &quot;queued&quot;,
+  &quot;schema_version&quot;: &quot;project_scan_ref.v1&quot;
+}</code></pre>
+<h3 id="apierror"><code>api_error</code></h3>
+<pre><code class="language-json">{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;validation_error&quot;,
+    &quot;message&quot;: &quot;human-readable message&quot;,
+    &quot;details&quot;: {},
+    &quot;correlation_id&quot;: &quot;request_or_job_correlation_id&quot;
+  }
+}</code></pre>
+<h3 id="listresponse"><code>list_response</code></h3>
+<pre><code class="language-json">{
+  &quot;items&quot;: [],
+  &quot;next_cursor&quot;: null
+}</code></pre>
+<h3 id="runtimestatus"><code>runtime_status</code></h3>
+<p>Stage 03 <code>runtime_status.v1</code> is an aggregate read model from <code>status-monitor</code>. It summarizes <code>jobs</code>, derived worker status and <code>module_states</code>; clients must not reconstruct this aggregate from lower-level tables or endpoints.</p>
+<pre><code class="language-json">{
+  &quot;aggregate_status&quot;: &quot;running&quot;,
+  &quot;jobs&quot;: {
+    &quot;queued&quot;: 3,
+    &quot;running&quot;: 1,
+    &quot;failed&quot;: 0
+  },
+  &quot;workers&quot;: {
+    &quot;active&quot;: 1,
+    &quot;stale&quot;: 0
+  },
+  &quot;modules&quot;: {
+    &quot;running&quot;: 5,
+    &quot;stopped&quot;: 1,
+    &quot;failed&quot;: 0,
+    &quot;unavailable&quot;: 5
+  },
+  &quot;updated_at&quot;: &quot;2026-04-08T00:00:00Z&quot;,
+  &quot;schema_version&quot;: &quot;runtime_status.v1&quot;
+}</code></pre>
+<p><code>aggregate_status</code> accepts <code>running</code>, <code>degraded</code> or <code>failed</code> for Stage 03.</p>
+<h3 id="jobstatus"><code>job_status</code></h3>
+<p><code>job_status.v1</code> is the operational status view for one job. It complements <code>GET /api/jobs/{id}</code>, which returns the persisted job record and safe payload/result metadata.</p>
+<pre><code class="language-json">{
+  &quot;job_id&quot;: &quot;job_opaque_id&quot;,
+  &quot;job_type&quot;: &quot;config_reload&quot;,
+  &quot;status&quot;: &quot;running&quot;,
+  &quot;job_group_id&quot;: &quot;config_operation:job_opaque_id&quot;,
+  &quot;attempt_count&quot;: 1,
+  &quot;max_attempts&quot;: 3,
+  &quot;leased_by&quot;: &quot;host:12345:worker_uuid&quot;,
+  &quot;heartbeat_at&quot;: &quot;2026-04-08T00:00:00Z&quot;,
+  &quot;lease_expires_at&quot;: &quot;2026-04-08T00:00:30Z&quot;,
+  &quot;latest_event&quot;: {
+    &quot;event_type&quot;: &quot;heartbeat&quot;,
+    &quot;status&quot;: &quot;running&quot;,
+    &quot;worker_id&quot;: &quot;host:12345:worker_uuid&quot;,
+    &quot;message&quot;: &quot;job heartbeat&quot;,
+    &quot;created_at&quot;: &quot;2026-04-08T00:00:00Z&quot;
+  },
+  &quot;updated_at&quot;: &quot;2026-04-08T00:00:00Z&quot;,
+  &quot;schema_version&quot;: &quot;job_status.v1&quot;
+}</code></pre>
+<p>If a job exists but has no <code>job_events</code> yet, <code>latest_event</code> is <code>null</code>.</p>
+<h3 id="workerstatus"><code>worker_status</code></h3>
+<p>Stage 03 derives <code>worker_status.v1</code> from running jobs and their leases. Idle workers are not reported until a later worker heartbeat registry is introduced.</p>
+<pre><code class="language-json">{
+  &quot;worker_id&quot;: &quot;host:12345:worker_uuid&quot;,
+  &quot;status&quot;: &quot;active&quot;,
+  &quot;running_job_id&quot;: &quot;job_opaque_id&quot;,
+  &quot;running_job_type&quot;: &quot;config_reload&quot;,
+  &quot;running_job_count&quot;: 1,
+  &quot;last_heartbeat_at&quot;: &quot;2026-04-08T00:00:00Z&quot;,
+  &quot;lease_expires_at&quot;: &quot;2026-04-08T00:00:30Z&quot;,
+  &quot;schema_version&quot;: &quot;worker_status.v1&quot;
+}</code></pre>
+<p><code>status</code> is <code>active</code> when <code>lease_expires_at</code> is in the future and <code>stale</code> when the lease is expired but recovery has not yet processed the job. When one worker process runs multiple jobs concurrently, Stage 03 returns one <code>worker_status.v1</code> row per <code>worker_id</code>; <code>running_job_id</code> and <code>running_job_type</code> identify the most recently updated running lease, and <code>running_job_count</code> reports the total running leases owned by that worker.</p>
+<p><code>last_heartbeat_at</code> is read from <code>jobs.heartbeat_at</code>. A matching <code>heartbeat</code> event may exist for diagnostics, but clients must not require one heartbeat event per heartbeat tick.</p>
+<h3 id="healthstatus"><code>health_status</code></h3>
+<p>Confirmed MVP behavior: <code>GET /api/health</code> is intentionally safe for unauthenticated local discovery. It must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details. <code>database_fingerprint</code> is an opaque safe fingerprint of the active database target and must not be derived from raw secret-bearing DSNs or reveal filesystem paths, usernames, passwords or userinfo.</p>
+<pre><code class="language-json">{
+  &quot;instance_id&quot;: &quot;runtime_instance_opaque_id&quot;,
+  &quot;mode&quot;: &quot;local&quot;,
+  &quot;database_fingerprint&quot;: &quot;db_fingerprint&quot;,
+  &quot;started_at&quot;: &quot;2026-04-08T00:00:00Z&quot;,
+  &quot;readiness&quot;: &quot;ready&quot;,
+  &quot;schema_version&quot;: &quot;health_status.v1&quot;
+}</code></pre>
+<h3 id="authsession"><code>auth_session</code></h3>
+<pre><code class="language-json">{
+  &quot;session_id&quot;: &quot;session_opaque_id&quot;,
+  &quot;user&quot;: {
+    &quot;id&quot;: &quot;user_opaque_id&quot;,
+    &quot;username&quot;: &quot;admin&quot;,
+    &quot;display_name&quot;: &quot;Administrator&quot;
+  },
+  &quot;expires_at&quot;: &quot;2026-04-08T12:00:00Z&quot;,
+  &quot;schema_version&quot;: &quot;auth_session.v1&quot;
+}</code></pre>
+<h2 id="endpoint-skeleton">Endpoint skeleton</h2>
+<table>
+<thead><tr><th>Endpoint</th><th>Request</th><th>Success response</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>GET /api/health</code></td><td>n/a</td><td><code>health_status</code></td><td>Safe unauthenticated health/readiness endpoint for singleton runtime discovery; detailed status remains under authenticated <code>/api/status</code>.</td></tr>
+<tr><td><code>GET /api/root-paths</code></td><td><code>limit</code>, <code>cursor</code></td><td><code>list_response&lt;root_path&gt;</code></td><td>Возвращает активные и отключённые root paths. Before read, backend materializes <code>scanning.global_scan</code> from config into <code>root_paths</code>.</td></tr>
+<tr><td><code>PUT /api/root-paths</code></td><td><code>root_paths[]</code></td><td><code>list_response&lt;root_path&gt;</code></td><td>Operational API: идемпотентно upsert'ит root paths by <code>id</code> or normalized <code>path</code>; omitted records are not deleted in MVP and this endpoint does not rewrite <code>scanning.global_scan</code> config.</td></tr>
+<tr><td><code>POST /api/scans</code></td><td><code>root_path_ids?</code>, <code>reason?</code></td><td><code>202 job_ref</code></td><td>Создаёт <code>jobs.job_type = global_scan</code>; global scan creates/updates project records and enqueues background <code>project_discovery</code> jobs without waiting for them; <code>job_ref.job_id</code> используется для чтения статуса через <code>GET /api/scans/{job_id}</code> или <code>GET /api/jobs/{job_id}</code>.</td></tr>
+<tr><td><code>GET /api/scans/{job_id}</code></td><td>n/a</td><td><code>job</code></td><td>Temporary compatibility endpoint для global scan jobs; canonical job status endpoint - <code>GET /api/jobs/{id}</code>. Frontend MUST use <code>GET /api/jobs/{id}</code> or status endpoints for new code. Compatibility endpoint remains during MVP and may be removed only after one documented deprecation cycle.</td></tr>
+<tr><td><code>GET /api/projects</code></td><td><code>limit</code>, <code>cursor</code>, <code>root_path_id?</code>, <code>repository_id?</code>, <code>status?</code></td><td><code>list_response&lt;project&gt;</code></td><td>Read model для registry. Default <code>status</code> filter is <code>active</code>; use <code>status=missing</code>, <code>status=disabled</code> or <code>status=all</code> to include non-active projects.</td></tr>
+<tr><td><code>GET /api/projects/{id}</code></td><td>n/a</td><td><code>project</code></td><td>Возвращает проект с базовыми связями.</td></tr>
+<tr><td><code>GET /api/projects/{id}/links</code></td><td><code>limit</code>, <code>cursor</code>, <code>link_type?</code></td><td><code>list_response&lt;project_link&gt;</code></td><td>Возвращает связи отдельного project record, например <code>same_repository</code>, без merge project rows.</td></tr>
+<tr><td><code>GET /api/projects/{id}/scan-settings</code></td><td>n/a</td><td><code>project_scan_settings</code></td><td>Stage 06 contract. Not implemented by Stage 04 scanner MVP.</td></tr>
+<tr><td><code>PUT /api/projects/{id}/scan-settings</code></td><td><code>project_scan_settings</code></td><td><code>project_scan_settings</code></td><td>Stage 06 contract. Not implemented by Stage 04 scanner MVP. When implemented, <code>security.enabled_modules</code> must come from <code>scanning.security_scan.modules</code>.</td></tr>
+<tr><td><code>POST /api/project-scans</code></td><td><code>project_id</code>, <code>scan_type?</code>, <code>rule_set_id?</code>, <code>reason?</code></td><td><code>202 project_scan_ref</code></td><td>Stage 06 contract. Stage 04 exposes only the lifecycle guard: missing/disabled projects return controlled validation errors; otherwise the endpoint returns <code>501 project_scan_unavailable</code>.</td></tr>
+<tr><td><code>GET /api/project-scans/{project_scan_id}</code></td><td>n/a</td><td><code>project_scan</code></td><td>Stage 06 contract. Not implemented by Stage 04 scanner MVP.</td></tr>
+<tr><td><code>GET /api/project-scans/{project_scan_id}/findings</code></td><td><code>limit</code>, <code>cursor</code>, <code>severity?</code>, <code>status?</code></td><td><code>list_response&lt;security_finding&gt;</code></td><td>Stage 06 contract. Not implemented by Stage 04 scanner MVP.</td></tr>
+<tr><td><code>GET /api/repos</code></td><td><code>limit</code>, <code>cursor</code>, <code>provider?</code>, <code>provider_host?</code>, <code>full_path?</code>, <code>status?</code>, <code>discovery_source?</code>, <code>auto_sync_enabled?</code></td><td><code>list_response&lt;repository&gt;</code></td><td>Read model для repositories. Default <code>status</code> filter is <code>active</code>; <code>full_path</code> без provider/provider_host может вернуть несколько repositories.</td></tr>
+<tr><td><code>GET /api/repos/{id}</code></td><td>n/a</td><td><code>repository</code></td><td>Возвращает repository card.</td></tr>
+<tr><td><code>GET /api/repo-provider-instances</code></td><td><code>limit</code>, <code>cursor</code>, <code>provider?</code>, <code>provider_host?</code>, <code>enabled?</code></td><td><code>list_response&lt;repository_provider_instance&gt;</code></td><td>GitKraken-like integration profiles for cloud, on-premise and multi-domain provider hosts.</td></tr>
+<tr><td><code>PUT /api/repo-provider-instances</code></td><td><code>repository_provider_instances[]</code></td><td><code>list_response&lt;repository_provider_instance&gt;</code></td><td>Идемпотентно upsert'ит configured provider hosts/profiles by <code>id</code> or <code>provider + provider_host</code>; secrets are not accepted here.</td></tr>
+<tr><td><code>GET /api/repo-credentials</code></td><td><code>limit</code>, <code>cursor</code>, <code>provider_instance_id?</code>, <code>usage?</code>, <code>auth_type?</code></td><td><code>list_response&lt;repository_credential&gt;</code></td><td>Возвращает credentials with masked secret refs only.</td></tr>
+<tr><td><code>PUT /api/repo-credentials</code></td><td><code>repository_credentials[]</code></td><td><code>list_response&lt;repository_credential&gt;</code></td><td>Идемпотентно upsert'ит credential metadata and secret refs by <code>id</code> or <code>provider_instance_id + name</code>; raw secret values are rejected.</td></tr>
+<tr><td><code>POST /api/repos/clone</code></td><td><code>provider_instance_id?</code>, <code>provider</code>, <code>provider_host?</code>, <code>credential_id?</code>, <code>protocol</code>, <code>clone_url?</code>, <code>group_path?</code>, <code>clone_scope</code>, <code>full_path?</code>, <code>root_path_id?</code>, <code>new_root_path?</code>, <code>target_directory?</code>, <code>new_target_directory?</code></td><td><code>202 job_ref</code></td><td>Создаёт <code>jobs.job_type = repo_clone</code>; URL parsing follows ADR 0016; repository identity нормализуется как <code>provider + provider_host + full_path</code>; before a stable <code>repository_id</code> exists, clone checks active conflicts by normalized repository identity and normalized target path; <code>provider_instance_id</code> выбирает configured host/profile; <code>credential_id</code> выбирает credential with required usage and protocol-compatible <code>auth_type</code> (<code>ssh_key</code> for <code>ssh</code>, HTTPS/token auth types for <code>https</code>); <code>clone_url</code> принимается только как transport metadata, не участвует в deduplication и не должен сохраняться с credentials/userinfo; Stage 05 MVP supports <code>single_repository</code> clone for <code>generic</code> Git and GitHub; <code>gitlab_group_recursive</code> is a post-MVP extension and requires <code>provider_api</code> credential usage when enabled.</td></tr>
+<tr><td><code>POST /api/repos/pull</code></td><td><code>repository_id</code>, <code>credential_id?</code></td><td><code>202 job_ref</code></td><td>Создаёт <code>jobs.job_type = repo_pull</code>; credential must support <code>git_transport</code> and match the repository transport protocol.</td></tr>
+<tr><td><code>POST /api/repos/sync</code></td><td><code>repository_id</code>, <code>credential_id?</code>, <code>reason?</code></td><td><code>202 job_ref</code></td><td>Создаёт <code>jobs.job_type = repo_sync</code>; Stage 05 sync is pull-only and applies the same credential usage/protocol validation as pull.</td></tr>
+<tr><td><code>GET /api/jobs</code></td><td><code>limit</code>, <code>cursor</code>, <code>job_type?</code>, <code>status?</code>, <code>lock_key?</code>, <code>job_group_id?</code>, <code>parent_job_id?</code></td><td><code>list_response&lt;job&gt;</code></td><td>Общая видимость jobs. Для UI workflow status предпочтительнее status/project-scan aggregate endpoints.</td></tr>
+<tr><td><code>GET /api/jobs/{id}</code></td><td>n/a</td><td><code>job</code></td><td>Возвращает payload/result metadata без секретов.</td></tr>
+<tr><td><code>GET /api/status</code></td><td>n/a</td><td><code>runtime_status.v1</code></td><td>Aggregate runtime status из <code>status-monitor</code>; summarizes jobs, derived worker status and module states.</td></tr>
+<tr><td><code>GET /api/status/workflows</code></td><td><code>limit</code>, <code>cursor</code>, <code>workflow_type?</code>, <code>aggregate_status?</code></td><td><code>list_response&lt;workflow_status&gt;</code></td><td>Aggregate workflow statuses.</td></tr>
+<tr><td><code>GET /api/status/workflows/{job_group_id}</code></td><td>n/a</td><td><code>workflow_status</code></td><td>Единая точка чтения workflow status по <code>job_group_id</code>.</td></tr>
+<tr><td><code>GET /api/status/jobs/{job_id}</code></td><td>n/a</td><td><code>job_status.v1</code></td><td>Operational job status, latest event and worker lease diagnostics.</td></tr>
+<tr><td><code>GET /api/status/workers</code></td><td>n/a</td><td><code>list_response&lt;worker_status.v1&gt;</code></td><td>Stage 03 derives worker health/status from running jobs and leases; idle workers are not reported.</td></tr>
+<tr><td><code>GET /api/config</code></td><td>n/a</td><td><code>config</code></td><td>Возвращает активную runtime-конфигурацию с masked sensitive values; resolved secrets never returned.</td></tr>
+<tr><td><code>PUT /api/config</code></td><td><code>config</code></td><td><code>config_import.result.v1</code></td><td>Stage 02 synchronously imports config with strict schema validation, rejects unknown keys, sensitive literals, malformed JSON and trailing payload, and preserves existing imported ignore rules because <code>.t-helper.ignore</code> is not part of this HTTP payload. Later job-backed workflows may extend this contract without changing Stage 02 sync import semantics.</td></tr>
+<tr><td><code>GET /api/ignore-rules</code></td><td><code>limit</code>, <code>cursor</code>, <code>scope_type?</code>, <code>scope_id?</code></td><td><code>list_response&lt;ignore_rule&gt;</code></td><td>Возвращает правила без потери <code>!pattern</code>.</td></tr>
+<tr><td><code>PUT /api/ignore-rules</code></td><td><code>ignore_rules[]</code></td><td><code>list_response&lt;ignore_rule&gt;</code></td><td>Идемпотентно upsert'ит rules by <code>scope_type + scope_id + pattern</code>; omitted rules are not deleted in MVP.</td></tr>
+<tr><td><code>GET /api/security/findings</code></td><td><code>limit</code>, <code>cursor</code>, <code>project_id?</code>, <code>repository_id?</code>, <code>severity?</code>, <code>status?</code></td><td><code>list_response&lt;security_finding&gt;</code></td><td>Global findings view.</td></tr>
+<tr><td><code>GET /api/security/findings/{id}</code></td><td>n/a</td><td><code>security_finding</code></td><td>Детальная карточка finding.</td></tr>
+<tr><td><code>GET /api/security/rule-sets</code></td><td><code>limit</code>, <code>cursor</code>, <code>active?</code></td><td><code>list_response&lt;security_rule_set&gt;</code></td><td>Список rule sets.</td></tr>
+<tr><td><code>PUT /api/security/rule-sets</code></td><td><code>security_rule_set</code></td><td><code>security_rule_set</code></td><td>Идемпотентное обновление metadata/rule set registration by <code>id</code> or <code>name + version</code>.</td></tr>
+<tr><td><code>GET /api/tool-profiles</code></td><td><code>limit</code>, <code>cursor</code>, <code>tool?</code>, <code>active?</code>, <code>source_type?</code></td><td><code>list_response&lt;tool_profile&gt;</code></td><td>Список tool profiles from ADR 0018.</td></tr>
+<tr><td><code>POST /api/tool-profiles/validate</code></td><td><code>profile_path?</code>, <code>profile_payload?</code>, <code>fixture_set?</code></td><td><code>tool_profile_validation_result</code></td><td>Валидирует profile files or payloads without activation. Raw tool outputs in fixtures must be redacted/size-limited and are not persisted as primary scan data.</td></tr>
+<tr><td><code>POST /api/tool-profiles/import</code></td><td><code>profile_path?</code>, <code>profile_payload?</code></td><td><code>tool_profile</code></td><td>Imports bundled/local/generated profile metadata after validation; imported profiles are inactive unless separately activated.</td></tr>
+<tr><td><code>POST /api/tool-profiles/activate</code></td><td><code>tool</code>, <code>profile_id</code>, <code>profile_version</code></td><td><code>tool_profile</code></td><td>Explicitly activates a validated profile for runtime selection. Generated candidate profiles cannot be activated without successful validation results.</td></tr>
+<tr><td><code>POST /api/tool-profiles/analyze</code></td><td><code>samples_path?</code>, <code>sample_payload?</code>, <code>baseline_profile_id?</code></td><td><code>tool_profile_candidate</code></td><td>Optional analyzer endpoint that generates candidate profiles/fixtures; it never activates profiles automatically.</td></tr>
+<tr><td><code>GET /api/modules</code></td><td>n/a</td><td><code>list_response&lt;module_state&gt;</code></td><td>Состояния runtime modules.</td></tr>
+<tr><td><code>POST /api/modules/reload</code></td><td><code>keys?</code>, <code>module_name?</code>, <code>reason?</code></td><td><code>config_reload.result.v1</code> or <code>module_reload.result.v1</code></td><td>Stage 02 synchronous operation and explicit Stage 03 jobs exception. Without <code>module_name</code>, accepts reloadable config keys and applies only keys with implemented Stage 02 runtime effects, currently <code>modules.enabled</code>; accepted-but-not-applied keys remain visible in <code>accepted_keys</code>, and unknown explicit keys are returned in <code>failed_keys</code>. With <code>module_name</code>, reloads one available module. Unknown modules return <code>validation_error</code>; unavailable modules return controlled <code>module_unavailable</code>; lifecycle hook failures return <code>module_lifecycle_failed</code>; unexpected persistence failures return <code>storage_error</code>. Request JSON is strict: unknown fields, <code>null</code>, malformed JSON and trailing payload are rejected. Stage 03 implements job-backed <code>config_reload</code> handlers for framework validation/future workflow integration without changing this public sync contract.</td></tr>
+<tr><td><code>POST /api/modules/restart</code></td><td><code>module_name</code>, <code>reason?</code></td><td><code>module_restart.result.v1</code></td><td>Stage 02 synchronous restart for one available module and explicit Stage 03 jobs exception. Unknown modules return <code>validation_error</code>; unavailable modules return controlled <code>module_unavailable</code>; lifecycle hook failures return <code>module_lifecycle_failed</code>; unexpected persistence failures return <code>storage_error</code>. Request JSON is strict and <code>module_name</code> is required. Stage 03 implements job-backed <code>module_restart</code> handlers for framework validation/future workflow integration without changing this public sync contract.</td></tr>
+<tr><td><code>GET /api/environments</code></td><td><code>limit</code>, <code>cursor</code></td><td><code>list_response&lt;environment&gt;</code></td><td>MVP read endpoint.</td></tr>
+<tr><td><code>GET /api/environments/{id}</code></td><td>n/a</td><td><code>environment</code></td><td>MVP read endpoint.</td></tr>
+<tr><td><code>GET /api/workspaces</code></td><td><code>limit</code>, <code>cursor</code>, <code>project_id?</code>, <code>environment_id?</code></td><td><code>list_response&lt;workspace&gt;</code></td><td>MVP read endpoint.</td></tr>
+<tr><td><code>GET /api/workspaces/{id}</code></td><td>n/a</td><td><code>workspace</code></td><td>MVP read endpoint.</td></tr>
+<tr><td><code>POST /api/auth/login</code></td><td><code>username</code>, <code>password</code></td><td><code>auth_session</code></td><td>Local auth login; failures use generic errors and must not reveal whether username exists.</td></tr>
+<tr><td><code>POST /api/auth/logout</code></td><td>n/a</td><td><code>204 No Content</code></td><td>Invalidates current session/token.</td></tr>
+<tr><td><code>GET /api/auth/session</code></td><td>n/a</td><td><code>auth_session</code></td><td>Returns current authenticated session and safe user metadata.</td></tr>
+<tr><td><code>POST /api/auth/password-reset/request</code></td><td><code>username_or_email</code></td><td><code>204 No Content</code></td><td>Starts reset flow with generic success response; raw reset token must never be stored.</td></tr>
+<tr><td><code>POST /api/auth/password-reset/confirm</code></td><td><code>token</code>, <code>new_password</code></td><td><code>204 No Content</code></td><td>Verifies one-time reset token and updates local credentials using Argon2id PHC hashing.</td></tr>
+<tr><td><code>POST /api/auth/password/change</code></td><td><code>current_password</code>, <code>new_password</code></td><td><code>204 No Content</code></td><td>Changes password for current authenticated local user.</td></tr>
+<tr><td><code>GET /api/auth/users</code></td><td><code>limit</code>, <code>cursor</code>, <code>active?</code></td><td><code>list_response&lt;user&gt;</code></td><td>Administrative endpoint; full MVP UI is Stage 08 scope.</td></tr>
+<tr><td><code>PUT /api/auth/users</code></td><td><code>users[]</code></td><td><code>list_response&lt;user&gt;</code></td><td>Идемпотентно upsert'ит users by <code>id</code> or <code>username</code>; omitted users are not deleted in MVP.</td></tr>
+<tr><td><code>GET /api/auth/groups</code></td><td><code>limit</code>, <code>cursor</code></td><td><code>list_response&lt;group&gt;</code></td><td>Administrative endpoint; full MVP UI is Stage 08 scope.</td></tr>
+<tr><td><code>PUT /api/auth/groups</code></td><td><code>groups[]</code></td><td><code>list_response&lt;group&gt;</code></td><td>Идемпотентно upsert'ит groups by <code>id</code> or <code>name</code>; omitted groups are not deleted in MVP.</td></tr>
+<tr><td><code>GET /api/auth/roles</code></td><td><code>limit</code>, <code>cursor</code>, <code>scope_type?</code></td><td><code>list_response&lt;role&gt;</code></td><td>Administrative endpoint; full MVP UI is Stage 08 scope.</td></tr>
+<tr><td><code>PUT /api/auth/roles</code></td><td><code>roles[]</code></td><td><code>list_response&lt;role&gt;</code></td><td>Идемпотентно upsert'ит roles by <code>id</code> or <code>name + scope_type</code>; omitted roles are not deleted in MVP.</td></tr>
+<tr><td><code>GET /api/auth/role-bindings</code></td><td><code>limit</code>, <code>cursor</code>, <code>scope_type?</code>, <code>scope_id?</code>, <code>subject_type?</code>, <code>subject_id?</code></td><td><code>list_response&lt;role_binding&gt;</code></td><td>Administrative endpoint; full MVP UI is Stage 08 scope.</td></tr>
+<tr><td><code>PUT /api/auth/role-bindings</code></td><td><code>role_bindings[]</code></td><td><code>list_response&lt;role_binding&gt;</code></td><td>Идемпотентно upsert'ит bindings by subject/role/scope tuple; omitted bindings are not deleted in MVP.</td></tr>
+<tr><td><code>GET /api/auth/scim/identities</code></td><td><code>limit</code>, <code>cursor</code>, <code>provider?</code></td><td><code>list_response&lt;scim_identity&gt;</code></td><td>SCIM identity read model.</td></tr>
+<tr><td><code>POST /api/auth/scim/sync</code></td><td><code>provider?</code>, <code>reason?</code></td><td><code>202 job_ref</code></td><td>Создаёт <code>jobs.job_type = scim_sync</code>.</td></tr>
+<tr><td><code>GET /api/audit</code></td><td><code>limit</code>, <code>cursor</code>, <code>actor?</code>, <code>entity_type?</code>, <code>action?</code></td><td><code>list_response&lt;audit_log&gt;</code></td><td>Audit log read model.</td></tr>
+</tbody></table>
+<h2 id="repository-operation-conflicts">Repository operation conflicts</h2>
+<p>For <code>clone</code>, <code>pull</code> and <code>sync</code>, if another <code>queued</code> or <code>running</code> repository operation exists for the same <code>lock_key = repository:&lt;repository_id&gt;</code>, a new request returns <code>409 conflict</code> with code <code>repository_operation_already_running</code>, except exact <code>Idempotency-Key</code> replay, which returns the existing <code>job_ref</code>.</p>
+<p>Clone also checks pre-create conflicts by normalized repository identity and normalized target path before a stable <code>repository_id</code> exists.</p>
+<h2 id="schema-sources">Schema sources</h2>
+<p>Имена сущностей в таблице endpoint'ов соответствуют persistent entities из <a href="data-model.html"><code>data-model.md</code></a>. API DTO могут скрывать внутренние поля, но имена полей должны оставаться согласованными, если нет явно описанной причины для расхождения.</p>
+<p>Версионируемые <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>project_scans.result_payload</code> и <code>module_states.details</code> описаны в <a href="payload-schemas.html"><code>payload-schemas.md</code></a>.</p>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="access-control.html"><span>Core Docs</span>Auth, SCIM и RBAC</a>
+<a href="data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="github-pages.html"><span>Core Docs</span>GitHub Pages</a>
+<a href="interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+<a href="technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html"><span>Implementation Specs</span>Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html"><span>Implementation Specs</span>Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html"><span>Implementation Specs</span>Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html" aria-current="page">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../api.html">Русская страница</a>
+      <a href="api.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/api.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

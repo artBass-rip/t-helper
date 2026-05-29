@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Development setup - T-Helper documentation.">
+    <title>Development setup - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../development.html">
+    <link rel="alternate" hreflang="en" href="development.html">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>T-Helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../development.html">RU</a>
+        <a class="is-active" href="development.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>development.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#development-setup">Development setup</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#postgresql-test-environment">PostgreSQL test environment</a>
+<a class="toc-level-2" href="#test-policy">Test policy</a>
+<a class="toc-level-2" href="#migration-layout">Migration layout</a>
+<a class="toc-level-2" href="#stage-04-runtime-behavior">Stage 04 runtime behavior</a>
+<a class="toc-level-2" href="#project-pages">Project Pages</a>
+<a class="toc-level-2" href="#secret-references-in-development">Secret references in development</a>
+<a class="toc-level-2" href="#stage-01-implementation-checklist">Stage 01 implementation checklist</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="development-setup">Development setup</h1>
+<h2 id="purpose">Purpose</h2>
+<p>This document defines the local development contract for the current Stage 04 scanner/registry baseline and storage tests.</p>
+<p>The Docker-based developer environment, product/dependency containers, manual testing profile and OS-family test matrix are defined in <a href="local-dev-environment.html"><code>local-dev-environment.md</code></a>.</p>
+<p>Stage 04 has delivered the executable backend scaffold, persisted runtime configuration, module lifecycle, singleton runtime policy, jobs/workers/status, global scanning, Terraform project discovery and scanner/registry HTTP APIs. The current local baseline is:</p>
+<ul>
+<li><code>go test ./...</code>;</li>
+<li><code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
+<li><code>docker compose --profile offline -f docker-compose.test.yml run --rm test-runner</code>.</li>
+</ul>
+<p>The Docker <code>offline</code> test runner starts PostgreSQL and runs the same Go test suite with <code>THELPER_POSTGRES_DSN</code> set. DSN-backed tests run with <code>go test -p 1 ./...</code> so destructive contract tests in different packages do not reset the same test database concurrently.</p>
+<h2 id="postgresql-test-environment">PostgreSQL test environment</h2>
+<p>PostgreSQL tests run when <code>THELPER_POSTGRES_DSN</code> is set. SQLite tests run by default.</p>
+<p>Recommended local PostgreSQL baseline:</p>
+<ul>
+<li>PostgreSQL version: <code>16</code> or <code>17</code></li>
+<li>database: <code>t_helper_test</code></li>
+<li>user: <code>t_helper</code></li>
+<li>password: local-only test password</li>
+<li>host: <code>127.0.0.1</code></li>
+<li>port: <code>5432</code> or a project-specific override</li>
+</ul>
+<p>Recommended DSN variable:</p>
+<pre><code class="language-text">THELPER_POSTGRES_DSN=postgres://t_helper:local_password@127.0.0.1:5432/t_helper_test?sslmode=disable</code></pre>
+<p>CI must set <code>THELPER_POSTGRES_DSN</code> and run the storage test suite against both SQLite and PostgreSQL.</p>
+<h2 id="test-policy">Test policy</h2>
+<ul>
+<li>SQLite storage tests are mandatory for every local test run.</li>
+<li>PostgreSQL storage tests are mandatory in CI and optional locally unless <code>THELPER_POSTGRES_DSN</code> is set.</li>
+<li>PostgreSQL storage tests perform destructive cleanup only against a configured test database. The database name must contain <code>test</code> or the caller must set <code>THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1</code>.</li>
+<li>MySQL storage tests run when <code>THELPER_MYSQL_DSN</code> is set after the MySQL adapter is implemented.</li>
+<li>MSSQL storage tests run when <code>THELPER_MSSQL_DSN</code> is set after the MSSQL adapter is implemented.</li>
+<li>Aurora PostgreSQL contract tests run against a writer endpoint through <code>THELPER_POSTGRES_DSN</code>.</li>
+<li>Aurora MySQL contract tests run against a writer endpoint through <code>THELPER_MYSQL_DSN</code>.</li>
+<li>Migration tests start from an empty database.</li>
+<li>Tests that need destructive database cleanup must operate only on the configured test database.</li>
+<li>Test fixtures must not contain real secrets.</li>
+</ul>
+<h2 id="migration-layout">Migration layout</h2>
+<p>Migrations are dialect-specific while sharing logical migration versions:</p>
+<pre><code class="language-text">internal/storage/migrations/
+  sqlite/
+  postgres/
+  mysql/
+  mssql/</code></pre>
+<p>The same logical migration number must exist in every dialect directory supported by the current release line. Contract tests verify behavior parity across adapters.</p>
+<p>The current release line ships synchronized SQLite/PostgreSQL logical migration versions:</p>
+<ul>
+<li><code>000001_create_system_tables.sql</code> for Stage 01 system metadata;</li>
+<li><code>000002_stage02_config_modules_runtime.sql</code> for Stage 02 config, storage profiles, module state and imported system ignore rules;</li>
+<li><code>000003_stage03_jobs_workers_status.sql</code> for jobs, job locks, job events and workflow statuses;</li>
+<li><code>000004_stage04_scanner_registry.sql</code> for root paths, projects, project links, minimal repositories, environments and workspaces;</li>
+<li><code>000005_stage04_root_path_source.sql</code> for root path source tracking.</li>
+</ul>
+<p>The <code>mysql</code> and <code>mssql</code> directories are reserved for Stage 10 adapter expansion and contain no current SQL migrations.</p>
+<p>Stage 01 migrations create only:</p>
+<ul>
+<li><code>system_metadata</code>;</li>
+<li>migration metadata managed by the migration framework.</li>
+</ul>
+<p>Stage 02 migrations create:</p>
+<ul>
+<li><code>config_entries</code>;</li>
+<li><code>storage_profiles</code>;</li>
+<li><code>storage_provider_settings</code>;</li>
+<li><code>module_states</code>;</li>
+<li>imported system <code>ignore_rules</code>.</li>
+</ul>
+<p>Stage 03 migrations create:</p>
+<ul>
+<li><code>jobs</code>;</li>
+<li><code>job_locks</code>;</li>
+<li><code>job_events</code>;</li>
+<li><code>workflow_statuses</code>.</li>
+</ul>
+<p>Stage 04 migrations create:</p>
+<ul>
+<li><code>root_paths</code>;</li>
+<li><code>projects</code>;</li>
+<li><code>project_links</code>;</li>
+<li>minimal <code>repositories</code>;</li>
+<li><code>environments</code>;</li>
+<li><code>workspaces</code>.</li>
+</ul>
+<p>Stage 01-04 migrations must not create later-stage tables such as <code>users</code>, <code>groups</code>, <code>security_findings</code>, <code>project_scans</code> or repository operation tables owned by Stage 05 and later.</p>
+<h2 id="stage-04-runtime-behavior">Stage 04 runtime behavior</h2>
+<ul>
+<li><code>cmd/thelper</code> applies Stage 01-04 migrations, starts the HTTP runtime and exposes <code>GET /api/health</code>, <code>GET/PUT /api/config</code>, <code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>, <code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>, <code>GET /api/status*</code> and Stage 04 scanner/registry endpoints.</li>
+<li><code>GET /api/health</code> returns <code>health_status.v1</code> with <code>instance_id</code>, <code>mode</code>, safe <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code>.</li>
+<li><code>database_fingerprint</code> is derived from safe storage locator components and must not expose DSNs, filesystem paths, usernames, passwords or userinfo.</li>
+<li>SQLite runs through a single open DB connection so connection local PRAGMA settings remain effective. Stage 01 sets foreign keys, busy timeout and WAL for file-backed SQLite databases.</li>
+<li><code>cmd/thelper-worker</code> executes queued jobs through persistent leases, heartbeats, retry/backoff and <code>job_locks</code>.</li>
+<li><code>cmd/thelper-ctl providers</code> lists the registered Stage 01 storage providers.</li>
+<li><code>cmd/thelper-ctl -reconfigure</code> imports <code>config.json</code> and <code>.t-helper.ignore</code> into Stage 02-owned tables.</li>
+<li><code>cmd/thelper-ctl -reload</code> applies reloadable keys synchronously and updates <code>module_states</code> when <code>modules.enabled</code> changes.</li>
+<li><code>cmd/thelper-ctl -restart &lt;module&gt;</code> restarts one available module synchronously and returns a Stage 02 result DTO.</li>
+<li><code>cmd/thelper-ctl -migrate-db</code> promotes a prepared <code>migration</code> storage profile only after successful schema/data copy.</li>
+<li>Stage 04 scanner endpoints expose root paths, ignore rules, scans, projects, project links, repositories, environments and workspaces.</li>
+<li>Global scan detects Terraform projects by <code>*.tf</code> filenames and does not parse Terraform source contents during discovery.</li>
+<li>Global scan enqueues coalesced <code>project_discovery</code> jobs for Git repository association without blocking the global scan result.</li>
+<li>Symlinked directories and <code>.git/</code> directories are skipped in Stage 04.</li>
+<li>Traversal stops below a discovered Terraform project.</li>
+<li>Stage 04 ignore matching is exclude-only. <code>!pattern</code> rules are preserved but not applied until full <code>.gitignore</code> semantics are implemented in a later hardening stage.</li>
+</ul>
+<h2 id="project-pages">Project Pages</h2>
+<ul>
+<li><code>docs/index.html</code> is the default Russian GitHub Pages entrypoint.</li>
+<li><code>docs/en.html</code> is the English language variant.</li>
+<li>Both pages share <code>docs/pages.css</code> and <code>docs/pages.js</code>.</li>
+<li><code>docs/build-pages.js</code> renders every <code>docs/**/*.md</code> file to styled dependency-free Russian and English HTML pages for the published artifact and rewrites internal Markdown links to generated same-language HTML links.</li>
+<li>Generated document pages share the same navigation shell, local table of contents, related-document links, backlinks and full documentation catalog.</li>
+<li><code>.github/workflows/pages.yml</code> publishes the <code>docs</code> directory through GitHub Actions to the <code>gh-pages</code> branch.</li>
+<li>Repository Pages settings must use source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
+<li>The Pages landing page is documentation/presentation only and is separate from the Stage 08 React/Tauri frontend deliverable.</li>
+</ul>
+<h2 id="secret-references-in-development">Secret references in development</h2>
+<p>Development configuration should use <code>secretref://env/...</code> for sensitive values.</p>
+<p>Example:</p>
+<pre><code class="language-json">{
+  &quot;external_databases&quot;: {
+    &quot;username&quot;: &quot;secretref://env/THELPER_POSTGRES_USER&quot;,
+    &quot;password&quot;: &quot;secretref://env/THELPER_POSTGRES_PASSWORD&quot;
+  }
+}</code></pre>
+<p>Resolved secret values must not be written to <code>config_entries</code>, logs, job payloads, job events, result payloads or audit records.</p>
+<h2 id="stage-01-implementation-checklist">Stage 01 implementation checklist</h2>
+<ul>
+<li>Scaffold <code>cmd/thelper</code>, <code>cmd/thelper-worker</code> and <code>cmd/thelper-ctl</code> - done.</li>
+<li>Add <code>internal/storage/migrations</code> - done.</li>
+<li>Add SQLite migration test coverage - done.</li>
+<li>Add PostgreSQL migration test coverage gated by <code>THELPER_POSTGRES_DSN</code> - done.</li>
+<li>Keep MySQL and MSSQL migration directories reserved for Stage 10 adapters - done.</li>
+<li>Seed only Stage 01-owned bootstrap metadata through versioned migrations or migration-adjacent seed steps - done through <code>system_metadata</code>.</li>
+<li>Seed the default module registry in Stage 02 with <code>module_states</code>.</li>
+<li>Seed system permissions, roles and role permissions in Stage 07 with the auth/RBAC schema.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="local-dev-environment.html"><span>Core Docs</span>Local Developer Environment</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="stage-00-delivery-contract.html"><span>Core Docs</span>Stage 00 Delivery Contract</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html"><span>Implementation Specs</span>Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html"><span>Implementation Specs</span>Stage 10: Storage Adapter Expansion</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html" aria-current="page">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../development.html">Русская страница</a>
+      <a href="development.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/development.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>
