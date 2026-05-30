@@ -13,6 +13,9 @@ documentation pages use the same dark visual system with a sticky header,
 sidebar table of contents, related links, backlinks and full documentation
 catalog.
 
+The landing pages identify Stage 05 repository manager MVP as the closed
+backend baseline and point the active roadmap focus to Stage 06A/06B.
+
 ## Files
 
 - `docs/index.html` - Russian landing page and default GitHub Pages entrypoint.
