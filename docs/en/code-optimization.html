@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Code Optimization And Quality Baseline - T-Helper documentation.">
+    <title>Code Optimization And Quality Baseline - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../code-optimization.html">
+    <link rel="alternate" hreflang="en" href="code-optimization.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../code-optimization.html">RU</a>
+        <a class="is-active" href="code-optimization.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/code-optimization.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>code-optimization.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</a>
+<a class="toc-level-2" href="#current-status">Current Status</a>
+<a class="toc-level-2" href="#accepted-design-decisions">Accepted Design Decisions</a>
+<a class="toc-level-2" href="#backlog">Backlog</a>
+<a class="toc-level-3" href="#p1-sql-dialect-helper">P1. SQL dialect helper</a>
+<a class="toc-level-3" href="#p1-workflow-status-refresh-load">P1. Workflow status refresh load</a>
+<a class="toc-level-3" href="#p1-split-large-store-files">P1. Split Large Store Files</a>
+<a class="toc-level-3" href="#p2-filesystem-scan-backpressure">P2. Filesystem scan backpressure</a>
+<a class="toc-level-3" href="#p2-repository-operations-separation">P2. Repository operations separation</a>
+<a class="toc-level-3" href="#p2-postgresql-connection-pool-settings">P2. PostgreSQL connection pool settings</a>
+<a class="toc-level-3" href="#p3-additional-benchmarks-and-test-slicing">P3. Additional Benchmarks and Test Slicing</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</h1>
+<p>Last updated: 2026-05-29.</p>
+<p>This document records completed optimizations, the current quality gate and the remaining backlog, which should be implemented iteratively without broad mechanical refactoring.</p>
+<h2 id="current-status">Current Status</h2>
+<p>Completed:</p>
+<ul>
+<li>HTTP route composition was moved from <code>optionalHandlers ...any</code> and <code>type-switch</code> to the compile-time <code>httpapi.RouteRegistrar</code> contract.</li>
+<li>Route registration was moved closer to handlers through <code>RegisterRoutes(chi.Router)</code>.</li>
+<li>A smoke test was added for the full set of current HTTP routes: <code>internal/httpapi/router_test.go</code>.</li>
+<li>The transactional helper <code>storage.WithTx(ctx, db, opts, fn)</code> was added and applied in mutable lifecycle paths <code>jobs.Store.Start</code>, <code>jobs.Store.Complete</code>, <code>jobs.Store.Requeue</code>.</li>
+<li>Initial benchmarks were added for hot paths <code>jobs.Store.ClaimNext</code> and <code>jobs.Store.RefreshWorkflowStatus</code>.</li>
+<li>A local quality gate <code>make test</code> was added; it runs: <code>gofmt</code> check, <code>go vet ./...</code>, <code>go test ./...</code>.</li>
+<li><code>make race</code> was added for manual/nightly checks with the race detector.</li>
+</ul>
+<p>Verified baseline after optimization:</p>
+<pre><code class="language-text">make test</code></pre>
+<p>Note: some tests open a local listener on <code>127.0.0.1:0</code>, so sandboxed environments may require bind permission.</p>
+<h2 id="accepted-design-decisions">Accepted Design Decisions</h2>
+<ul>
+<li>Canonical decision for HTTP route registration and the transactional helper: <a href="adr/0019-code-quality-and-route-registration.html"><code>adr/0019-code-quality-and-route-registration.md</code></a>.</li>
+<li>Stage 09 remains the owner of runtime/scanner performance hardening: <a href="implementation-specs/stage-09-runtime-observability-hardening.html"><code>implementation-specs/stage-09-runtime-observability-hardening.md</code></a>.</li>
+</ul>
+<h2 id="backlog">Backlog</h2>
+<h3 id="p1-sql-dialect-helper">P1. SQL dialect helper</h3>
+<p>Problem: the store layer still contains branches by <code>handle.Provider</code> for SQLite/PostgreSQL placeholders, casts and upsert shapes.</p>
+<p>Next step:</p>
+<ul>
+<li>add a small helper in <code>internal/storage</code> or <code>internal/storage/sqlutil</code>;</li>
+<li>centralize placeholders, <code>IN (...)</code>, boolean/time/JSON casts and common upsert fragments;</li>
+<li>migrate store files one by one, starting with <code>jobs</code> or <code>scanner</code>.</li>
+</ul>
+<h3 id="p1-workflow-status-refresh-load">P1. Workflow status refresh load</h3>
+<p>Problem: <code>RefreshWorkflowStatus</code> is called after many job lifecycle events and recomputes the aggregate read model.</p>
+<p>Next step:</p>
+<ul>
+<li>use the added benchmark as the baseline;</li>
+<li>add a 10k-job scenario;</li>
+<li>after measurement, choose debounce, a dirty-workflow queue or a status-monitor reconciliation loop.</li>
+</ul>
+<h3 id="p1-split-large-store-files">P1. Split Large Store Files</h3>
+<p>Problem: <code>scanner/store.go</code>, <code>config/store.go</code>, <code>jobs/store.go</code> and <code>repository/store.go</code> are still accumulation files.</p>
+<p>Next step:</p>
+<ul>
+<li>split files by aggregate only when changing the corresponding area;</li>
+<li>keep the package-level API and tests without changing public behavior;</li>
+<li>start with <code>jobs</code> after introducing the SQL helper, so duplicate dialect code.</li>
+</ul>
+<h3 id="p2-filesystem-scan-backpressure">P2. Filesystem scan backpressure</h3>
+<p>Problem: large root paths may create uneven load through frequent progress/error events and per-item DB writes.</p>
+<p>Next step:</p>
+<ul>
+<li>add a coarse-grained progress interval;</li>
+<li>evaluate batch upsert for projects;</li>
+<li>introduce scan metrics: directories/sec, DB writes/sec, skipped/error counts.</li>
+</ul>
+<h3 id="p2-repository-operations-separation">P2. Repository operations separation</h3>
+<p>Problem: repository handlers combine validation, reservation lifecycle, credential env, filesystem checks and <code>git</code> execution.</p>
+<p>Next step:</p>
+<ul>
+<li>move <code>git</code> execution into <code>GitRunner</code>;</li>
+<li>move reservation lifecycle into a helper with cleanup;</li>
+<li>cover a fake <code>GitRunner</code> with tests for git/credential/reservation errors.</li>
+</ul>
+<h3 id="p2-postgresql-connection-pool-settings">P2. PostgreSQL connection pool settings</h3>
+<p>Problem: the SQLite provider explicitly limits the pool, while PostgreSQL currently uses <code>database/sql</code> defaults.</p>
+<p>Next step:</p>
+<ul>
+<li>add storage config for max open/idle connections, lifetime and idle time;</li>
+<li>set safe defaults for server/worker;</li>
+<li>log effective pool settings on startup.</li>
+</ul>
+<h3 id="p3-additional-benchmarks-and-test-slicing">P3. Additional Benchmarks and Test Slicing</h3>
+<p>Next step:</p>
+<ul>
+<li>add benchmarks for <code>scanner.Store.ListProjects/ListRepositories</code>, scanner traversal and repository reservation conflict path;</li>
+<li>split large integration test files by endpoint/aggregate during the next changes in those areas;</li>
+<li>move shared fixtures into <code>*_test_helpers.go</code>.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="adr/0019-code-quality-and-route-registration.html"><span>ADR</span>ADR 0019: Code Quality Baseline And Route Registration</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html"><span>Implementation Specs</span>Stage 09: Runtime and Observability Hardening</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="roadmap.html"><span>Core Docs</span>Roadmap и приёмка</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html"><span>Implementation Specs</span>Stage 09: Runtime and Observability Hardening</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html" aria-current="page">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../code-optimization.html">Русская страница</a>
+      <a href="code-optimization.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/code-optimization.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

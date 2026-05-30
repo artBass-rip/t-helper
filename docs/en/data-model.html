@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Data Model - T-Helper documentation.">
+    <title>Data Model - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../data-model.html">
+    <link rel="alternate" hreflang="en" href="data-model.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../data-model.html">RU</a>
+        <a class="is-active" href="data-model.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/data-model.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>data-model.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#data-model">Data Model</a>
+<a class="toc-level-2" href="#stage-owned-migrations">Stage-Owned Migrations</a>
+<a class="toc-level-2" href="#base-entities">Base Entities</a>
+<a class="toc-level-3" href="#rootpaths">root_paths</a>
+<a class="toc-level-3" href="#projects">projects</a>
+<a class="toc-level-3" href="#projectlinks">project_links</a>
+<a class="toc-level-3" href="#projectscansettings">project_scan_settings</a>
+<a class="toc-level-3" href="#projectsecurityscansettings">project_security_scan_settings</a>
+<a class="toc-level-3" href="#repositories">repositories</a>
+<a class="toc-level-3" href="#repositoryproviderinstances">repository_provider_instances</a>
+<a class="toc-level-3" href="#repositorycredentials">repository_credentials</a>
+<a class="toc-level-3" href="#ignorerules">ignore_rules</a>
+<a class="toc-level-3" href="#environments">environments</a>
+<a class="toc-level-3" href="#workspaces">workspaces</a>
+<a class="toc-level-3" href="#configentries">config_entries</a>
+<a class="toc-level-3" href="#storageprofiles">storage_profiles</a>
+<a class="toc-level-3" href="#storageprovidersettings">storage_provider_settings</a>
+<a class="toc-level-3" href="#modulestates">module_states</a>
+<a class="toc-level-3" href="#jobs">jobs</a>
+<a class="toc-level-3" href="#joblocks">job_locks</a>
+<a class="toc-level-3" href="#projectscans">project_scans</a>
+<a class="toc-level-3" href="#jobevents">job_events</a>
+<a class="toc-level-3" href="#workflowstatuses">workflow_statuses</a>
+<a class="toc-level-3" href="#auditlog">audit_log</a>
+<a class="toc-level-2" href="#security-entities">Security Entities</a>
+<a class="toc-level-3" href="#securityrulesets">security_rule_sets</a>
+<a class="toc-level-3" href="#toolprofiles">tool_profiles</a>
+<a class="toc-level-3" href="#toolprofilevalidationresults">tool_profile_validation_results</a>
+<a class="toc-level-3" href="#securityfindings">security_findings</a>
+<a class="toc-level-2" href="#auth-and-rbac-entities">Auth and RBAC Entities</a>
+<a class="toc-level-3" href="#users">users</a>
+<a class="toc-level-3" href="#localusercredentials">local_user_credentials</a>
+<a class="toc-level-3" href="#passwordresettokens">password_reset_tokens</a>
+<a class="toc-level-3" href="#usersessions">user_sessions</a>
+<a class="toc-level-3" href="#authbootstrapcredentials">auth_bootstrap_credentials</a>
+<a class="toc-level-3" href="#groups">groups</a>
+<a class="toc-level-3" href="#groupmembers">group_members</a>
+<a class="toc-level-3" href="#permissions">permissions</a>
+<a class="toc-level-3" href="#roles">roles</a>
+<a class="toc-level-3" href="#rolepermissions">role_permissions</a>
+<a class="toc-level-3" href="#rolebindings">role_bindings</a>
+<a class="toc-level-3" href="#scimidentities">scim_identities</a>
+<a class="toc-level-2" href="#entity-relationships">Entity Relationships</a>
+<a class="toc-level-2" href="#nullable-fk-and-delete-behavior">Nullable, FK and delete behavior</a>
+<a class="toc-level-2" href="#indexes-and-uniqueness">Indexes and Uniqueness</a>
+<a class="toc-level-2" href="#cross-storage-rules">Cross-Storage Rules</a>
+<a class="toc-level-2" href="#design-notes">Design Notes</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="data-model">Data Model</h1>
+<p>This document describes the target persistent data model. It does not mean that all tables must appear in the first migration.</p>
+<p>Physical migrations are stage-owned: a table or index is introduced only by the stage that also ships the code, API or worker behavior and tests for its invariants. Stage 01 must not create the whole target schema in advance.</p>
+<h2 id="stage-owned-migrations">Stage-Owned Migrations</h2>
+<p>Expected migration ownership:</p>
+<ul>
+<li>Stage 01: migration metadata, storage bootstrap metadata, health/schema version support and only the minimal system tables required by the backend skeleton.</li>
+<li>Stage 02: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, imported system <code>ignore_rules</code> and runtime lifecycle state.</li>
+<li>Stage 03: <code>jobs</code>, <code>job_locks</code>, <code>job_events</code>, <code>workflow_statuses</code>.</li>
+<li>Stage 04: <code>root_paths</code>, project-scoped/runtime scanner <code>ignore_rules</code> behavior, <code>projects</code>, <code>project_links</code>, minimal <code>repositories</code>, <code>environments</code>, <code>workspaces</code>.</li>
+<li>Stage 05: full repository model, <code>repository_provider_instances</code>, <code>repository_credentials</code>, repository enrichment/supersede fields and repository-operation indexes.</li>
+<li>Stage 06A: <code>tool_profiles</code>, <code>tool_profile_validation_results</code>.</li>
+<li>Stage 06B: <code>project_scan_settings</code>, <code>project_security_scan_settings</code>, <code>project_scans</code>, <code>security_rule_sets</code>, <code>security_findings</code>.</li>
+<li>Stage 07: <code>users</code>, <code>local_user_credentials</code>, <code>password_reset_tokens</code>, <code>user_sessions</code>, <code>auth_bootstrap_credentials</code>, <code>groups</code>, <code>group_members</code>, <code>permissions</code>, <code>roles</code>, <code>role_permissions</code>, <code>role_bindings</code>, <code>scim_identities</code>, <code>audit_log</code>.</li>
+<li>Platform stages: add only the schema needed for their enabled platform capabilities.</li>
+</ul>
+<p>If a later implementation needs to move a table between stages, the owning implementation spec must be updated together with roadmap, traceability and test plan.</p>
+<h2 id="base-entities">Base Entities</h2>
+<h3 id="rootpaths"><code>root_paths</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>path</code></li>
+<li><code>source</code></li>
+<li><code>enabled</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>source</code> accepts <code>config</code> or <code>api</code>. <code>scanning.global_scan</code> sync owns only <code>source = config</code> rows: removed config roots are disabled, while API-created roots are preserved.</p>
+<h3 id="projects"><code>projects</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>path</code></li>
+<li><code>relative_path</code></li>
+<li><code>root_path_id</code></li>
+<li><code>terraform_marker</code></li>
+<li><code>status</code></li>
+<li><code>repository_id</code></li>
+<li><code>environment_id</code></li>
+<li><code>default_workspace_id</code></li>
+<li><code>detected_at</code></li>
+<li><code>last_seen_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>status</code> values for Stage 04:</p>
+<ul>
+<li><code>active</code> - the project was found by the latest scan or explicitly created/updated;</li>
+<li><code>missing</code> - the project was previously found under a scanned <code>root_path</code>, but was not found in the latest completed scan;</li>
+<li><code>disabled</code> - the project is administratively disabled and must not automatically participate in project scan workflows.</li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>projects.root_path_id + projects.relative_path</code> unique;</li>
+<li>Stage 04 scanner creates/updates projects by <code>root_path_id + relative_path</code>;</li>
+<li>every locally discovered Terraform working directory remains a separate <code>projects</code> row, even when multiple projects belong to the same Git repository;</li>
+<li>project rows are created with the full schema from the beginning; fields whose information is not known at creation time remain nullable/default and are filled by later discovery/scanning/management stages;</li>
+<li>missing projects are not deleted by scanner;</li>
+<li>repeat scan must preserve known <code>repository_id</code>, <code>environment_id</code> and <code>default_workspace_id</code> unless an explicit update changes them.</li>
+</ul>
+<h3 id="projectlinks"><code>project_links</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>source_project_id</code></li>
+<li><code>target_project_id</code></li>
+<li><code>link_type</code></li>
+<li><code>repository_id</code></li>
+<li><code>detected_by_job_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>link_type</code> values:</p>
+<ul>
+<li><code>same_repository</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>project links express relationships between separate local project records; they do not merge projects;</li>
+<li><code>source_project_id</code> and <code>target_project_id</code> must reference different project rows;</li>
+<li>for <code>same_repository</code>, <code>repository_id</code> should reference the repository shared by both projects when known;</li>
+<li>duplicate links for the same unordered project pair and <code>link_type</code> must not be created.</li>
+</ul>
+<h3 id="projectscansettings"><code>project_scan_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>scan_enabled</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>run_after_clone</code></li>
+<li><code>run_after_pull</code></li>
+<li><code>scan_type</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Project-level scan settings are configured per project and are not global default parameters in <code>config.json</code>.</p>
+<h3 id="projectsecurityscansettings"><code>project_security_scan_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>enabled</code></li>
+<li><code>enabled_modules</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>validate_code</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>enabled_modules</code> must reference only modules from the global catalog <code>scanning.security_scan.modules</code>.</p>
+<h3 id="repositories"><code>repositories</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>provider_instance_id</code></li>
+<li><code>provider</code></li>
+<li><code>provider_host</code></li>
+<li><code>full_path</code></li>
+<li><code>clone_url</code></li>
+<li><code>default_branch</code></li>
+<li><code>root_path_id</code></li>
+<li><code>target_directory</code></li>
+<li><code>local_path</code></li>
+<li><code>auth_type</code></li>
+<li><code>default_credential_id</code></li>
+<li><code>status</code></li>
+<li><code>discovery_source</code></li>
+<li><code>superseded_by_repository_id</code></li>
+<li><code>identity_confirmed_at</code></li>
+<li><code>auto_sync_enabled</code></li>
+<li><code>webhook_enabled</code></li>
+<li><code>poll_interval</code></li>
+<li><code>last_pull_at</code></li>
+<li><code>last_error</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>provider</code> accepts one of these values: <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>, <code>generic</code>;</li>
+<li><code>status</code> accepts <code>active</code>, <code>missing</code>, <code>superseded</code> or <code>disabled</code>;</li>
+<li><code>discovery_source</code> accepts <code>filesystem</code>, <code>provider</code>, <code>clone</code> or <code>manual</code>;</li>
+<li><code>provider_instance_id</code> references a configured provider host/profile when the repository was created through a managed provider integration;</li>
+<li><code>provider_host</code> stores the normalized host provider instance, for example <code>gitlab.foodtech.team</code> or <code>github.com</code>;</li>
+<li>repository identity is defined by the tuple <code>provider + provider_host + full_path</code>;</li>
+<li>for Stage 04 filesystem-only generic local cards (<code>provider = generic</code>, <code>provider_host = local</code>), identity is scoped by <code>root_path_id + full_path</code> so different scan roots with the same relative repository path do not collapse into one repository card;</li>
+<li><code>full_path</code> is unique only within <code>provider + provider_host</code>;</li>
+<li><code>full_path</code> stores the namespace/project path inside the provider instance without protocol, host, leading slash or trailing <code>.git</code>;</li>
+<li><code>root_path_id</code> is required for cloned repositories;</li>
+<li><code>target_directory</code> stores the user-selected directory inside <code>root_path</code>;</li>
+<li><code>local_path</code> is computed inside the selected <code>root_path</code> and must not point outside that path;</li>
+<li><code>clone_url</code> is nullable and non-unique; it is a safe normalized transport endpoint and is not an identity key;</li>
+<li><code>clone_url</code> is not used for lookup/upsert/deduplication and must not contain credentials, tokens, passwords or userinfo;</li>
+<li>different <code>clone_url</code> values that normalize to one <code>provider + provider_host + full_path</code> must reference one repository card;</li>
+<li>Stage 04 global filesystem scan does not create repository cards directly;</li>
+<li>Stage 04 <code>project_discovery</code> job may create/update conservative repository card with <code>provider = generic</code>, <code>provider_host = local</code>, <code>root_path_id = &lt;containing root path&gt;</code>, <code>full_path = &lt;root_path-relative normalized repository path&gt;</code>, <code>clone_url = null</code>, <code>status = active</code>, <code>discovery_source = filesystem</code> and <code>identity_confirmed_at = null</code>;</li>
+<li>Stage 05 repository manager may enrich generic local cards after provider-aware identity resolution, but separate project records must not be merged;</li>
+<li>if provider-aware identity is resolved and no managed repository card exists, the generic repository card is enriched in place and keeps the same <code>repositories.id</code>;</li>
+<li>if provider-aware identity is resolved and a managed repository card already exists, project relations are moved to the managed card and the generic card becomes <code>status = superseded</code>;</li>
+<li><code>superseded_by_repository_id</code> may be set only when <code>status = superseded</code>;</li>
+<li><code>superseded</code> repositories must not participate in clone, pull, sync, webhook or polling operations;</li>
+<li><code>identity_confirmed_at</code> is set when provider-aware identity has been validated by repository manager or explicit provider workflow;</li>
+<li><code>auth_type</code> is the legacy/default transport hint for the repository card and accepts <code>ssh</code>, <code>https</code> or <code>token</code>; actual auth material comes from <code>repository_credentials</code>;</li>
+<li><code>default_credential_id</code> is nullable and points to the credential used by default for repository operations when the request did not pass an explicit <code>credential_id</code>;</li>
+<li>active <code>clone</code>, <code>pull</code>, <code>sync</code> for one <code>repository.id</code> must have at most one lock/job in <code>queued</code> or <code>running</code>.</li>
+</ul>
+<h3 id="repositoryproviderinstances"><code>repository_provider_instances</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>provider</code></li>
+<li><code>provider_host</code></li>
+<li><code>display_name</code></li>
+<li><code>deployment_type</code></li>
+<li><code>api_base_url</code></li>
+<li><code>web_base_url</code></li>
+<li><code>default_clone_protocol</code></li>
+<li><code>enabled</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>Stage 05 MVP stores <code>display_name</code> as <code>name</code> and does not yet persist <code>deployment_type</code> or <code>default_clone_protocol</code>; those fields remain the forward data-model contract for later provider-profile expansion.</li>
+<li><code>provider</code> accepts <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code> or <code>generic</code>;</li>
+<li><code>deployment_type</code> accepts <code>cloud</code>, <code>self_managed</code>, <code>enterprise_server</code>, <code>data_center</code> or <code>organization</code>;</li>
+<li><code>provider_host</code> normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;</li>
+<li><code>provider + provider_host</code> unique;</li>
+<li>provider instance stores host/profile metadata only, not secrets.</li>
+<li>Stage 05 MVP accepts <code>api_base_url</code> and <code>web_base_url</code> only as HTTPS URLs without userinfo; their host must normalize to the same value as <code>provider_host</code>.</li>
+</ul>
+<h3 id="repositorycredentials"><code>repository_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>provider_instance_id</code></li>
+<li><code>name</code></li>
+<li><code>auth_type</code></li>
+<li><code>username</code></li>
+<li><code>usages</code></li>
+<li><code>scope_hint</code></li>
+<li><code>token_ref</code></li>
+<li><code>password_ref</code></li>
+<li><code>private_key_ref</code></li>
+<li><code>passphrase_ref</code></li>
+<li><code>webhook_secret_ref</code></li>
+<li><code>last_validated_at</code></li>
+<li><code>last_error</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>Stage 05 MVP persists a single <code>secret_ref</code> selected by <code>auth_type</code> instead of separate <code>token_ref</code>, <code>password_ref</code>, <code>private_key_ref</code>, <code>passphrase_ref</code> and <code>webhook_secret_ref</code> columns; the separate columns are the forward data-model contract for richer credential material.</li>
+<li><code>provider_instance_id</code> is required;</li>
+<li><code>auth_type</code> accepts <code>ssh_key</code>, <code>https_token</code>, <code>https_basic</code>, <code>oauth_token</code>, <code>app_password</code>, <code>webhook_secret</code>;</li>
+<li><code>usages</code> contains one or more values: <code>git_transport</code>, <code>provider_api</code>, <code>webhook</code>;</li>
+<li>secret fields store only <code>secretref://...</code> values and never resolved secrets;</li>
+<li>MVP accepts only <code>secretref://env/...</code> secret refs;</li>
+<li>API responses mask secret refs and never return resolved secrets;</li>
+<li>one provider instance may have multiple credentials with different usages, scope hints and permissions;</li>
+<li>repository operations must validate that selected <code>credential_id</code> belongs to the same provider instance, supports the required usage and has an <code>auth_type</code> compatible with the selected transport protocol.</li>
+</ul>
+<h3 id="ignorerules"><code>ignore_rules</code></h3>
+<p>Stage 02 creates this table for imported system-level <code>.t-helper.ignore</code> rules from <code>thelper-ctl -reconfigure</code>. Stage 04 owns scanner/API behavior for <code>root_path</code> and <code>project</code> scopes.</p>
+<ul>
+<li><code>id</code></li>
+<li><code>scope_type</code></li>
+<li><code>scope_id</code></li>
+<li><code>pattern</code></li>
+<li><code>origin</code></li>
+<li><code>sort_order</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>origin</code> values:</p>
+<ul>
+<li><code>ui</code></li>
+<li><code>config_import</code></li>
+<li><code>system_default</code></li>
+</ul>
+<p>Allowed <code>scope_type</code> values:</p>
+<ul>
+<li><code>system</code></li>
+<li><code>root_path</code></li>
+<li><code>project</code></li>
+</ul>
+<p>For MVP, the matcher may support exclude-only rules. Negative <code>!pattern</code> rules must be stored without data loss and applied after full <code>.gitignore</code> semantics are added. <code>sort_order</code> preserves import/API upsert order for future full <code>.gitignore</code> semantics.</p>
+<h3 id="environments"><code>environments</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>code</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="workspaces"><code>workspaces</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>environment_id</code></li>
+<li><code>name</code></li>
+<li><code>is_default</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="configentries"><code>config_entries</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>key</code></li>
+<li><code>value</code></li>
+<li><code>value_type</code></li>
+<li><code>scope</code></li>
+<li><code>version</code></li>
+<li><code>updated_at</code></li>
+<li><code>updated_by</code></li>
+</ul>
+<p>Minimum configuration keys:</p>
+<ul>
+<li><code>system_settings.app_name</code></li>
+<li><code>system_settings.version</code></li>
+<li><code>system_settings.mode</code></li>
+<li><code>database.database_type</code></li>
+<li><code>database.database_path</code></li>
+<li><code>external_databases.enabled</code></li>
+<li><code>external_databases.provider</code></li>
+<li><code>external_databases.engine_flavor</code></li>
+<li><code>external_databases.host</code></li>
+<li><code>external_databases.port</code></li>
+<li><code>external_databases.username</code></li>
+<li><code>external_databases.password</code></li>
+<li><code>external_databases.database_name</code></li>
+<li><code>scanning.global_scan</code></li>
+<li><code>scanning.security_scan.modules</code></li>
+<li><code>repositories.default_auth_type</code></li>
+<li><code>repositories.poll_interval_default</code></li>
+<li><code>repositories.auto_sync_default</code></li>
+<li><code>security.active_rule_set_id</code></li>
+<li><code>api.listen_address</code></li>
+<li><code>auth.local_enabled</code></li>
+<li><code>workers.enabled</code></li>
+<li><code>workers.concurrency</code></li>
+<li><code>modules.enabled</code></li>
+<li><code>logging.level</code></li>
+<li><code>logging.format</code></li>
+<li><code>logging.log_path</code></li>
+</ul>
+<p><code>external_databases.provider</code> accepts values <code>postgresql</code>, <code>mysql</code> or <code>mssql</code>. <code>external_databases.engine_flavor</code> is optional and accepts values <code>standard</code> or <code>aurora</code>; it does not change the storage dialect, but is used for diagnostics, validation and operational guidance.</p>
+<h3 id="storageprofiles"><code>storage_profiles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>slot</code></li>
+<li><code>provider</code></li>
+<li><code>engine_flavor</code></li>
+<li><code>status</code></li>
+<li><code>config_payload</code></li>
+<li><code>database_fingerprint</code></li>
+<li><code>last_migrated_from_profile_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>slot</code> values:</p>
+<ul>
+<li><code>current</code></li>
+<li><code>migration</code></li>
+<li><code>historical</code></li>
+</ul>
+<p>Allowed <code>status</code> values:</p>
+<ul>
+<li><code>active</code></li>
+<li><code>migration_target</code></li>
+<li><code>migration_in_progress</code></li>
+<li><code>migration_succeeded</code></li>
+<li><code>migration_failed</code></li>
+<li><code>superseded</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>there can be only one profile with <code>slot = current</code> and <code>status = active</code>;</li>
+<li><code>migration</code> profile may be updated through <code>thelper-ctl -reconfigure</code> or <code>thelper-ctl -migrate-db</code>;</li>
+<li>active runtime uses only the <code>current</code> profile;</li>
+<li>active DB switching is performed only after a successful <code>thelper-ctl -migrate-db</code>;</li>
+<li>the old DB configuration is not deleted after switching and remains historical/rollback metadata;</li>
+<li><code>config_payload</code> stores only normalized storage settings and secret refs, not resolved secrets;</li>
+<li><code>database_fingerprint</code> must not reveal DSN, path, credentials or userinfo. Stage 01 derives the health fingerprint from safe storage locator components and exposes only the opaque fingerprint through <code>GET /api/health</code>.</li>
+</ul>
+<h3 id="storageprovidersettings"><code>storage_provider_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>storage_profile_id</code></li>
+<li><code>provider</code></li>
+<li><code>workers_concurrency</code></li>
+<li><code>worker_process_limit</code></li>
+<li><code>busy_timeout</code></li>
+<li><code>lease_duration</code></li>
+<li><code>heartbeat_interval</code></li>
+<li><code>sqlite_journal_mode</code></li>
+<li><code>sqlite_foreign_keys</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>settings scoped to one storage profile/provider do not change another provider's settings;</li>
+<li>for <code>sqlite</code>, MVP requires <code>worker_process_limit = 1</code>, <code>workers_concurrency = 1</code>, <code>sqlite_journal_mode = WAL</code>, <code>sqlite_foreign_keys = true</code>;</li>
+<li>for <code>postgresql</code>, worker limits are installation-specific and may be higher than <code>sqlite</code>;</li>
+<li>provider-specific settings are applied by the selected storage adapter at runtime start.</li>
+</ul>
+<h3 id="modulestates"><code>module_states</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>module_name</code></li>
+<li><code>state</code></li>
+<li><code>pid</code></li>
+<li><code>host</code></li>
+<li><code>details</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>state</code> values:</p>
+<ul>
+<li><code>starting</code></li>
+<li><code>running</code></li>
+<li><code>reloading</code></li>
+<li><code>restarting</code></li>
+<li><code>degraded</code></li>
+<li><code>stopped</code></li>
+<li><code>unavailable</code></li>
+<li><code>failed</code></li>
+</ul>
+<p><code>unavailable</code> means the module is known to the registry, but is unavailable in the current build, launch profile or implementation stage. <code>restart</code>/<code>reload</code> for such a module must return a controlled error.</p>
+<p>Initial module registry seed:</p>
+<ul>
+<li><code>core</code></li>
+<li><code>worker-runtime</code></li>
+<li><code>config-manager</code></li>
+<li><code>module-runtime</code></li>
+<li><code>status-monitor</code></li>
+<li><code>global-scanner</code></li>
+<li><code>repository-manager</code></li>
+<li><code>project-scanner</code></li>
+<li><code>security-validator</code></li>
+<li><code>auth</code></li>
+<li><code>web</code></li>
+</ul>
+<h3 id="jobs"><code>jobs</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_type</code></li>
+<li><code>status</code></li>
+<li><code>actor</code></li>
+<li><code>correlation_id</code></li>
+<li><code>idempotency_key</code></li>
+<li><code>parent_job_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>lock_key</code></li>
+<li><code>attempt_count</code></li>
+<li><code>max_attempts</code></li>
+<li><code>leased_by</code></li>
+<li><code>lease_expires_at</code></li>
+<li><code>heartbeat_at</code></li>
+<li><code>run_after</code></li>
+<li><code>priority</code></li>
+<li><code>payload</code></li>
+<li><code>result_payload</code></li>
+<li><code>created_at</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>error_message</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>job_type</code> values:</p>
+<ul>
+<li><code>global_scan</code></li>
+<li><code>project_discovery</code></li>
+<li><code>project_scan</code></li>
+<li><code>security_validation_scan</code></li>
+<li><code>repo_clone</code></li>
+<li><code>repo_pull</code></li>
+<li><code>repo_sync</code></li>
+<li><code>config_reload</code></li>
+<li><code>module_restart</code></li>
+<li><code>scim_sync</code></li>
+</ul>
+<p>Allowed <code>status</code> values:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>idempotency_key</code> is unique for repeatable write requests within a reasonable TTL;</li>
+<li><code>parent_job_id</code> is nullable and references the parent orchestration job in <code>jobs.id</code>;</li>
+<li><code>job_group_id</code> groups jobs of one workflow, for example <code>project_scan:&lt;project_scan_id&gt;</code>;</li>
+<li>child job must use the same <code>job_group_id</code> as the parent job;</li>
+<li><code>lock_key</code> is populated for operations that must be serialized;</li>
+<li><code>leased_by</code> is populated only after an atomic claim by a specific <code>thelper-worker</code>;</li>
+<li><code>lease_expires_at</code> defines the worker process ownership period for the job;</li>
+<li><code>heartbeat_at</code> is updated by the worker process during long execution;</li>
+<li>an expired lease allows returning the job to <code>queued</code> or finishing it as <code>failed</code> if <code>max_attempts</code> is exhausted;</li>
+<li><code>run_after</code> is used for delayed start and retry/backoff;</li>
+<li><code>attempt_count</code> must not exceed <code>max_attempts</code>;</li>
+<li>the job lease owns a specific job, while <code>job_locks</code> serialize business resources;</li>
+<li><code>payload</code> and <code>result_payload</code> have a versioned JSON schema described in <a href="payload-schemas.html"><code>payload-schemas.md</code></a>;</li>
+<li>an active job has status <code>queued</code> or <code>running</code>.</li>
+</ul>
+<h3 id="joblocks"><code>job_locks</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>lock_key</code></li>
+<li><code>job_id</code></li>
+<li><code>owner</code></li>
+<li><code>status</code></li>
+<li><code>created_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>released_at</code></li>
+</ul>
+<p>Allowed <code>status</code> values:</p>
+<ul>
+<li><code>held</code></li>
+<li><code>released</code></li>
+<li><code>expired</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>only one lock with status <code>held</code> for one <code>lock_key</code>;</li>
+<li>for repository operations, the final <code>lock_key</code> is built as <code>repository:&lt;repository_id&gt;</code>, to serialize <code>clone</code>, <code>pull</code> and <code>sync</code> with each other;</li>
+<li>clone additionally uses pre-create lock keys <code>repository-identity:&lt;provider&gt;:&lt;provider_host&gt;:&lt;full_path&gt;</code> and <code>repository-path:&lt;root_path_id&gt;:&lt;normalized_target_path&gt;</code> before a stable <code>repository_id</code> exists;</li>
+<li>released/expired repository-operation reservations are removed by an explicit cleanup storage primitive and may also be pruned opportunistically before new reservations are created;</li>
+<li>expired locks must not block new operations, but must be retained for audit/debug.</li>
+</ul>
+<h3 id="projectscans"><code>project_scans</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_id</code></li>
+<li><code>project_id</code></li>
+<li><code>rule_set_id</code></li>
+<li><code>scan_type</code></li>
+<li><code>status</code></li>
+<li><code>created_at</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>result_payload</code></li>
+<li><code>error_message</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>scan_type</code> values:</p>
+<ul>
+<li><code>terraform_static</code></li>
+<li><code>terraform_validate</code></li>
+<li><code>terraform_security</code></li>
+<li><code>terraform_full</code></li>
+<li><code>security_validation</code></li>
+</ul>
+<p>Allowed <code>status</code> values:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>partial</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p><code>project_scans.job_id</code> points to the parent <code>jobs.job_type = project_scan</code>. Aggregate <code>project_scans.status</code> and <code>project_scans.result_payload</code> are updated by <code>status-monitor</code>, not by individual worker handlers.</p>
+<h3 id="jobevents"><code>job_events</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>event_type</code></li>
+<li><code>status</code></li>
+<li><code>worker_id</code></li>
+<li><code>metric_name</code></li>
+<li><code>metric_value</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Allowed base <code>event_type</code> values:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>claimed</code></li>
+<li><code>started</code></li>
+<li><code>heartbeat</code></li>
+<li><code>progress</code></li>
+<li><code>child_created</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>cancelled</code></li>
+<li><code>lease_expired</code></li>
+<li><code>retry_scheduled</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>job_events</code> describe job execution facts and are not aggregate state;</li>
+<li>payload must not contain secrets, tokens, private keys or raw Terraform source;</li>
+<li>workers write <code>job_events</code>, and <code>status-monitor</code> builds aggregate read models.</li>
+</ul>
+<h3 id="workflowstatuses"><code>workflow_statuses</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>workflow_type</code></li>
+<li><code>workflow_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>aggregate_status</code></li>
+<li><code>progress_current</code></li>
+<li><code>progress_total</code></li>
+<li><code>summary_payload</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed base <code>workflow_type</code> values:</p>
+<ul>
+<li><code>project_scan</code></li>
+<li><code>project_discovery</code></li>
+<li><code>global_scan</code></li>
+<li><code>repository_operation</code></li>
+<li><code>config_operation</code></li>
+<li><code>module_operation</code></li>
+<li><code>scim_sync</code></li>
+</ul>
+<p>Allowed <code>aggregate_status</code> values:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>partial</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>workflow_statuses.workflow_type + workflow_id</code> unique;</li>
+<li><code>workflow_statuses.job_group_id</code> unique;</li>
+<li><code>workflow_statuses</code> are a read model owned by <code>status-monitor</code>;</li>
+<li>UI and internal services read workflow status from the aggregate read model instead of assembling it themselves from child jobs.</li>
+</ul>
+<h3 id="auditlog"><code>audit_log</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>actor</code></li>
+<li><code>action</code></li>
+<li><code>entity_type</code></li>
+<li><code>entity_id</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h2 id="security-entities">Security Entities</h2>
+<h3 id="securityrulesets"><code>security_rule_sets</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>version</code></li>
+<li><code>source_type</code></li>
+<li><code>checksum</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>source_type</code> values:</p>
+<ul>
+<li><code>bundled</code></li>
+<li><code>local_upload</code></li>
+<li><code>local_path</code></li>
+</ul>
+<h3 id="toolprofiles"><code>tool_profiles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>tool</code></li>
+<li><code>profile_id</code></li>
+<li><code>profile_version</code></li>
+<li><code>schema_version</code></li>
+<li><code>source_type</code></li>
+<li><code>source_path</code></li>
+<li><code>checksum</code></li>
+<li><code>certified_versions</code></li>
+<li><code>compatible_versions</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>tool</code> values for Stage 06A/06B MVP:</p>
+<ul>
+<li><code>terraform</code></li>
+<li><code>tflint</code></li>
+<li><code>trivy</code></li>
+</ul>
+<p><code>checkov</code>, <code>gitleaks</code>, <code>opa</code> and <code>conftest</code> are extension tool/profile targets outside mandatory Stage 06A/06B MVP acceptance.</p>
+<p>Allowed <code>source_type</code> values:</p>
+<ul>
+<li><code>bundled</code></li>
+<li><code>local_upload</code></li>
+<li><code>local_path</code></li>
+<li><code>generated_candidate</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>tool + profile_id + profile_version</code> unique;</li>
+<li>the active profile is selected by <code>tool</code>, configured version policy and discovered tool version;</li>
+<li>bundled certified profiles are required for <code>terraform validate</code>, <code>TFLint</code> and <code>Trivy</code>;</li>
+<li>profile files follow ADR 0018 and must pass validation before activation;</li>
+<li><code>generated_candidate</code> profiles created by <code>tool-profile-analyzer</code> are inactive by default and must never be selected by runtime until explicitly validated and activated;</li>
+<li>profile content must not contain raw secrets, shell fragments, arbitrary scripts or commands outside explicit version discovery and scan command templates.</li>
+</ul>
+<h3 id="toolprofilevalidationresults"><code>tool_profile_validation_results</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>tool_profile_id</code></li>
+<li><code>tool</code></li>
+<li><code>tool_version</code></li>
+<li><code>fixture_set</code></li>
+<li><code>validation_status</code></li>
+<li><code>diagnostics</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Allowed <code>validation_status</code> values:</p>
+<ul>
+<li><code>passed</code></li>
+<li><code>failed</code></li>
+<li><code>warning</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>validation results store fixture diagnostics and profile validation metadata, not raw Terraform source or secrets;</li>
+<li>activation of local/generated profiles requires at least one successful validation result for the target tool version or approved compatible version range.</li>
+</ul>
+<h3 id="securityfindings"><code>security_findings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>repository_id</code></li>
+<li><code>workspace_id</code></li>
+<li><code>job_id</code></li>
+<li><code>rule_set_id</code></li>
+<li><code>check_type</code></li>
+<li><code>rule_id</code></li>
+<li><code>severity</code></li>
+<li><code>status</code></li>
+<li><code>file_path</code></li>
+<li><code>resource_ref</code></li>
+<li><code>title</code></li>
+<li><code>description</code></li>
+<li><code>remediation</code></li>
+<li><code>fingerprint</code></li>
+<li><code>fingerprint_schema_version</code></li>
+<li><code>fingerprint_components</code></li>
+<li><code>first_seen_at</code></li>
+<li><code>last_seen_at</code></li>
+<li><code>detected_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Allowed <code>severity</code> values:</p>
+<ul>
+<li><code>info</code></li>
+<li><code>low</code></li>
+<li><code>medium</code></li>
+<li><code>high</code></li>
+<li><code>critical</code></li>
+</ul>
+<p>Allowed <code>status</code> values:</p>
+<ul>
+<li><code>open</code></li>
+<li><code>accepted</code></li>
+<li><code>false_positive</code></li>
+<li><code>fixed</code></li>
+<li><code>suppressed</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>fingerprint</code> has format <code>fp:v1:&lt;sha256&gt;</code> according to ADR 0017;</li>
+<li><code>fingerprint_schema_version</code> accepts <code>security_finding.fingerprint.v1</code> for MVP;</li>
+<li><code>fingerprint_components</code> stores canonical JSON components without secrets or raw Terraform source;</li>
+<li><code>resource_ref</code> or stable <code>finding_key</code> inside <code>fingerprint_components</code> is required for a persisted finding;</li>
+<li><code>first_seen_at</code> records the first fingerprint detection;</li>
+<li><code>last_seen_at</code> is updated on every scan where the finding is present;</li>
+<li><code>detected_at</code> is stored as a backward-compatible alias/initial detection timestamp and must match <code>first_seen_at</code> for new rows.</li>
+</ul>
+<h2 id="auth-and-rbac-entities">Auth and RBAC Entities</h2>
+<h3 id="users"><code>users</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>username</code></li>
+<li><code>email</code></li>
+<li><code>display_name</code></li>
+<li><code>auth_source</code></li>
+<li><code>external_id</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>users</code> is the shared identity entity for local and external auth sources. Local password hashes are not stored in <code>users</code>.</p>
+<h3 id="localusercredentials"><code>local_user_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>password_hash</code></li>
+<li><code>password_hash_algorithm</code></li>
+<li><code>password_updated_at</code></li>
+<li><code>password_must_change</code></li>
+<li><code>failed_attempt_count</code></li>
+<li><code>locked_until</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>user_id</code> is required and unique;</li>
+<li><code>password_hash</code> stores the Argon2id PHC string;</li>
+<li><code>password_hash_algorithm</code> accepts <code>argon2id</code> in MVP;</li>
+<li>raw password is never stored;</li>
+<li>successful login resets <code>failed_attempt_count</code>;</li>
+<li>5 consecutive failed attempts set <code>locked_until</code> to 15 minutes from the lock moment;</li>
+<li>if Argon2id PHC parameters are weaker than current defaults, the hash is updated after successful login.</li>
+</ul>
+<h3 id="passwordresettokens"><code>password_reset_tokens</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>token_hash</code></li>
+<li><code>expires_at</code></li>
+<li><code>used_at</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>reset token is stored only as a hash;</li>
+<li>raw reset token is never stored;</li>
+<li>token is one-time-use and invalid after <code>used_at</code> or <code>expires_at</code>;</li>
+<li>completing the reset flow sets <code>local_user_credentials.password_must_change = true</code>, unless a separate administrative policy defines different behavior.</li>
+</ul>
+<h3 id="usersessions"><code>user_sessions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>token_hash</code></li>
+<li><code>auth_source</code></li>
+<li><code>created_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>revoked_at</code></li>
+<li><code>last_seen_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li><code>user_id</code> is required and references <code>users.id</code>;</li>
+<li>raw session token is never stored;</li>
+<li><code>token_hash</code> stores only the hash of the opaque session token;</li>
+<li>session is invalid after <code>revoked_at</code> or <code>expires_at</code>;</li>
+<li>API responses return only opaque <code>session_id</code> and safe user metadata, but not the bearer token hash.</li>
+</ul>
+<h3 id="authbootstrapcredentials"><code>auth_bootstrap_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>username</code></li>
+<li><code>password_hash</code></li>
+<li><code>shown_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>used_at</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>bootstrap user is created automatically only on the first start of <code>thelper</code> with empty auth state;</li>
+<li>username and initial password are generated as random Latin letters and digits, 16 characters each;</li>
+<li>password is stored only as an Argon2id PHC hash through <code>local_user_credentials</code>; raw password is kept only in memory until single display;</li>
+<li>credentials are shown once in the first launched UI and in active runtime stdout;</li>
+<li>stdout/UI warning must explicitly state that bootstrap credentials are valid for 24 hours;</li>
+<li>if the bootstrap user is not used within 24 hours, it is deleted together with credentials;</li>
+<li>after bootstrap user expiration or deletion, a new bootstrap user is not created automatically;</li>
+<li>if auth was not configured and bootstrap credentials expired, recovery requires full data deletion and a restart as a new empty installation.</li>
+</ul>
+<h3 id="groups"><code>groups</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>external_id</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="groupmembers"><code>group_members</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>group_id</code></li>
+<li><code>user_id</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="permissions"><code>permissions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>code</code></li>
+<li><code>scope_type</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="roles"><code>roles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>scope_type</code></li>
+<li><code>description</code></li>
+<li><code>is_system</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="rolepermissions"><code>role_permissions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>role_id</code></li>
+<li><code>permission_id</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rolebindings"><code>role_bindings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>subject_type</code></li>
+<li><code>subject_id</code></li>
+<li><code>role_id</code></li>
+<li><code>scope_type</code></li>
+<li><code>scope_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="scimidentities"><code>scim_identities</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>group_id</code></li>
+<li><code>provider</code></li>
+<li><code>external_id</code></li>
+<li><code>raw_payload</code></li>
+<li><code>last_sync_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="entity-relationships">Entity Relationships</h2>
+<ul>
+<li><code>root_path</code> contains many discovered <code>projects</code></li>
+<li><code>project</code> may be linked to one <code>repository</code></li>
+<li><code>project_link</code> relates two separate <code>projects</code>, optionally through one shared <code>repository</code></li>
+<li><code>repository</code> belongs to one optional <code>repository_provider_instance</code></li>
+<li><code>repository</code> can reference one default <code>repository_credential</code></li>
+<li><code>repository_provider_instance</code> has many <code>repository_credentials</code></li>
+<li><code>project</code> may have several <code>workspaces</code></li>
+<li><code>workspace</code> belongs to the <code>project</code> + <code>environment</code> pair</li>
+<li><code>project_scan</code> belongs to one <code>project</code></li>
+<li><code>security_finding</code> may reference <code>project</code>, <code>repository</code>, <code>workspace</code>, <code>job</code>, <code>security_rule_set</code></li>
+<li><code>tool_profile_validation_result</code> belongs to one <code>tool_profile</code></li>
+<li><code>job_lock</code> belongs to one active or completed <code>job</code></li>
+<li><code>local_user_credentials</code> belongs to one local-auth <code>user</code></li>
+<li><code>password_reset_tokens</code> belongs to one <code>user</code></li>
+<li><code>user_sessions</code> belongs to one <code>user</code></li>
+<li><code>auth_bootstrap_credentials</code> belongs to one bootstrap <code>user</code></li>
+<li><code>role_binding</code> binds <code>user</code> or <code>group</code> to a role in a specific scope</li>
+</ul>
+<h2 id="nullable-fk-and-delete-behavior">Nullable, FK and delete behavior</h2>
+<p>Minimum rules for SQL adapters:</p>
+<ul>
+<li><code>projects.root_path_id</code> is required and uses <code>ON DELETE RESTRICT</code>;</li>
+<li><code>project_links.source_project_id</code> and <code>project_links.target_project_id</code> are required and use <code>ON DELETE CASCADE</code>;</li>
+<li><code>project_links.repository_id</code> is nullable and uses <code>ON DELETE SET NULL</code>;</li>
+<li><code>project_scan_settings.project_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>project_security_scan_settings.project_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>projects.repository_id</code>, <code>projects.environment_id</code>, <code>projects.default_workspace_id</code> are nullable and use <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.provider_instance_id</code> is nullable and uses <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.default_credential_id</code> is nullable and uses <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.superseded_by_repository_id</code> is nullable and uses <code>ON DELETE SET NULL</code>;</li>
+<li><code>repository_credentials.provider_instance_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>workspaces.project_id</code> and <code>workspaces.environment_id</code> are required and use <code>ON DELETE CASCADE</code> for <code>project</code>, <code>ON DELETE RESTRICT</code> for <code>environment</code>;</li>
+<li><code>project_scans.job_id</code> and <code>project_scans.project_id</code> are required; deletion of related <code>jobs</code> and <code>projects</code> must use <code>ON DELETE RESTRICT</code>;</li>
+<li><code>job_locks.job_id</code> is required; deletion of related <code>jobs</code> must use <code>ON DELETE RESTRICT</code>;</li>
+<li><code>security_findings.project_id</code>, <code>security_findings.repository_id</code>, <code>security_findings.workspace_id</code>, <code>security_findings.job_id</code>, <code>security_findings.rule_set_id</code> are nullable, but a finding must reference at least one of <code>project_id</code>, <code>repository_id</code>, <code>workspace_id</code> or <code>job_id</code>;</li>
+<li><code>tool_profile_validation_results.tool_profile_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>local_user_credentials.user_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>password_reset_tokens.user_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>user_sessions.user_id</code> is required and uses <code>ON DELETE CASCADE</code>;</li>
+<li><code>role_bindings.scope_id = NULL</code> only for <code>system</code> scope; for object scopes <code>scope_id</code> is required;</li>
+<li><code>scim_identities</code> must reference exactly one subject: <code>user_id</code> or <code>group_id</code>;</li>
+<li>audit records are not cascade-deleted together with business entities.</li>
+</ul>
+<h2 id="indexes-and-uniqueness">Indexes and Uniqueness</h2>
+<p>Minimum set for SQL adapters:</p>
+<ul>
+<li><code>root_paths.path</code> unique;</li>
+<li><code>projects.root_path_id + projects.relative_path</code> unique;</li>
+<li><code>project_links.source_project_id + project_links.target_project_id + project_links.link_type</code> unique after canonical ordering of project ids;</li>
+<li><code>project_links.repository_id</code> indexed;</li>
+<li><code>project_scan_settings.project_id</code> unique;</li>
+<li><code>project_security_scan_settings.project_id</code> unique;</li>
+<li>provider-aware repositories use unique <code>repositories.provider + repositories.provider_host + repositories.full_path</code>;</li>
+<li>Stage 04 generic local repositories use unique <code>repositories.provider + repositories.provider_host + repositories.root_path_id + repositories.full_path</code>;</li>
+<li><code>repositories.provider_host + repositories.full_path</code> indexed;</li>
+<li><code>repositories.provider_instance_id + repositories.full_path</code> indexed;</li>
+<li><code>repositories.local_path</code> indexed;</li>
+<li><code>repositories.status</code> indexed;</li>
+<li><code>repositories.discovery_source</code> indexed;</li>
+<li><code>repositories.superseded_by_repository_id</code> indexed;</li>
+<li><code>repository_provider_instances.provider + repository_provider_instances.provider_host</code> unique;</li>
+<li><code>repository_credentials.provider_instance_id + repository_credentials.name</code> unique;</li>
+<li><code>repository_credentials.provider_instance_id + repository_credentials.auth_type</code> indexed;</li>
+<li><code>ignore_rules.scope_type + ignore_rules.scope_id + ignore_rules.pattern</code> unique;</li>
+<li><code>environments.code</code> unique;</li>
+<li><code>workspaces.project_id + workspaces.name</code> unique;</li>
+<li><code>config_entries.key + config_entries.scope</code> unique;</li>
+<li><code>jobs.idempotency_key</code> unique where not null;</li>
+<li><code>jobs.parent_job_id</code> indexed;</li>
+<li><code>jobs.job_group_id + jobs.status</code> indexed;</li>
+<li><code>jobs.lock_key + jobs.status</code> indexed for active job lookup;</li>
+<li><code>jobs.status + run_after + priority + created_at</code> indexed for worker claim;</li>
+<li><code>jobs.lease_expires_at</code> indexed for expired lease recovery;</li>
+<li><code>jobs.leased_by + status</code> indexed for worker diagnostics;</li>
+<li><code>job_locks.lock_key</code> unique where <code>status = held</code>;</li>
+<li><code>project_scans.job_id</code> unique;</li>
+<li><code>project_scans.project_id + project_scans.status</code> indexed;</li>
+<li><code>job_events.job_group_id + job_events.created_at</code> indexed;</li>
+<li><code>job_events.job_id + job_events.created_at</code> indexed;</li>
+<li><code>workflow_statuses.workflow_type + workflow_statuses.workflow_id</code> unique;</li>
+<li><code>workflow_statuses.job_group_id</code> unique;</li>
+<li><code>security_findings.fingerprint</code> unique;</li>
+<li><code>security_findings.rule_set_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.project_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.repository_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.job_id</code> indexed;</li>
+<li><code>security_findings.severity + security_findings.status</code> indexed;</li>
+<li><code>tool_profiles.tool + tool_profiles.profile_id + tool_profiles.profile_version</code> unique;</li>
+<li><code>tool_profiles.tool + tool_profiles.active</code> indexed;</li>
+<li><code>tool_profile_validation_results.tool_profile_id + tool_profile_validation_results.tool_version</code> indexed;</li>
+<li><code>tool_profile_validation_results.validation_status</code> indexed;</li>
+<li><code>users.username</code> unique;</li>
+<li><code>users.email</code> unique where not null;</li>
+<li><code>local_user_credentials.user_id</code> unique;</li>
+<li><code>password_reset_tokens.user_id + expires_at</code> indexed;</li>
+<li><code>password_reset_tokens.expires_at</code> indexed;</li>
+<li><code>user_sessions.user_id + expires_at</code> indexed;</li>
+<li><code>user_sessions.token_hash</code> unique;</li>
+<li><code>user_sessions.expires_at</code> indexed;</li>
+<li><code>groups.name</code> unique;</li>
+<li><code>permissions.code</code> unique;</li>
+<li><code>roles.name + roles.scope_type</code> unique;</li>
+<li><code>role_bindings.subject_type + role_bindings.subject_id + role_bindings.role_id + role_bindings.scope_type + role_bindings.scope_id</code> unique.</li>
+</ul>
+<h2 id="cross-storage-rules">Cross-Storage Rules</h2>
+<ul>
+<li>SQL/SQL-like backends implement invariants through migrations, constraints and indexes where supported.</li>
+<li>MVP storage adapters: <code>PostgreSQL</code> and <code>SQLite</code>.</li>
+<li>Platform storage adapters: <code>MySQL</code> and <code>MSSQL</code>.</li>
+<li>Aurora PostgreSQL is supported through the <code>postgresql</code> adapter; Aurora MySQL is supported through the <code>mysql</code> adapter.</li>
+<li>Babelfish for Aurora PostgreSQL is not considered an <code>mssql</code> adapter target without a separate compatibility decision.</li>
+<li>All SQL adapters use synchronized logical migration versions with dialect-specific SQL.</li>
+<li>Adapters with limited SQL constraint support must duplicate critical checks at the application level.</li>
+<li>Times are stored in UTC.</li>
+<li>Identifiers must be opaque to API consumers.</li>
+<li><code>payload</code>, <code>details</code> and <code>result_payload</code> must have a versioned JSON schema described in <a href="payload-schemas.html"><code>payload-schemas.md</code></a>.</li>
+</ul>
+<h2 id="design-notes">Design Notes</h2>
+<ul>
+<li>the model remains common for SQL and non-SQL backends;</li>
+<li>SQL adapters must support migrations;</li>
+<li>critical invariants must be validated both at the storage level and at the application level;</li>
+<li>findings and project scans are best designed as append-oriented entities with explicit status and timestamps.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html"><span>Implementation Specs</span>Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html"><span>Implementation Specs</span>Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html"><span>Implementation Specs</span>Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html"><span>Implementation Specs</span>Stage 07: Auth, RBAC, SCIM and Audit</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html" aria-current="page">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../data-model.html">Русская страница</a>
+      <a href="data-model.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/data-model.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

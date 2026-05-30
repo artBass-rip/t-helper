@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 260" role="img" aria-labelledby="title desc">
+  <title id="title">t-helper mark</title>
+  <desc id="desc">Terraform blocks with security analysis symbols.</desc>
+  <defs>
+    <linearGradient id="purple" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#9b69ff"/>
+      <stop offset=".45" stop-color="#6b35f2"/>
+      <stop offset="1" stop-color="#3210b4"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#20f0ff"/>
+      <stop offset="1" stop-color="#04aabf"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#35edb6"/>
+      <stop offset="1" stop-color="#0876d9"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#030816" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <path fill="url(#purple)" d="M72 32h60l-20 20H52z"/>
+    <path fill="#5c26ef" d="M52 52h60v58H52z"/>
+    <path fill="#28138b" d="M112 52l20-20v58l-20 20z"/>
+    <path fill="url(#purple)" d="M200 32h60l26 20h-62z"/>
+    <path fill="#5721e8" d="M224 52h62v58h-62z"/>
+    <path fill="#7c50ff" d="M200 32l24 20v58l-24-20z"/>
+    <path fill="url(#cyan)" d="M138 42h66l20 18h-106z"/>
+    <path fill="#08b8cf" d="M118 60h106v48H118z"/>
+    <path fill="#087eaa" d="M204 42l20 18v48l-20-18z"/>
+    <path fill="url(#purple)" d="M142 116h58v70l-29 16-29-16z"/>
+    <path fill="#7b4dff" d="M142 116h58l-18 18h-40z"/>
+    <path fill="#4d22d8" d="M182 134h18v52l-18 16z"/>
+    <path fill="url(#purple)" d="M142 196l29 16 29-16v24l-29 16-29-16z"/>
+    <path fill="url(#purple)" d="M82 204l36-18 38 18-38 20z"/>
+    <path fill="#4f20dc" d="M82 204l36 20v32l-36-20z"/>
+    <path fill="#2b129d" d="M118 224l38-20v32l-38 20z"/>
+    <path fill="#101a33" d="M178 220l22-10 22 10-22 12z"/>
+    <path fill="#121a30" d="M178 220l22 12v24l-22-12z"/>
+    <path fill="#050a18" d="M200 232l22-12v24l-22 12z"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path fill="#15223a" d="M58 162l17 16-42 46-17-16z"/>
+    <circle cx="84" cy="142" r="40" fill="#121a31"/>
+    <circle cx="84" cy="142" r="29" fill="#596b91"/>
+    <circle cx="84" cy="142" r="23" fill="url(#cyan)"/>
+    <circle cx="75" cy="132" r="7" fill="#d9ffff" opacity=".9"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path fill="url(#green)" d="M244 160l46-21v55c0 28-17 50-46 64-29-14-46-36-46-64v-55z"/>
+    <path fill="#11172d" d="M225 186h38c8 0 14 6 14 14v34c0 8-6 14-14 14h-38c-8 0-14-6-14-14v-34c0-8 6-14 14-14z"/>
+    <path fill="none" stroke="#10d8c5" stroke-width="9" d="M225 187v-18c0-13 9-23 20-23s20 10 20 23v18"/>
+    <circle cx="244" cy="216" r="7" fill="#32f3c7"/>
+    <path fill="#32f3c7" d="M241 219h7v17h-7z"/>
+  </g>
+</svg>

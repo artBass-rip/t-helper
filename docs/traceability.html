@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Трассировка требований - T-Helper documentation.">
+    <title>Трассировка требований - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="traceability.html">
+    <link rel="alternate" hreflang="en" href="en/traceability.html">
+    <link rel="icon" href="assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <img class="brand-mark" src="assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="is-active" href="traceability.html" aria-current="page">RU</a>
+        <a class="" href="en/traceability.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/traceability.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>traceability.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#трассировка-требований">Трассировка требований</a>
+<a class="toc-level-2" href="#правила-поддержки-трассировки">Правила поддержки трассировки</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="трассировка-требований">Трассировка требований</h1>
+<p>Этот документ связывает продуктовые требования с API, моделью данных, payload schemas, permissions, stage roadmap, test plan и критериями приёмки. Он должен обновляться вместе с <a href="requirements.html"><code>requirements.md</code></a>, <a href="interfaces.html"><code>interfaces.md</code></a>, <a href="api.html"><code>api.md</code></a>, <a href="payload-schemas.html"><code>payload-schemas.md</code></a>, <a href="data-model.html"><code>data-model.md</code></a>, <a href="access-control.html"><code>access-control.md</code></a>, <a href="test-plan.html"><code>test-plan.md</code></a> и <a href="code-optimization.html"><code>code-optimization.md</code></a>, если изменение затрагивает engineering quality или performance backlog.</p>
+<table>
+<thead><tr><th>Capability</th><th>Requirements</th><th>API</th><th>Data model</th><th>Permissions</th><th>Roadmap</th><th>Acceptance</th></tr></thead>
+<tbody>
+<tr><td>Global scan and project discovery</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Глобальное сканирование&quot;, &quot;Project discovery и Git-связи&quot;</td><td><code>POST /api/scans</code>, <code>GET /api/scans/{job_id}</code>, <code>GET /api/jobs/{id}</code></td><td><code>root_paths</code>, <code>projects</code>, <code>project_links</code>, <code>repositories</code>, <code>jobs</code></td><td><code>system.globalscan.run</code>, <code>system.job.read</code></td><td>Stage 04</td><td><code>ACC-MVP-001</code>-<code>ACC-MVP-005</code></td></tr>
+<tr><td>Root paths</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Глобальное сканирование&quot;</td><td><code>GET /api/root-paths</code>, <code>PUT /api/root-paths</code></td><td><code>root_paths</code>, <code>config_entries</code></td><td><code>system.rootpath.read</code>, <code>system.rootpath.write</code></td><td>Stage 04</td><td><code>ACC-MVP-021</code></td></tr>
+<tr><td>Ignore rules</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Исключения при сканировании&quot;</td><td>Stage 02 imports system rules through <code>thelper-ctl -reconfigure</code>; Stage 04 adds <code>GET /api/ignore-rules</code>, <code>PUT /api/ignore-rules</code></td><td><code>ignore_rules</code></td><td><code>system.ignore.read</code>, <code>system.ignore.write</code></td><td>Stage 02 imported system rules; Stage 04 API/scanner behavior; Stage 09 full <code>.gitignore</code> semantics</td><td><code>ACC-MVP-004</code>, <code>ACC-PLATFORM-004</code></td></tr>
+<tr><td>Project registry</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Регистрация объектов&quot;</td><td><code>GET /api/projects</code>, <code>GET /api/projects/{id}</code>, <code>GET /api/projects/{id}/links</code></td><td><code>projects</code>, <code>project_links</code>, <code>environments</code>, <code>workspaces</code>, <code>repositories</code></td><td><code>project.read</code>, <code>project.write</code>, <code>project.relation.write</code></td><td>Stage 04</td><td><code>ACC-MVP-005</code>, <code>ACC-MVP-015</code></td></tr>
+<tr><td>MVP lifecycle without hard delete</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Lifecycle без hard delete в MVP&quot;, Stage 00 decision register</td><td>non-destructive <code>PUT</code> endpoints and documented state transitions; no public <code>DELETE</code> endpoints in MVP</td><td><code>enabled</code>, <code>active</code>, <code>status</code>, <code>superseded_by_repository_id</code> fields across owned entities</td><td>corresponding <code>*.write</code>, runtime or specialized operation permissions; <code>*.delete</code> reserved for future hard delete endpoints</td><td>Stage 02-08, future lifecycle expansion</td><td>bulk write/delete semantics tests</td></tr>
+<tr><td>Environments and workspaces</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Frontend&quot;</td><td><code>GET /api/environments</code>, <code>GET /api/environments/{id}</code>, <code>GET /api/workspaces</code>, <code>GET /api/workspaces/{id}</code></td><td><code>environments</code>, <code>workspaces</code></td><td><code>environment.read</code>, <code>workspace.read</code></td><td>Stage 04 backend/API, Stage 08 UI</td><td><code>ACC-MVP-015</code>, <code>ACC-MVP-021</code></td></tr>
+<tr><td>Frontend UI and local GUI</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Frontend&quot;, <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a></td><td>all MVP read/operate endpoints from <a href="api.html"><code>api.md</code></a>; no frontend-only backend API</td><td>frontend route tree and typed API client; backend persistent entities through documented API</td><td>endpoint-specific permissions from API authorization matrix</td><td>Stage 08, Stage 12</td><td><code>ACC-MVP-011</code>, <code>ACC-MVP-012</code>, <code>ACC-MVP-021</code>, <code>ACC-PLATFORM-002</code>, <code>ACC-PLATFORM-003</code></td></tr>
+<tr><td>Repository operations</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Работа с репозиториями&quot;</td><td><code>GET /api/repos</code>, <code>GET /api/repos/{id}</code>, <code>GET/PUT /api/repo-provider-instances</code>, <code>GET/PUT /api/repo-credentials</code>, <code>POST /api/repos/clone</code>, <code>POST /api/repos/pull</code>, <code>POST /api/repos/sync</code></td><td><code>repositories</code>, <code>repository_provider_instances</code>, <code>repository_credentials</code>, <code>repository_operation_reservations</code>, <code>jobs</code>, <code>job_locks</code>, <code>root_paths</code></td><td><code>repository.read</code>, <code>repository.provider.*</code>, <code>repository.credential.*</code>, <code>repository.clone</code>, <code>repository.pull</code>, <code>repository.sync</code></td><td>Stage 05 completed; Stage 05A, Stage 05B, Stage 14 extensions</td><td><code>ACC-MVP-014</code>, <code>ACC-MVP-021</code>, <code>ACC-MVP-022</code>, <code>ACC-PLATFORM-006</code></td></tr>
+<tr><td>Project scan (<code>terraform validate</code>, <code>TFLint</code>)</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Базовый стек сканирования&quot;, &quot;Проектное Terraform-сканирование&quot;</td><td><code>POST /api/project-scans</code>, <code>GET /api/project-scans/{project_scan_id}</code>, <code>GET/PUT /api/projects/{id}/scan-settings</code></td><td><code>project_scans</code>, <code>project_scan_settings</code>, <code>jobs</code>, <code>security_rule_sets</code></td><td><code>project.scan.run</code>, <code>project.scan.read</code>, <code>project.scan.write</code>, <code>security.scan.run</code>, <code>security.scan.read</code></td><td>Stage 06B, depends on Stage 06A</td><td><code>ACC-MVP-006</code>, <code>ACC-MVP-020</code></td></tr>
+<tr><td>Security validation scan (MVP scanner plus adapters)</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Базовый стек сканирования&quot;, &quot;Сканирование безопасности и валидация кода&quot;</td><td><code>POST /api/project-scans</code>, <code>GET/PUT /api/projects/{id}/scan-settings</code>, <code>GET /api/project-scans/{project_scan_id}/findings</code></td><td><code>project_security_scan_settings</code>, <code>project_scans</code>, <code>security_findings</code>, <code>jobs</code></td><td><code>security.scan.run</code>, <code>security.scan.read</code>, <code>security.scan.write</code>, <code>security.finding.read</code></td><td>Stage 06B, Stage 11; depends on Stage 06A</td><td><code>ACC-MVP-006</code>, <code>ACC-MVP-018</code>-<code>ACC-MVP-020</code>, <code>ACC-PLATFORM-003</code>, <code>ACC-PLATFORM-007</code></td></tr>
+<tr><td>External toolchain profiles</td><td><a href="architecture.html"><code>architecture.md</code></a> -&gt; <code>tool-profile-runtime</code>, ADR 0018</td><td><code>GET /api/tool-profiles</code>, <code>POST /api/tool-profiles/validate</code>, <code>POST /api/tool-profiles/import</code>, <code>POST /api/tool-profiles/activate</code>, <code>POST /api/tool-profiles/analyze</code></td><td><code>tool_profiles</code>, <code>tool_profile_validation_results</code>, <code>jobs.result_payload</code>, <code>project_scans.result_payload</code></td><td><code>security.toolprofile.read</code>, <code>security.toolprofile.write</code>, <code>security.toolprofile.analyze</code></td><td>Stage 06A, Stage 11</td><td><code>ACC-MVP-006</code>, <code>ACC-MVP-018</code>, <code>ACC-PLATFORM-007</code></td></tr>
+<tr><td>Findings</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Сканирование безопасности и валидация кода&quot;</td><td><code>GET /api/project-scans/{project_scan_id}/findings</code>, <code>GET /api/security/findings</code>, <code>GET /api/security/findings/{id}</code></td><td><code>security_findings</code>, <code>security_rule_sets</code></td><td><code>security.finding.read</code>, <code>security.finding.write</code></td><td>Stage 06B</td><td><code>ACC-MVP-018</code>-<code>ACC-MVP-020</code></td></tr>
+<tr><td>Security rule sets</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Сканирование безопасности и валидация кода&quot;</td><td><code>GET /api/security/rule-sets</code>, <code>PUT /api/security/rule-sets</code></td><td><code>security_rule_sets</code></td><td><code>security.ruleset.read</code>, <code>security.ruleset.write</code></td><td>Stage 06B, Stage 11, Stage 12</td><td><code>ACC-MVP-019</code>, <code>ACC-PLATFORM-003</code></td></tr>
+<tr><td>Config lifecycle</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Конфигурация и lifecycle&quot;</td><td><code>GET /api/config</code>, <code>PUT /api/config</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code></td><td><code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, system <code>ignore_rules</code>; Stage 03 adds <code>jobs</code> for worker/status integration</td><td><code>system.config.read</code>, <code>system.config.write</code>, <code>system.module.reload</code>, <code>system.module.restart</code></td><td>Stage 02 completed; Stage 03 extends with jobs</td><td><code>ACC-MVP-007</code>-<code>ACC-MVP-010</code></td></tr>
+<tr><td>Jobs visibility</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Frontend&quot; and &quot;Надёжность&quot;</td><td><code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code></td><td><code>jobs</code>, <code>job_locks</code></td><td><code>system.job.read</code>, object-scoped <code>*.job.read</code></td><td>Stage 03-06</td><td><code>ACC-MVP-014</code>, <code>ACC-MVP-021</code></td></tr>
+<tr><td>Status and health</td><td><a href="architecture.html"><code>architecture.md</code></a> -&gt; &quot;Status monitoring и aggregation&quot;, ADR 0010</td><td><code>GET /api/health</code>, <code>GET /api/status</code>, <code>GET /api/status/workflows</code>, <code>GET /api/status/workflows/{job_group_id}</code>, <code>GET /api/status/jobs/{job_id}</code>, <code>GET /api/status/workers</code></td><td><code>job_events</code>, <code>workflow_statuses</code>, <code>jobs</code>, <code>module_states</code>, runtime lock/health state</td><td>unauthenticated safe health metadata; <code>system.status.read</code>, <code>system.runtime.read</code>, object-scoped <code>*.job.read</code></td><td>Stage 02-03, Stage 06, Stage 09, Stage 15</td><td><code>ACC-MVP-006</code>, <code>ACC-MVP-011</code>, <code>ACC-MVP-021</code></td></tr>
+<tr><td>Worker execution</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Конфигурация и lifecycle&quot;, &quot;Производительность&quot;</td><td>No public API; workers consume persisted jobs</td><td><code>jobs</code>, <code>job_locks</code>, <code>module_states</code>, <code>config_entries</code></td><td><code>system.job.read</code>, module/runtime permissions through job handlers</td><td>Stage 03-09, Stage 15</td><td><code>ACC-MVP-009</code>, <code>ACC-MVP-010</code>, <code>ACC-MVP-014</code>, <code>ACC-MVP-021</code></td></tr>
+<tr><td>Engineering quality and optimization</td><td><a href="code-optimization.html"><code>code-optimization.md</code></a>, ADR 0019, Stage 09 implementation spec</td><td>No public API; route smoke-test covers executable HTTP surface</td><td>no user-facing data model; <code>storage.WithTx</code> and future SQL helpers support store invariants</td><td>n/a</td><td>Stage 05 baseline hardening; Stage 09 optimization backlog</td><td><code>make test</code>, benchmarks for accepted hot-path optimizations</td></tr>
+<tr><td>Module states</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Конфигурация и lifecycle&quot;</td><td><code>GET /api/modules</code></td><td><code>module_states</code></td><td><code>system.module.read</code></td><td>Stage 02</td><td><code>ACC-MVP-010</code>, <code>ACC-MVP-021</code></td></tr>
+<tr><td>Auth and RBAC</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Безопасность&quot;</td><td><code>POST /api/auth/login</code>, <code>POST /api/auth/logout</code>, <code>GET /api/auth/session</code>, <code>POST /api/auth/password-reset/request</code>, <code>POST /api/auth/password-reset/confirm</code>, <code>POST /api/auth/password/change</code>, <code>GET/PUT /api/auth/users</code>, <code>GET/PUT /api/auth/groups</code>, <code>GET/PUT /api/auth/roles</code>, <code>GET/PUT /api/auth/role-bindings</code></td><td><code>users</code>, <code>local_user_credentials</code>, <code>password_reset_tokens</code>, <code>user_sessions</code>, <code>groups</code>, <code>group_members</code>, <code>permissions</code>, <code>roles</code>, <code>role_permissions</code>, <code>role_bindings</code></td><td><code>auth.*</code>, object-scoped role permissions</td><td>Stage 07, Stage 12</td><td><code>ACC-MVP-016</code>, <code>ACC-MVP-017</code>, <code>ACC-PLATFORM-002</code></td></tr>
+<tr><td>SCIM</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Frontend&quot; and &quot;Безопасность&quot;</td><td><code>GET /api/auth/scim/identities</code>, <code>POST /api/auth/scim/sync</code></td><td><code>scim_identities</code>, <code>users</code>, <code>groups</code></td><td><code>auth.scim.read</code>, <code>auth.scim.write</code></td><td>Stage 07 contract/stub, Stage 13 full sync</td><td><code>ACC-MVP-017</code>, <code>ACC-PLATFORM-002</code>, <code>ACC-PLATFORM-008</code></td></tr>
+<tr><td>Audit</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Надёжность&quot; and &quot;Безопасность&quot;</td><td><code>GET /api/audit</code></td><td><code>audit_log</code></td><td><code>system.audit.read</code></td><td>Stage 07</td><td><code>ACC-MVP-017</code>-<code>ACC-MVP-019</code></td></tr>
+<tr><td>Storage adapters</td><td><a href="architecture.html"><code>architecture.md</code></a> -&gt; &quot;Storage strategy&quot;</td><td>Storage abstraction, not public API</td><td>all persistent entities</td><td>n/a</td><td>Stage 01 completed for SQLite/PostgreSQL; Stage 10 expands adapters</td><td><code>ACC-MVP-013</code>, <code>ACC-PLATFORM-001</code></td></tr>
+<tr><td>Stage-owned migrations</td><td><a href="data-model.html"><code>data-model.md</code></a> -&gt; &quot;Stage-Owned Migrations&quot;, Stage 00 decision register</td><td>migration framework, no public API</td><td>physical tables introduced only by owning stage</td><td>n/a</td><td>Stage 01 completed for <code>system_metadata</code>; Stage 02 completed for config, storage profiles, module states and system ignore rules; Stage 03 completed for jobs, locks, events and workflow statuses; Stage 04 completed for scanner registry, root path ownership and project discovery; Stage 05 completed for repository provider profiles, credentials and operation reservations; Stage 06-15 add later owned tables</td><td>stage-specific DoD and storage contract tests</td></tr>
+<tr><td>Singleton runtime</td><td><a href="requirements.html"><code>requirements.md</code></a> -&gt; &quot;Frontend&quot;, <a href="technology-stack.html"><code>technology-stack.md</code></a> -&gt; &quot;Singleton Runtime Policy&quot;</td><td>No public API; runtime discovery/health mechanism</td><td>runtime lock/health state, configuration</td><td>n/a</td><td>Stage 02, Stage 08</td><td><code>ACC-MVP-011</code>, <code>ACC-MVP-012</code></td></tr>
+<tr><td>Distributed deployment</td><td><a href="architecture.html"><code>architecture.md</code></a> -&gt; &quot;Сценарии развёртывания&quot;</td><td>compatible inter-module contracts</td><td>module-specific persistent state</td><td>module/runtime permissions</td><td>Stage 15</td><td><code>ACC-PLATFORM-005</code></td></tr>
+</tbody></table>
+<h2 id="правила-поддержки-трассировки">Правила поддержки трассировки</h2>
+<ul>
+<li>Новое функциональное требование должно иметь хотя бы один API или явное объяснение, почему API не нужен.</li>
+<li>Новый write endpoint должен иметь permission и либо идемпотентное поведение, либо <code>job_id</code>.</li>
+<li>Новая persistent сущность должна иметь индексы/уникальность или явное объяснение, почему они не требуются.</li>
+<li>Новый roadmap acceptance criterion должен ссылаться на capability из таблицы.</li>
+<li>Новый API endpoint должен быть добавлен в <a href="interfaces.html"><code>interfaces.md</code></a>, <a href="api.html"><code>api.md</code></a> и API authorization matrix в <a href="access-control.html"><code>access-control.md</code></a>.</li>
+<li>Новый job type должен быть добавлен в <a href="data-model.html"><code>data-model.md</code></a>, <a href="payload-schemas.html"><code>payload-schemas.md</code></a> и <a href="test-plan.html"><code>test-plan.md</code></a>.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Связанные документы</h2>
+          <div class="doc-relation-links">
+            <a href="access-control.html"><span>Core Docs</span>Auth, SCIM и RBAC</a>
+<a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="architecture.html"><span>Core Docs</span>Архитектура T-Helper</a>
+<a href="code-optimization.html"><span>Core Docs</span>Code Optimization And Quality Baseline</a>
+<a href="data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="frontend-ui-contract.html"><span>Core Docs</span>Frontend UI Delivery Contract</a>
+<a href="interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+<a href="requirements.html"><span>Core Docs</span>Требования</a>
+<a href="technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+          </div>
+        </section>
+<section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="frontend-ui-contract.html"><span>Core Docs</span>Frontend UI Delivery Contract</a>
+<a href="stage-00-delivery-contract.html"><span>Core Docs</span>Stage 00 Delivery Contract</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html" aria-current="page">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="traceability.html">Русская страница</a>
+      <a href="en/traceability.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/traceability.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

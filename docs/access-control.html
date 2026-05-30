@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Auth, SCIM и RBAC - T-Helper documentation.">
+    <title>Auth, SCIM и RBAC - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="access-control.html">
+    <link rel="alternate" hreflang="en" href="en/access-control.html">
+    <link rel="icon" href="assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <img class="brand-mark" src="assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="is-active" href="access-control.html" aria-current="page">RU</a>
+        <a class="" href="en/access-control.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/access-control.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>access-control.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#auth-scim-и-rbac">Auth, SCIM и RBAC</a>
+<a class="toc-level-2" href="#обязательные-возможности-модуля-auth">Обязательные возможности модуля auth</a>
+<a class="toc-level-2" href="#local-password-policy">Local password policy</a>
+<a class="toc-level-2" href="#scope-модель">Scope-модель</a>
+<a class="toc-level-2" href="#системные-роли">Системные роли</a>
+<a class="toc-level-2" href="#объектные-роли">Объектные роли</a>
+<a class="toc-level-2" href="#role-to-permission-matrix">Role-to-permission matrix</a>
+<a class="toc-level-3" href="#системные-роли-2">Системные роли</a>
+<a class="toc-level-3" href="#объектные-роли-2">Объектные роли</a>
+<a class="toc-level-2" href="#machine-readable-permissions">Machine-readable permissions</a>
+<a class="toc-level-3" href="#system">System</a>
+<a class="toc-level-3" href="#auth">Auth</a>
+<a class="toc-level-3" href="#security">Security</a>
+<a class="toc-level-3" href="#project">Project</a>
+<a class="toc-level-3" href="#environment">Environment</a>
+<a class="toc-level-3" href="#workspace">Workspace</a>
+<a class="toc-level-3" href="#repository">Repository</a>
+<a class="toc-level-2" href="#минимальные-правила-авторизации-api">Минимальные правила авторизации API</a>
+<a class="toc-level-3" href="#systemruntimeread-visibility-examples">system.runtime.read visibility examples</a>
+<a class="toc-level-2" href="#api-authorization-matrix">API authorization matrix</a>
+<a class="toc-level-2" href="#sql-ориентированные-инварианты">SQL-ориентированные инварианты</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="auth-scim-и-rbac">Auth, SCIM и RBAC</h1>
+<h2 id="обязательные-возможности-модуля-auth">Обязательные возможности модуля <code>auth</code></h2>
+<ul>
+<li>локальная аутентификация;</li>
+<li>расширяемая модель внешних authentication providers;</li>
+<li><code>SCIM</code>;</li>
+<li><code>RBAC</code>;</li>
+<li>управление users, groups, roles и role bindings;</li>
+<li>audit security-событий.</li>
+</ul>
+<h2 id="local-password-policy">Local password policy</h2>
+<p>Local auth uses Argon2id PHC password hashes as defined in <a href="adr/0014-local-password-hashing.html"><code>docs/ru/adr/0014-local-password-hashing.md</code></a>.</p>
+<p>API responses, logs, job payloads, workflow payloads and audit payloads must never expose raw passwords, password hashes, reset tokens or reset token hashes. Authentication failures must use generic errors and must not reveal whether a username exists.</p>
+<p>Runtime auth endpoints are separate from administrative auth endpoints. Login, logout, session, password reset and password change flows operate on session/local credential state; users/groups/roles/role-bindings/SCIM endpoints remain administrative APIs.</p>
+<h2 id="scope-модель">Scope-модель</h2>
+<p>Поддерживаемые scope:</p>
+<ul>
+<li><code>system</code></li>
+<li><code>project</code></li>
+<li><code>environment</code></li>
+<li><code>workspace</code></li>
+<li><code>repository</code></li>
+</ul>
+<p>Субъекты назначения ролей:</p>
+<ul>
+<li><code>user</code></li>
+<li><code>group</code></li>
+</ul>
+<p>Правила разрешения:</p>
+<ul>
+<li>системная роль имеет приоритет над объектной;</li>
+<li>permissions нескольких ролей объединяются;</li>
+<li>базовая модель строится на <code>allow</code> без явного <code>deny</code>;</li>
+<li>права группы наследуются её участниками.</li>
+</ul>
+<h2 id="системные-роли">Системные роли</h2>
+<ul>
+<li><code>system_admin</code> - полный доступ ко всей системе</li>
+<li><code>platform_operator</code> - scan, runtime, config, module operations, repo sync, security scan</li>
+<li><code>security_admin</code> - auth, RBAC, <code>SCIM</code>, security rule sets и findings</li>
+<li><code>auditor</code> - расширенный read-only по объектам, config, jobs, audit и findings</li>
+<li><code>viewer</code> - базовый глобальный read-only</li>
+</ul>
+<h2 id="объектные-роли">Объектные роли</h2>
+<ul>
+<li><code>owner</code> - полный доступ к объекту, delete, role binding management</li>
+<li><code>maintainer</code> - operational access без управления RBAC</li>
+<li><code>editor</code> - изменение метаданных без delete и без RBAC management</li>
+<li><code>viewer</code> - read-only доступ</li>
+</ul>
+<h2 id="role-to-permission-matrix">Role-to-permission matrix</h2>
+<p>Wildcard permissions вида <code>project.*</code> используются в документации как сокращение. В persistent storage и seed/migration они должны разворачиваться в конкретные permissions из раздела &quot;Machine-readable permissions&quot;; runtime authorization не должен полагаться на строковое сопоставление wildcard.</p>
+<h3 id="системные-роли-2">Системные роли</h3>
+<table>
+<thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+<tbody>
+<tr><td><code>system_admin</code></td><td>все <code>system.*</code>, <code>auth.*</code>, <code>security.*</code>, <code>project.*</code>, <code>environment.*</code>, <code>workspace.*</code>, <code>repository.*</code></td></tr>
+<tr><td><code>platform_operator</code></td><td><code>system.config.read</code>, <code>system.globalscan.run</code>, <code>system.rootpath.*</code>, <code>system.ignore.*</code>, <code>system.module.*</code>, <code>system.job.read</code>, <code>system.status.read</code>, <code>system.audit.read</code>, <code>system.runtime.*</code>, <code>security.scan.*</code>, <code>security.finding.read</code>, <code>project.read</code>, <code>project.job.read</code>, <code>project.scan.*</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code>, <code>repository.job.read</code>, <code>repository.provider.*</code>, <code>repository.credential.*</code>, <code>repository.clone</code>, <code>repository.pull</code>, <code>repository.sync</code>, <code>repository.webhook.write</code>, <code>repository.polling.write</code></td></tr>
+<tr><td><code>security_admin</code></td><td><code>system.audit.read</code>, <code>system.job.read</code>, <code>auth.*</code>, <code>security.*</code>, <code>project.read</code>, <code>project.scan.read</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code></td></tr>
+<tr><td><code>auditor</code></td><td><code>system.config.read</code>, <code>system.security.read</code>, <code>system.module.read</code>, <code>system.job.read</code>, <code>system.status.read</code>, <code>system.audit.read</code>, <code>system.runtime.read</code>, <code>auth.user.read</code>, <code>auth.group.read</code>, <code>auth.role.read</code>, <code>auth.rolebind.read</code>, <code>auth.provider.read</code>, <code>auth.scim.read</code>, <code>security.ruleset.read</code>, <code>security.toolprofile.read</code>, <code>security.finding.read</code>, <code>security.scan.read</code>, <code>security.exception.read</code>, <code>project.read</code>, <code>project.job.read</code>, <code>project.log.read</code>, <code>project.scan.read</code>, <code>environment.read</code>, <code>environment.job.read</code>, <code>environment.log.read</code>, <code>workspace.read</code>, <code>workspace.job.read</code>, <code>workspace.log.read</code>, <code>repository.read</code>, <code>repository.job.read</code>, <code>repository.log.read</code></td></tr>
+<tr><td><code>viewer</code></td><td><code>system.runtime.read</code>, <code>project.read</code>, <code>environment.read</code>, <code>workspace.read</code>, <code>repository.read</code></td></tr>
+</tbody></table>
+<h3 id="объектные-роли-2">Объектные роли</h3>
+<p>Permissions объектных ролей применяются только внутри scope, к которому привязан role binding. Например, <code>maintainer</code> на <code>repository:&lt;id&gt;</code> выдаёт перечисленные repository permissions только для этого репозитория.</p>
+<table>
+<thead><tr><th>Scope</th><th><code>owner</code></th><th><code>maintainer</code></th><th><code>editor</code></th><th><code>viewer</code></th></tr></thead>
+<tbody>
+<tr><td><code>project</code></td><td><code>project.*</code></td><td><code>project.read</code>, <code>project.write</code>, <code>project.job.read</code>, <code>project.log.read</code>, <code>project.scan.*</code>, <code>project.relation.write</code></td><td><code>project.read</code>, <code>project.write</code>, <code>project.relation.write</code></td><td><code>project.read</code></td></tr>
+<tr><td><code>environment</code></td><td><code>environment.*</code></td><td><code>environment.read</code>, <code>environment.write</code>, <code>environment.job.read</code>, <code>environment.log.read</code>, <code>environment.relation.write</code></td><td><code>environment.read</code>, <code>environment.write</code>, <code>environment.relation.write</code></td><td><code>environment.read</code></td></tr>
+<tr><td><code>workspace</code></td><td><code>workspace.*</code></td><td><code>workspace.read</code>, <code>workspace.write</code>, <code>workspace.job.read</code>, <code>workspace.log.read</code>, <code>workspace.relation.write</code></td><td><code>workspace.read</code>, <code>workspace.write</code>, <code>workspace.relation.write</code></td><td><code>workspace.read</code></td></tr>
+<tr><td><code>repository</code></td><td><code>repository.*</code></td><td><code>repository.read</code>, <code>repository.write</code>, <code>repository.job.read</code>, <code>repository.log.read</code>, <code>repository.clone</code>, <code>repository.pull</code>, <code>repository.sync</code>, <code>repository.webhook.write</code>, <code>repository.polling.write</code></td><td><code>repository.read</code>, <code>repository.write</code></td><td><code>repository.read</code></td></tr>
+</tbody></table>
+<h2 id="machine-readable-permissions">Machine-readable permissions</h2>
+<h3 id="system">System</h3>
+<pre><code class="language-text">system.config.read
+system.config.write
+system.security.read
+system.security.write
+system.globalscan.run
+system.rootpath.read
+system.rootpath.write
+system.ignore.read
+system.ignore.write
+system.module.read
+system.module.reload
+system.module.restart
+system.job.read
+system.status.read
+system.audit.read
+system.runtime.read
+system.runtime.write</code></pre>
+<h3 id="auth">Auth</h3>
+<pre><code class="language-text">auth.user.read
+auth.user.write
+auth.group.read
+auth.group.write
+auth.role.read
+auth.role.write
+auth.rolebind.read
+auth.rolebind.write
+auth.provider.read
+auth.provider.write
+auth.scim.read
+auth.scim.write</code></pre>
+<h3 id="security">Security</h3>
+<pre><code class="language-text">security.ruleset.read
+security.ruleset.write
+security.toolprofile.read
+security.toolprofile.write
+security.toolprofile.analyze
+security.finding.read
+security.finding.write
+security.scan.run
+security.scan.read
+security.scan.write
+security.exception.read
+security.exception.write</code></pre>
+<h3 id="project">Project</h3>
+<pre><code class="language-text">project.read
+project.write
+project.delete
+project.rolebind.read
+project.rolebind.write
+project.job.read
+project.log.read
+project.scan.run
+project.scan.read
+project.scan.write
+project.relation.write</code></pre>
+<h3 id="environment">Environment</h3>
+<pre><code class="language-text">environment.read
+environment.write
+environment.delete
+environment.rolebind.read
+environment.rolebind.write
+environment.job.read
+environment.log.read
+environment.relation.write</code></pre>
+<h3 id="workspace">Workspace</h3>
+<pre><code class="language-text">workspace.read
+workspace.write
+workspace.delete
+workspace.rolebind.read
+workspace.rolebind.write
+workspace.job.read
+workspace.log.read
+workspace.relation.write</code></pre>
+<h3 id="repository">Repository</h3>
+<pre><code class="language-text">repository.read
+repository.write
+repository.delete
+repository.rolebind.read
+repository.rolebind.write
+repository.job.read
+repository.log.read
+repository.clone
+repository.pull
+repository.sync
+repository.provider.read
+repository.provider.write
+repository.credential.read
+repository.credential.write
+repository.webhook.write
+repository.polling.write</code></pre>
+<h2 id="минимальные-правила-авторизации-api">Минимальные правила авторизации API</h2>
+<ul>
+<li>чтение требует <code>viewer</code> и выше в системном или объектном scope;</li>
+<li>изменение требует <code>editor</code> и выше либо соответствующий system permission;</li>
+<li>hard delete требует <code>owner</code> или <code>system_admin</code> only after a future endpoint explicitly implements delete semantics;</li>
+<li>управление role bindings требует <code>security_admin</code>, <code>system_admin</code> или <code>owner</code> в объектном scope;</li>
+<li>runtime-операции требуют <code>platform_operator</code> или <code>system_admin</code>;</li>
+<li><code>SCIM</code>-операции требуют <code>security_admin</code> или <code>system_admin</code>.</li>
+<li><code>system.runtime.read</code> разрешает читать runtime summary и списочные metadata, но не должен автоматически раскрывать все object-scoped детали без соответствующего object permission или отдельного системного read permission.</li>
+<li>Confirmed MVP behavior: <code>GET /api/health</code> доступен без аутентификации только как safe readiness/discovery endpoint и не раскрывает config, filesystem paths, DSN, users, secrets или object-scoped details.</li>
+<li>Confirmed MVP behavior: public <code>DELETE</code> endpoints are out of scope; seeded <code>*.delete</code> permissions are reserved for future lifecycle endpoints.</li>
+<li>Confirmed MVP lifecycle behavior: disable/deactivate/mark-missing/supersede operations are write operations controlled by the corresponding <code>*.write</code>, runtime or specialized operation permissions, not by reserved <code>*.delete</code> permissions.</li>
+</ul>
+<h3 id="systemruntimeread-visibility-examples"><code>system.runtime.read</code> visibility examples</h3>
+<p><code>system.runtime.read</code> may expose:</p>
+<ul>
+<li>aggregate runtime readiness and module state names;</li>
+<li>counts of active jobs, projects, repositories and findings;</li>
+<li>worker status summary without host-sensitive diagnostics;</li>
+<li>list metadata needed for dashboards.</li>
+</ul>
+<p><code>system.runtime.read</code> must not expose by itself:</p>
+<ul>
+<li>filesystem paths such as <code>root_paths.path</code>, <code>repositories.local_path</code> or log paths;</li>
+<li>DSNs, database paths, provider credentials, full <code>secretref://env/NAME</code> values or resolved secrets;</li>
+<li>repository full details for objects where the subject lacks <code>repository.read</code>;</li>
+<li>project/workspace/environment object details where the subject lacks the corresponding object permission;</li>
+<li>job payloads, result payloads or event payloads that contain object-scoped diagnostics.</li>
+</ul>
+<p>Examples:</p>
+<ul>
+<li><code>viewer</code> with only <code>system.runtime.read</code> may see &quot;12 active projects&quot; but not their filesystem paths.</li>
+<li><code>auditor</code> with <code>system.job.read</code> may read job metadata and sanitized payloads, but still receives masked secret refs.</li>
+<li><code>platform_operator</code> may run global scans and module operations, but object-scoped repository details still require <code>repository.read</code> or an appropriate system permission.</li>
+</ul>
+<h2 id="api-authorization-matrix">API authorization matrix</h2>
+<table>
+<thead><tr><th>Endpoint</th><th>Permission</th></tr></thead>
+<tbody>
+<tr><td><code>GET /api/health</code></td><td>unauthenticated safe metadata only</td></tr>
+<tr><td><code>GET /api/root-paths</code></td><td><code>system.rootpath.read</code></td></tr>
+<tr><td><code>PUT /api/root-paths</code></td><td><code>system.rootpath.write</code></td></tr>
+<tr><td><code>GET /api/projects</code></td><td><code>project.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/projects/{id}</code></td><td><code>project.read</code> on project</td></tr>
+<tr><td><code>GET /api/projects/{id}/scan-settings</code></td><td><code>project.scan.read</code> on project or <code>security.scan.read</code></td></tr>
+<tr><td><code>PUT /api/projects/{id}/scan-settings</code></td><td><code>project.scan.write</code> on project or <code>security.scan.write</code></td></tr>
+<tr><td><code>GET /api/environments</code></td><td><code>environment.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/environments/{id}</code></td><td><code>environment.read</code> on environment</td></tr>
+<tr><td><code>GET /api/workspaces</code></td><td><code>workspace.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/workspaces/{id}</code></td><td><code>workspace.read</code> on workspace</td></tr>
+<tr><td><code>POST /api/scans</code></td><td><code>system.globalscan.run</code></td></tr>
+<tr><td><code>GET /api/scans/{job_id}</code></td><td><code>system.job.read</code></td></tr>
+<tr><td><code>POST /api/project-scans</code></td><td><code>project.scan.run</code> on project or <code>security.scan.run</code></td></tr>
+<tr><td><code>GET /api/project-scans/{project_scan_id}</code></td><td><code>project.scan.read</code> on project or <code>security.scan.read</code></td></tr>
+<tr><td><code>GET /api/project-scans/{project_scan_id}/findings</code></td><td><code>security.finding.read</code> or <code>project.scan.read</code> on project</td></tr>
+<tr><td><code>GET /api/jobs</code></td><td><code>system.job.read</code> or object-scoped <code>*.job.read</code></td></tr>
+<tr><td><code>GET /api/jobs/{id}</code></td><td><code>system.job.read</code> or object-scoped <code>*.job.read</code></td></tr>
+<tr><td><code>GET /api/status</code></td><td><code>system.status.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/status/workflows</code></td><td><code>system.status.read</code> or object-scoped <code>*.job.read</code></td></tr>
+<tr><td><code>GET /api/status/workflows/{job_group_id}</code></td><td><code>system.status.read</code> or object-scoped <code>*.job.read</code></td></tr>
+<tr><td><code>GET /api/status/jobs/{job_id}</code></td><td><code>system.status.read</code> or object-scoped <code>*.job.read</code></td></tr>
+<tr><td><code>GET /api/status/workers</code></td><td><code>system.status.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/config</code></td><td><code>system.config.read</code></td></tr>
+<tr><td><code>PUT /api/config</code></td><td><code>system.config.write</code></td></tr>
+<tr><td><code>GET /api/ignore-rules</code></td><td><code>system.ignore.read</code></td></tr>
+<tr><td><code>PUT /api/ignore-rules</code></td><td><code>system.ignore.write</code></td></tr>
+<tr><td><code>GET /api/repos</code></td><td><code>repository.read</code> or <code>system.runtime.read</code></td></tr>
+<tr><td><code>GET /api/repos/{id}</code></td><td><code>repository.read</code> on repository</td></tr>
+<tr><td><code>GET /api/repo-provider-instances</code></td><td><code>repository.provider.read</code> or <code>repository.read</code></td></tr>
+<tr><td><code>PUT /api/repo-provider-instances</code></td><td><code>repository.provider.write</code></td></tr>
+<tr><td><code>GET /api/repo-credentials</code></td><td><code>repository.credential.read</code></td></tr>
+<tr><td><code>PUT /api/repo-credentials</code></td><td><code>repository.credential.write</code></td></tr>
+<tr><td><code>POST /api/repos/clone</code></td><td><code>repository.clone</code> or <code>system.runtime.write</code></td></tr>
+<tr><td><code>POST /api/repos/pull</code></td><td><code>repository.pull</code> or <code>system.runtime.write</code></td></tr>
+<tr><td><code>POST /api/repos/sync</code></td><td><code>repository.sync</code> or <code>system.runtime.write</code></td></tr>
+<tr><td><code>GET /api/security/findings</code></td><td><code>security.finding.read</code></td></tr>
+<tr><td><code>GET /api/security/findings/{id}</code></td><td><code>security.finding.read</code></td></tr>
+<tr><td><code>GET /api/security/rule-sets</code></td><td><code>security.ruleset.read</code></td></tr>
+<tr><td><code>PUT /api/security/rule-sets</code></td><td><code>security.ruleset.write</code></td></tr>
+<tr><td><code>GET /api/tool-profiles</code></td><td><code>security.toolprofile.read</code></td></tr>
+<tr><td><code>POST /api/tool-profiles/validate</code></td><td><code>security.toolprofile.write</code></td></tr>
+<tr><td><code>POST /api/tool-profiles/import</code></td><td><code>security.toolprofile.write</code></td></tr>
+<tr><td><code>POST /api/tool-profiles/activate</code></td><td><code>security.toolprofile.write</code></td></tr>
+<tr><td><code>POST /api/tool-profiles/analyze</code></td><td><code>security.toolprofile.analyze</code></td></tr>
+<tr><td><code>GET /api/modules</code></td><td><code>system.module.read</code></td></tr>
+<tr><td><code>POST /api/modules/reload</code></td><td><code>system.module.reload</code></td></tr>
+<tr><td><code>POST /api/modules/restart</code></td><td><code>system.module.restart</code></td></tr>
+<tr><td><code>POST /api/auth/login</code></td><td>unauthenticated; creates session only after successful local/external auth</td></tr>
+<tr><td><code>POST /api/auth/logout</code></td><td>authenticated session</td></tr>
+<tr><td><code>GET /api/auth/session</code></td><td>authenticated current session</td></tr>
+<tr><td><code>POST /api/auth/password-reset/request</code></td><td>unauthenticated generic response</td></tr>
+<tr><td><code>POST /api/auth/password-reset/confirm</code></td><td>unauthenticated token-bound operation</td></tr>
+<tr><td><code>POST /api/auth/password/change</code></td><td>authenticated current local user</td></tr>
+<tr><td><code>GET /api/auth/users</code></td><td><code>auth.user.read</code></td></tr>
+<tr><td><code>PUT /api/auth/users</code></td><td><code>auth.user.write</code></td></tr>
+<tr><td><code>GET /api/auth/groups</code></td><td><code>auth.group.read</code></td></tr>
+<tr><td><code>PUT /api/auth/groups</code></td><td><code>auth.group.write</code></td></tr>
+<tr><td><code>GET /api/auth/roles</code></td><td><code>auth.role.read</code></td></tr>
+<tr><td><code>PUT /api/auth/roles</code></td><td><code>auth.role.write</code></td></tr>
+<tr><td><code>GET /api/auth/role-bindings</code></td><td><code>auth.rolebind.read</code></td></tr>
+<tr><td><code>PUT /api/auth/role-bindings</code></td><td><code>auth.rolebind.write</code></td></tr>
+<tr><td><code>GET /api/auth/scim/identities</code></td><td><code>auth.scim.read</code></td></tr>
+<tr><td><code>POST /api/auth/scim/sync</code></td><td><code>auth.scim.write</code></td></tr>
+<tr><td><code>GET /api/audit</code></td><td><code>system.audit.read</code></td></tr>
+</tbody></table>
+<h2 id="sql-ориентированные-инварианты">SQL-ориентированные инварианты</h2>
+<p>Для SQL-реализации должны соблюдаться ограничения:</p>
+<ul>
+<li><code>subject_type</code> принимает только <code>user</code> или <code>group</code>;</li>
+<li><code>scope_type</code> принимает только <code>system</code>, <code>project</code>, <code>environment</code>, <code>workspace</code>, <code>repository</code>;</li>
+<li>для <code>system</code> scope <code>scope_id = NULL</code>;</li>
+<li>для объектных scope <code>scope_id</code> обязателен;</li>
+<li><code>scim_identities</code> ссылается либо на <code>user_id</code>, либо на <code>group_id</code>.</li>
+</ul>
+<p>Рекомендации:</p>
+<ul>
+<li>в <code>PostgreSQL</code> использовать <code>CHECK CONSTRAINT</code>;</li>
+<li>в <code>MySQL</code>, <code>MSSQL</code> и <code>SQLite</code> дублировать критичную валидацию на уровне приложения, если конкретный constraint нельзя надёжно выразить средствами dialect;</li>
+<li>effective permissions кэшировать после объединения системных и объектных bindings.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Связанные документы</h2>
+          <div class="doc-relation-links">
+            <a href="adr/0014-local-password-hashing.html"><span>ADR</span>ADR 0014: Local password hashing</a>
+          </div>
+        </section>
+<section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="roadmap.html"><span>Core Docs</span>Roadmap и приёмка</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html"><span>Implementation Specs</span>Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html"><span>Implementation Specs</span>Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html"><span>Implementation Specs</span>Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html"><span>Implementation Specs</span>Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html"><span>Implementation Specs</span>Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html"><span>Implementation Specs</span>Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html"><span>Implementation Specs</span>Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html" aria-current="page">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="access-control.html">Русская страница</a>
+      <a href="en/access-control.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/access-control.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

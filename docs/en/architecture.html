@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="T-Helper Architecture - T-Helper documentation.">
+    <title>T-Helper Architecture - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../architecture.html">
+    <link rel="alternate" hreflang="en" href="architecture.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../architecture.html">RU</a>
+        <a class="is-active" href="architecture.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/architecture.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>architecture.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#t-helper-architecture">T-Helper Architecture</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#architectural-principles">Architectural Principles</a>
+<a class="toc-level-2" href="#technology-stack">Technology Stack</a>
+<a class="toc-level-2" href="#terraform-project-in-the-mvp">Terraform Project in the MVP</a>
+<a class="toc-level-2" href="#project-discovery-and-git-marker-allowlist-in-the-mvp">Project Discovery and Git Marker Allowlist in the MVP</a>
+<a class="toc-level-2" href="#logical-modules">Logical Modules</a>
+<a class="toc-level-2" href="#provider-adapters">Provider adapters</a>
+<a class="toc-level-2" href="#http-api-composition">HTTP API composition</a>
+<a class="toc-level-2" href="#deployment-scenarios">Deployment Scenarios</a>
+<a class="toc-level-3" href="#monolithic-mode">Monolithic Mode</a>
+<a class="toc-level-3" href="#distributed-mode">Distributed Mode</a>
+<a class="toc-level-2" href="#storage-strategy">Storage strategy</a>
+<a class="toc-level-2" href="#jobs-and-worker-execution">Jobs and Worker Execution</a>
+<a class="toc-level-2" href="#status-monitoring-and-aggregation">Status Monitoring and Aggregation</a>
+<a class="toc-level-3" href="#repo-storage-strategy">Repo storage strategy</a>
+<a class="toc-level-2" href="#basic-runtime-flow">Basic Runtime Flow</a>
+<a class="toc-level-2" href="#key-architectural-risks-removed-by-documentation-refactoring">Key Architectural Risks Removed by Documentation Refactoring</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="t-helper-architecture">T-Helper Architecture</h1>
+<h2 id="purpose">Purpose</h2>
+<p><code>t-helper</code> is a modular on-premise system for:</p>
+<ul>
+<li>discovering Terraform working directories in the filesystem;</li>
+<li>registering projects and Git repositories in persistent storage;</li>
+<li>local analysis of Terraform code without SaaS and without sending source code outside the installation;</li>
+<li>managing configuration, users, access and modules through the <code>GUI</code>, <code>Web UI</code> and <code>thelper-ctl</code>.</li>
+</ul>
+<h2 id="architectural-principles">Architectural Principles</h2>
+<ul>
+<li>the database is the source of truth for runtime configuration and working entities;</li>
+<li><code>config.json</code> and <code>.t-helper.ignore</code> are used only for initial import through <code>thelper-ctl -reconfigure</code>;</li>
+<li><code>GUI</code> and <code>Web UI</code> use a single backend API; feature parity is required only for read/operate scenarios included in a specific release;</li>
+<li>the Frontend MVP covers the main read/operate scenarios and full MVP administrative screens; Stage 12 is responsible for hardening and platform-only administrative extensions where they are in release scope;</li>
+<li>every module must have a clear lifecycle and support independent restart;</li>
+<li>all external providers, including database/storage and auth providers, are implemented as separate pluggable modules or libraries behind stable internal interfaces;</li>
+<li>monolithic and distributed modes must use a compatible interaction model;</li>
+<li>Terraform code, findings and security rules do not leave the installation perimeter.</li>
+</ul>
+<h2 id="technology-stack">Technology Stack</h2>
+<p>The canonical implementation stack is described in <a href="technology-stack.html"><code>technology-stack.md</code></a>.</p>
+<ul>
+<li>Backend runtime, CLI, API, module lifecycle, jobs framework and storage adapters are implemented in <code>Go</code>.</li>
+<li><code>Web UI</code> is implemented with <code>React</code>, <code>TypeScript</code>, <code>Vite</code>, <code>TanStack Router</code>, <code>TanStack Query</code>, <code>Zod</code>, <code>React Hook Form</code> and <code>Ant Design</code>.</li>
+<li>The local <code>GUI</code> is implemented with <code>Tauri</code> and uses the same React/TypeScript codebase as the <code>Web UI</code>.</li>
+<li>Stage 08 route map, navigation model, operational density and Tauri delivery policy are defined in <a href="frontend-ui-contract.html"><code>frontend-ui-contract.md</code></a>.</li>
+</ul>
+<h2 id="terraform-project-in-the-mvp">Terraform Project in the MVP</h2>
+<p>A Terraform project is a directory that contains at least one <code>*.tf</code> file.</p>
+<p>MVP constraints:</p>
+<ul>
+<li>directories that contain only <code>.terraform</code>, <code>*.tfstate</code>, or <code>*.tfvars</code> without <code>*.tf</code> are not considered projects;</li>
+<li>after a Terraform project is discovered, traversal below that directory stops;</li>
+<li><code>terragrunt.hcl</code> support is considered an extension for later versions.</li>
+</ul>
+<h2 id="project-discovery-and-git-marker-allowlist-in-the-mvp">Project Discovery and Git Marker Allowlist in the MVP</h2>
+<p><code>global-scanner</code> discovers only Terraform working directories in the blocking traversal path and registers separate <code>projects</code> rows. For each created or updated project it enqueues a background <code>project_discovery</code> job and continues the scan without waiting for the result.</p>
+<p><code>project_discovery</code> treats a directory as a Git working tree only when one of the allowed markers is present:</p>
+<ul>
+<li><code>.git/</code> directory;</li>
+<li><code>.git</code> regular file for a worktree/submodule when the first non-empty line starts with <code>gitdir:</code>.</li>
+</ul>
+<p>Files and directories such as <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> and similar convention/config files are not Git markers in the MVP.</p>
+<p><code>global-scanner</code> does not read <code>.git</code> metadata and does not shell out to <code>git</code>. <code>project_discovery</code> may read a <code>.git</code> file only as Git metadata, not as Terraform source. The MVP limits the readable <code>.git</code> file size to <code>4 KiB</code> and is not required to resolve the path after <code>gitdir:</code>.</p>
+<p>If several local Terraform projects belong to one Git repository, project records are not merged. They remain separate <code>projects</code> rows and are linked through a shared <code>repository_id</code> and <code>project_links.link_type = same_repository</code>.</p>
+<h2 id="logical-modules">Logical Modules</h2>
+<ul>
+<li><code>core</code> - orchestration, API, lifecycle, logging, jobs framework</li>
+<li><code>worker-runtime</code> - separate <code>thelper-worker</code> worker processes that execute queued jobs from persistent storage</li>
+<li><code>status-monitor</code> - logical module for aggregating job events, workflow statuses, worker health, module health and runtime metrics</li>
+<li><code>global-scanner</code> - traversal of global <code>root_path</code> entries from <code>scanning.global_scan</code>, ignore matcher, Terraform project discovery and enqueueing background <code>project_discovery</code> jobs</li>
+<li><code>project-scanner</code> - project-level Terraform scan using a specific project's settings; baseline toolchain: <code>terraform validate</code>, <code>TFLint</code></li>
+<li><code>security-validator</code> - security/validation scan using a specific project's settings and available modules from <code>scanning.security_scan.modules</code>; MVP requires <code>Trivy</code> as the mandatory local scanner; other tools are adapter extensions</li>
+<li><code>tool-profile-runtime</code> - shared execution/compatibility layer for external CLI tools; performs version discovery, profile selection, command execution, output parsing and normalized DTO mapping according to ADR 0018</li>
+<li><code>tool-profile-analyzer</code> - optional maintainer/operator tool for generating candidate profile versions from captured external tool outputs and validation fixtures; generated profiles require explicit validation and activation</li>
+<li><code>repository-manager</code> - <code>clone</code>, <code>pull</code>, <code>sync</code>, protection from conflicting operations; webhook/polling operations are delivered as later extensions</li>
+<li><code>config-manager</code> - import, validation and application of configuration from the database</li>
+<li><code>auth</code> - authentication providers, <code>SCIM</code>, <code>RBAC</code>, users, groups, roles, bindings</li>
+<li><code>module-runtime</code> - module states, <code>reload</code>, <code>restart</code></li>
+<li><code>web</code> - <code>Web UI</code> delivery</li>
+<li><code>gui</code> - desktop client for local use</li>
+<li><code>nginx</code> - reverse proxy, TLS termination, static delivery</li>
+</ul>
+<h2 id="provider-adapters">Provider adapters</h2>
+<p>Provider-specific integrations are pluggable modules or libraries:</p>
+<ul>
+<li>database/storage providers: <code>sqlite</code>, <code>postgresql</code>, <code>mysql</code>, <code>mssql</code>;</li>
+<li>auth providers: local auth and future external IAM/SSO providers;</li>
+<li>SCIM providers;</li>
+<li>repository providers: <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code> and generic Git where explicitly supported;</li>
+<li>policy/tool providers where integration behavior is provider-specific.</li>
+</ul>
+<p>Provider-specific code must not live in HTTP handlers, CLI commands or domain logic. Runtime services select providers through configuration and provider registries.</p>
+<h2 id="http-api-composition">HTTP API composition</h2>
+<p>Executable HTTP routes are registered through a compile-time <code>httpapi.RouteRegistrar</code> contract. Each handler owns its route declarations via <code>RegisterRoutes(chi.Router)</code>, while <code>httpapi.New</code> owns only router creation, common middleware and composition.</p>
+<p>This keeps route ownership close to handler behavior and prevents unsupported handler types from being silently ignored. The current route surface is guarded by <code>internal/httpapi/router_test.go</code>.</p>
+<p>The accepted decision is documented in <a href="adr/0019-code-quality-and-route-registration.html"><code>adr/0019-code-quality-and-route-registration.md</code></a>.</p>
+<h2 id="deployment-scenarios">Deployment Scenarios</h2>
+<h3 id="monolithic-mode">Monolithic Mode</h3>
+<p>The following run on one host:</p>
+<ul>
+<li><code>core</code></li>
+<li><code>worker-runtime</code> / <code>thelper-worker</code></li>
+<li><code>status-monitor</code></li>
+<li><code>global-scanner</code></li>
+<li><code>project-scanner</code></li>
+<li><code>security-validator</code></li>
+<li><code>repository-manager</code></li>
+<li><code>config-manager</code></li>
+<li><code>auth</code></li>
+<li><code>module-runtime</code></li>
+<li><code>web</code></li>
+<li><code>nginx</code></li>
+</ul>
+<p><code>GUI</code> runs locally on an administrator or user workstation.</p>
+<p>Only one <code>t-helper</code> runtime instance is active in a single local installation:</p>
+<ul>
+<li>if <code>thelper</code> is already running for the <code>Web UI</code>, the Tauri GUI connects to the existing local runtime;</li>
+<li>if <code>thelper</code> is not running yet, the Tauri GUI starts a local <code>thelper</code>, after which the <code>Web UI</code> connects to the same runtime;</li>
+<li>a repeated <code>thelper</code> start must discover the existing runtime through the lock/health mechanism and must not create a second active process.</li>
+</ul>
+<h3 id="distributed-mode">Distributed Mode</h3>
+<p>The following can be moved out separately:</p>
+<ul>
+<li><code>global-scanner</code></li>
+<li><code>project-scanner</code></li>
+<li><code>security-validator</code></li>
+<li><code>repository-manager</code></li>
+<li><code>worker-runtime</code> / <code>thelper-worker</code></li>
+<li><code>status-monitor</code></li>
+<li><code>auth</code></li>
+<li><code>web</code></li>
+<li><code>nginx</code></li>
+<li>database</li>
+</ul>
+<h2 id="storage-strategy">Storage strategy</h2>
+<p>Target storage engines on the roadmap:</p>
+<ul>
+<li><code>SQLite</code></li>
+<li><code>PostgreSQL</code></li>
+<li><code>MySQL</code></li>
+<li><code>MSSQL</code></li>
+</ul>
+<p>Default values:</p>
+<ul>
+<li><code>SQLite</code> - default internal SQL-like storage for local setup</li>
+<li><code>PostgreSQL</code> - default external storage for server setup</li>
+<li><code>MySQL</code> - optional external storage</li>
+<li><code>MSSQL</code> - optional external storage</li>
+</ul>
+<p>Managed engine compatibility:</p>
+<ul>
+<li>Aurora PostgreSQL uses the <code>PostgreSQL</code> storage adapter and migration dialect.</li>
+<li>Aurora MySQL uses the <code>MySQL</code> storage adapter and migration dialect.</li>
+<li>Babelfish for Aurora PostgreSQL is not treated as the <code>MSSQL</code> adapter target unless a separate compatibility decision is accepted.</li>
+</ul>
+<p>Storage layer requirements:</p>
+<ul>
+<li>the logical data model is the same for all backends;</li>
+<li>the backend uses a storage abstraction;</li>
+<li>SQL storage engines support dialect-specific migrations with synchronized logical migration versions;</li>
+<li>the internal database is selected through <code>database.database_type</code> and <code>database.database_path</code>;</li>
+<li>if <code>external_databases.enabled = true</code>, the runtime uses <code>external_databases</code> and does not use the internal database for working data;</li>
+<li><code>SQLite</code> and <code>PostgreSQL</code> are included in the first mandatory implementation stage;</li>
+<li><code>MySQL</code>, <code>MSSQL</code> and other SQL-compatible adapters are delivered as separate adapters in Stage 10 Storage Adapter Expansion.</li>
+<li>transaction boilerplate should be centralized with <code>storage.WithTx</code> in new or materially changed store paths, while domain-specific retry/isolation remains explicit in the store code;</li>
+<li>shared SQL dialect helpers are a documented optimization backlog item before Stage 10 expands storage adapters.</li>
+</ul>
+<h2 id="jobs-and-worker-execution">Jobs and Worker Execution</h2>
+<p>Background jobs are executed by separate worker processes.</p>
+<p>Rules:</p>
+<ul>
+<li><code>thelper</code> creates jobs, validates requests, manages API/config/module state and does not execute long-running jobs inline;</li>
+<li><code>thelper-worker</code> atomically claims an eligible queued job through a storage-level lease, moves it to <code>running</code>, executes the job handler, stores <code>result_payload</code> and completes the job;</li>
+<li>worker processes update <code>heartbeat_at</code> and <code>lease_expires_at</code> for long-running jobs;</li>
+<li>expired leases are recovered by worker processes through retry/backoff or by moving the job to <code>failed</code> after attempts are exhausted;</li>
+<li><code>job_locks</code> are used to serialize conflicting business operations across multiple worker processes;</li>
+<li>the job lease identifies the owner of a specific job, while <code>job_locks</code> protect business resources;</li>
+<li><code>global-scanner</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>repository-manager</code> and <code>scim_sync</code> run through the worker execution model;</li>
+<li>worker processes can scale horizontally while preserving unified storage contracts.</li>
+</ul>
+<h2 id="status-monitoring-and-aggregation">Status Monitoring and Aggregation</h2>
+<p>All jobs must publish status events and runtime metrics to persistent <code>job_events</code>.</p>
+<p><code>status-monitor</code>:</p>
+<ul>
+<li>aggregates <code>job_events</code>, <code>jobs</code>, <code>module_states</code> and worker heartbeat data;</li>
+<li>owns aggregate read models <code>workflow_statuses</code>;</li>
+<li>updates aggregate <code>project_scans.status</code> and <code>project_scans.result_payload</code>;</li>
+<li>provides the single source of status information for the UI, backend API and internal services;</li>
+<li>in the MVP, may be a logical module inside <code>thelper</code>, but must have a separate responsibility boundary;</li>
+<li>in distributed mode, may be moved to a separate process or node.</li>
+</ul>
+<p>State ownership rule:</p>
+<ul>
+<li>workers write execution facts and domain results;</li>
+<li><code>status-monitor</code> writes aggregate statuses;</li>
+<li>UI and internal services must not aggregate workflow status from child jobs on their own.</li>
+</ul>
+<h3 id="repo-storage-strategy">Repo storage strategy</h3>
+<p>The same materialized set of <code>root_paths</code> used for global scanning is used for local placement of cloned repositories. <code>scanning.global_scan</code> remains the external config source for <code>source = config</code> rows; root paths created through clone/API are stored as <code>source = api</code> and do not rewrite config.</p>
+<p>Rules:</p>
+<ul>
+<li>during clone, the user selects an existing <code>root_path</code> or creates a new root path;</li>
+<li>inside the selected root path, the user selects an existing target directory or creates a new one;</li>
+<li>the clone workflow uses provider-aware adapters for <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>;</li>
+<li>provider integrations use GitKraken-like profiles: one provider can have multiple configured hosts/provider instances, and one host can have multiple credentials with different usages;</li>
+<li>protocol <code>https|ssh</code> is selected at clone request level and affects the final clone URL;</li>
+<li>repository identity is built as <code>provider + provider_host + full_path</code>, where <code>provider_host</code> distinguishes self-hosted provider instances;</li>
+<li>provider URL parsing follows ADR 0016 and must normalize equivalent HTTPS/SSH/scp-like URLs into the same identity;</li>
+<li><code>clone_url</code> is stored only as nullable non-unique transport metadata without credentials/userinfo and does not participate in deduplication;</li>
+<li>credentials are selected by <code>credential_id</code>; workers resolve <code>secretref://...</code> values at use time and never receive raw secrets in job payloads;</li>
+<li>recursive GitLab group clone is a later repository operations extension after single-repository clone;</li>
+<li>if clone runs into a new path, <code>repository-manager</code> adds it to the <code>root_paths</code> list with <code>source = api</code>;</li>
+<li>the local repository path is built inside the selected <code>root_path</code>;</li>
+<li><code>provider_host</code>, <code>full_path</code> and the resulting <code>local_path</code> must be normalized; <code>local_path</code> must not allow escaping the selected <code>root_path</code>;</li>
+<li>if the directory already contains a valid Git repository with the expected remote, <code>clone</code> is replaced with <code>pull</code>;</li>
+<li><code>clone</code>, <code>pull</code> and <code>sync</code> operations for the same <code>repository.id</code> are serialized through <code>job_locks</code>.</li>
+</ul>
+<h2 id="basic-runtime-flow">Basic Runtime Flow</h2>
+<ol>
+<li><code>thelper-ctl -reconfigure</code> imports configuration and ignore rules into the database.</li>
+<li><code>thelper</code> starts the runtime and reads the active configuration from the database.</li>
+<li><code>global-scanner</code> starts a global scan over <code>root_path</code> entries from <code>scanning.global_scan</code>.</li>
+<li>Discovered Terraform projects are registered as separate <code>projects</code> rows; a background <code>project_discovery</code> job is created for each created or updated project.</li>
+<li><code>project_discovery</code> determines the project's local Git relationships, creates/updates a repository card when a Git marker exists, and links separate project records through <code>project_links</code> if they belong to one Git repository.</li>
+<li><code>repository-manager</code> supports <code>clone</code>, <code>pull</code>, <code>sync</code>; when cloning into a new path it adds that path to <code>root_paths</code>.</li>
+<li>Stage 06A provides <code>tool-profile-runtime</code>, certified profiles, profile validation and optional analyzer for external CLI compatibility.</li>
+<li><code>project-scanner</code> performs a project-level Terraform scan using a specific project's settings and <code>terraform validate</code> and <code>TFLint</code> through <code>tool-profile-runtime</code>.</li>
+<li><code>security-validator</code> performs a security/validation scan using a specific project's settings and <code>Trivy</code> through <code>tool-profile-runtime</code>, then stores normalized findings. <code>Gitleaks</code>, <code>Checkov</code>, <code>OPA</code> and <code>Conftest</code> are connected as adapter extensions.</li>
+<li><code>module-runtime</code> provides <code>reload</code>, <code>restart</code> and module statuses.</li>
+</ol>
+<h2 id="key-architectural-risks-removed-by-documentation-refactoring">Key Architectural Risks Removed by Documentation Refactoring</h2>
+<ul>
+<li>dependency on line-number references in another document was removed;</li>
+<li>product requirements and technical mechanics were separated into different documents;</li>
+<li>duplicates and inconsistent wording were consolidated into a single source of truth;</li>
+<li>the repository received a stable structure for subsequent code scaffolding.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="adr/0019-code-quality-and-route-registration.html"><span>ADR</span>ADR 0019: Code Quality Baseline And Route Registration</a>
+<a href="frontend-ui-contract.html"><span>Core Docs</span>Frontend UI Delivery Contract</a>
+<a href="technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="stage-00-delivery-contract.html"><span>Core Docs</span>Stage 00 Delivery Contract</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html"><span>Implementation Specs</span>Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html"><span>Implementation Specs</span>Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html"><span>Implementation Specs</span>Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html" aria-current="page">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../architecture.html">Русская страница</a>
+      <a href="architecture.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/architecture.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

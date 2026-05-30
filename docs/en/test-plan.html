@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Test Plan - T-Helper documentation.">
+    <title>Test Plan - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../test-plan.html">
+    <link rel="alternate" hreflang="en" href="test-plan.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../test-plan.html">RU</a>
+        <a class="is-active" href="test-plan.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/test-plan.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>test-plan.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#test-plan">Test Plan</a>
+<a class="toc-level-2" href="#general-rules">General Rules</a>
+<a class="toc-level-2" href="#mvp-acceptance-mapping">MVP Acceptance Mapping</a>
+<a class="toc-level-2" href="#cross-cutting-tests">Cross-Cutting Tests</a>
+<a class="toc-level-3" href="#idempotency">Idempotency</a>
+<a class="toc-level-3" href="#configuration-contract">Configuration Contract</a>
+<a class="toc-level-3" href="#provider-adapters">Provider Adapters</a>
+<a class="toc-level-3" href="#repository-operation-conflicts">Repository Operation Conflicts</a>
+<a class="toc-level-3" href="#module-registry">Module Registry</a>
+<a class="toc-level-3" href="#secret-masking">Secret Masking</a>
+<a class="toc-level-3" href="#authorization">Authorization</a>
+<a class="toc-level-3" href="#payload-schemas-and-findings">Payload Schemas and Findings</a>
+<a class="toc-level-3" href="#status-aggregation">Status Aggregation</a>
+<a class="toc-level-3" href="#toolchain-coverage">Toolchain Coverage</a>
+<a class="toc-level-3" href="#storage-invariants">Storage Invariants</a>
+<a class="toc-level-3" href="#worker-execution">Worker Execution</a>
+<a class="toc-level-3" href="#singleton-runtime">Singleton Runtime</a>
+<a class="toc-level-3" href="#frontend-ui-contract">Frontend UI Contract</a>
+<a class="toc-level-3" href="#scanner-fixtures">Scanner Fixtures</a>
+<a class="toc-level-3" href="#stage-04-scanner-registry-behavior">Stage 04 Scanner Registry Behavior</a>
+<a class="toc-level-3" href="#stage-05-repository-enrichment">Stage 05 Repository Enrichment</a>
+<a class="toc-level-3" href="#stage-05-path-safety">Stage 05 Path Safety</a>
+<a class="toc-level-3" href="#api-compatibility">API Compatibility</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="test-plan">Test Plan</h1>
+<p>This document links MVP acceptance criteria from <a href="roadmap.html"><code>roadmap.md</code></a> to API checks, storage state and runtime behavior.</p>
+<h2 id="general-rules">General Rules</h2>
+<ul>
+<li>Acceptance tests must run against a local on-premise environment without external SaaS dependencies.</li>
+<li>API assertions use endpoint contracts from <a href="api.html"><code>api.md</code></a>.</li>
+<li>Payload assertions use schema versions from <a href="payload-schemas.html"><code>payload-schemas.md</code></a>.</li>
+<li>Storage assertions use entities and invariants from <a href="data-model.html"><code>data-model.md</code></a>.</li>
+<li>Authorization assertions use permissions from <a href="access-control.html"><code>access-control.md</code></a>.</li>
+<li>Test Terraform fixtures must not contain real secrets.</li>
+</ul>
+<h2 id="mvp-acceptance-mapping">MVP Acceptance Mapping</h2>
+<table>
+<thead><tr><th>ID</th><th>Acceptance</th><th>Primary checks</th></tr></thead>
+<tbody>
+<tr><td><code>ACC-MVP-001</code></td><td>A Terraform project is discovered by the presence of <code>*.tf</code>.</td><td>Create a fixture with <code>main.tf</code>; run <code>POST /api/scans</code>; verify <code>projects</code> with <code>terraform_marker = *.tf</code>.</td></tr>
+<tr><td><code>ACC-MVP-002</code></td><td>Global scanning identifies Terraform projects, and background project discovery identifies project Git relationships.</td><td>Fixture contains <code>*.tf</code> and allowed Git markers <code>.git/</code> directory and <code>.git</code> file with <code>gitdir:</code>; verify <code>projects</code>, queued <code>project_discovery</code> jobs, <code>repositories</code>/<code>project_links</code> after project discovery completes; verify negative fixtures for similar files that must not create repository links/cards.</td></tr>
+<tr><td><code>ACC-MVP-003</code></td><td>After a project is discovered, nested directories are not scanned as separate working directories.</td><td>Fixture contains parent <code>main.tf</code> and nested <code>child/main.tf</code>; verify that no second <code>project</code> exists under the parent.</td></tr>
+<tr><td><code>ACC-MVP-004</code></td><td>Ignore rules exclude files and directories; <code>!pattern</code> is preserved.</td><td>Load <code>.t-helper.ignore</code>; verify <code>ignore_rules.pattern</code>, excluded directories and preserved negative patterns.</td></tr>
+<tr><td><code>ACC-MVP-005</code></td><td>Projects are stored as separate records and updated in the database; project Git relationships are stored without merging project records.</td><td>Run scan twice; verify no duplicates by unique constraints and <code>last_seen_at</code> update; run project discovery and verify shared <code>repository_id</code>/<code>project_links</code> for projects from one Git repository without merging project rows.</td></tr>
+<tr><td><code>ACC-MVP-006</code></td><td>Project-level scan identifies providers, required auth and quality through <code>terraform validate</code> and <code>TFLint</code>, while security/validation scan stores findings through <code>Trivy</code> as the mandatory local scanner.</td><td>Configure <code>PUT /api/projects/{id}/scan-settings</code>, run <code>POST /api/project-scans</code>; verify parent <code>jobs.job_type = project_scan</code>, child <code>jobs.job_type = security_validation_scan</code> with the same <code>job_group_id</code>, <code>project_scans.result_payload</code>, <code>workflow_statuses</code> and <code>security_findings</code> for <code>Trivy</code>.</td></tr>
+<tr><td><code>ACC-MVP-007</code></td><td>Runtime configuration is stored in the database.</td><td>Import config; verify <code>config_entries</code> and <code>GET /api/config</code>.</td></tr>
+<tr><td><code>ACC-MVP-008</code></td><td><code>thelper-ctl -reconfigure</code> imports configuration and ignore rules.</td><td>Run the CLI command; verify <code>config_entries</code>, <code>ignore_rules</code> and no service restart side effect.</td></tr>
+<tr><td><code>ACC-MVP-009</code></td><td><code>thelper-ctl -reload</code> applies reloadable configuration.</td><td>Change <code>modules.enabled</code>, <code>logging.level</code> or <code>scanning.global_scan</code>; verify sync reload result with <code>accepted_keys</code>, <code>applied_keys</code>, <code>restart_required_keys</code>, <code>failed_keys</code>, no Stage 03 <code>jobs</code> dependency and honest distinction between accepted and actually applied Stage 02 keys.</td></tr>
+<tr><td><code>ACC-MVP-010</code></td><td><code>thelper-ctl -restart &lt;module&gt;</code> works for any available individual module, and unavailable modules return a controlled error.</td><td>Restart an available module such as <code>config-manager</code> or <code>global-scanner</code>; verify <code>module_states</code> transition and <code>module_restart.result.v1</code>; restart/reload of unavailable roadmap modules must return controlled <code>module_unavailable</code>.</td></tr>
+<tr><td><code>ACC-MVP-011</code></td><td><code>GUI</code> and <code>Web UI</code> use a unified backend API and cover MVP read/operate scenarios.</td><td>Contract test: both frontend clients use only the documented backend API.</td></tr>
+<tr><td><code>ACC-MVP-012</code></td><td><code>GUI</code> works only locally.</td><td>Verify bind policy/config and rejection of remote GUI access.</td></tr>
+<tr><td><code>ACC-MVP-013</code></td><td><code>PostgreSQL</code> and <code>SQLite</code> are supported through storage abstraction.</td><td>Run the same storage test suite against PostgreSQL and SQLite adapters.</td></tr>
+<tr><td><code>ACC-MVP-014</code></td><td><code>clone</code>, <code>pull</code>, <code>sync</code> are serialized through <code>job_locks</code>, clone uses the shared root path, and a new root path is added automatically to root paths.</td><td>Run concurrent repo operations; verify one <code>held</code> lock and no conflicting active jobs; run <code>POST /api/repos/clone</code> with <code>new_root_path</code> and verify the new <code>root_path</code>; verify clone into existing and new <code>target_directory</code>; verify repository identity as <code>provider + provider_host + full_path</code>.</td></tr>
+<tr><td><code>ACC-MVP-022</code></td><td>Clone workflow supports <code>generic</code> Git and one managed provider from <code>gitlab</code> or <code>github</code>, `https</td><td>ssh<code> selection, multi-host/multi-credential provider profiles, path safety and </code>job_locks`.</td><td>Run generic Git and selected managed provider clone requests; verify transport URL, <code>repositories.provider</code>, <code>repositories.provider_host</code>, clone into selected <code>target_directory</code>, multiple provider hosts and credentials on one provider, path containment and lock serialization.</td></tr>
+<tr><td><code>ACC-MVP-015</code></td><td><code>environments</code> and <code>workspaces</code> are supported.</td><td>Create/import relationships; verify <code>GET /api/environments</code>, <code>GET /api/workspaces</code> and FK constraints.</td></tr>
+<tr><td><code>ACC-MVP-016</code></td><td><code>auth</code> is implemented as a separate module.</td><td>Verify <code>module_states</code> for <code>auth</code> and auth endpoints.</td></tr>
+<tr><td><code>ACC-MVP-017</code></td><td>Local auth and <code>RBAC</code> are implemented at backend/API level; SCIM endpoints may be contract/stub without a full sync workflow.</td><td>Verify users/groups/roles/bindings, bootstrap admin flow, negative authorization tests and controlled SCIM stub responses.</td></tr>
+<tr><td><code>ACC-MVP-018</code></td><td>The security stack works locally and does not send code outside.</td><td>Run project scan in a network-restricted environment; verify no outbound calls.</td></tr>
+<tr><td><code>ACC-MVP-019</code></td><td>Security findings and rule sets are stored inside the system.</td><td>Verify <code>security_rule_sets</code>, <code>security_findings</code>, <code>GET /api/security/findings</code>.</td></tr>
+<tr><td><code>ACC-MVP-020</code></td><td>One project scan API creates <code>project_scans</code>; findings are read without <code>security_scans</code>.</td><td>Verify <code>POST /api/project-scans</code>, <code>GET /api/project-scans/{project_scan_id}/findings</code>; confirm that there is no separate <code>security_scans</code> entity.</td></tr>
+<tr><td><code>ACC-MVP-021</code></td><td>Backend API covers scan roots, repositories, jobs, environments, workspaces and module states for the Frontend MVP.</td><td>Contract test against the endpoint list from <a href="api.html"><code>api.md</code></a> and the authorization matrix.</td></tr>
+</tbody></table>
+<h2 id="cross-cutting-tests">Cross-Cutting Tests</h2>
+<h3 id="idempotency">Idempotency</h3>
+<ul>
+<li>Repeat a write request with the same <code>Idempotency-Key</code> and same payload.</li>
+<li>Expected: the same <code>job_id</code> or the same resulting state is returned.</li>
+<li>Repeat a write request with the same <code>Idempotency-Key</code> but different payload.</li>
+<li>Expected: <code>409 Conflict</code> or <code>validation_error</code> with an explicit code.</li>
+<li>For job-producing endpoints, verify that <code>Idempotency-Key</code> is scoped by <code>(actor, job_type, key)</code>: same actor/job type/key replays, different payload conflicts, but the same key can be used independently by another job type or actor.</li>
+</ul>
+<h3 id="configuration-contract">Configuration Contract</h3>
+<ul>
+<li>Verify that <code>config.example.json</code> uses <code>scanning.global_scan</code>.</li>
+<li>Import config with unknown top-level key; expected: <code>validation_error</code> without partial application.</li>
+<li>Import config with unknown nested key; expected: <code>validation_error</code> without partial application.</li>
+<li>Import config with trailing JSON payload after a valid config object; expected: <code>validation_error</code> without partial application.</li>
+<li>Import config with <code>scanning.global_scan</code>; Stage 02 expectation: <code>config_entries</code> stores the canonical key and <code>GET /api/config</code> returns <code>scanning.global_scan</code>. Stage 04 materializes scan roots into <code>root_paths</code>.</li>
+<li>Import config with legacy/alias key <code>scanning.global_scann</code>; expected: <code>validation_error</code> without partial application.</li>
+<li>Import config with any other alias for global scan roots, for example <code>globalScan</code> or <code>scan_roots</code>; expected: <code>validation_error</code> without partial application.</li>
+<li>Verify that reload request/result uses keys such as <code>scanning.global_scan</code> and returns a sync result without a Stage 03 <code>jobs</code> dependency.</li>
+<li>Send reload request with an explicit unknown key, for example <code>logging.levl</code>; expected: key appears in <code>failed_keys</code>, not in <code>accepted_keys</code> or <code>applied_keys</code>.</li>
+<li>Verify that <code>PUT /api/config</code> does not delete imported system <code>ignore_rules</code>, because <code>.t-helper.ignore</code> is not part of the HTTP config payload.</li>
+<li>Verify that storage/API/read models use <code>repository_id</code> for the project -&gt; repository relationship and do not require <code>repo_id</code>.</li>
+<li>Verify that <code>modules.enabled</code> accepts only registered modules from the initial module registry.</li>
+<li>Import config with an unknown module in <code>modules.enabled</code>; expected: <code>validation_error</code> without partial application.</li>
+<li>Import config with an unknown database provider; expected: <code>validation_error</code> without partial application.</li>
+<li>Verify that <code>database.*</code> and <code>external_databases.*</code> update only storage profile metadata/current bootstrap or the <code>migration</code> slot and do not switch the active DB through reload.</li>
+<li>Verify that <code>thelper-ctl -reconfigure</code> can update the <code>migration</code> storage profile without changing <code>current</code>.</li>
+<li>Verify that <code>thelper-ctl -migrate-db</code> copies schema/data, then updates <code>current</code>/<code>migration</code> statuses and preserves old DB profile metadata.</li>
+<li>Verify SQLite -&gt; PostgreSQL <code>thelper-ctl -migrate-db</code> with <code>external_databases.username/password = secretref://env/...</code>; expected: target DB receives stage-owned tables/data, secret refs remain refs, API output is masked.</li>
+<li>Verify that a failed DB migration does not change the active <code>current</code> profile.</li>
+<li>For Stage 02, verify transfer only of Stage 02-owned tables: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, <code>ignore_rules</code> and system migration metadata. Later stage-owned tables must extend this migration test when introduced.</li>
+<li>Verify that provider-specific worker settings scoped to PostgreSQL do not change SQLite settings and vice versa.</li>
+</ul>
+<h3 id="provider-adapters">Provider Adapters</h3>
+<ul>
+<li>Verify that database providers are registered through the storage provider registry, not selected by conditional logic in HTTP/CLI/domain layers.</li>
+<li>Verify that auth providers are registered through the auth provider registry.</li>
+<li>Verify that unknown database/auth provider names return controlled validation errors.</li>
+<li>Verify that provider-specific code is not used directly from HTTP handlers.</li>
+<li>Verify that repository provider adapters normalize identity as <code>provider + provider_host + full_path</code>.</li>
+<li>Verify URL parsing according to ADR 0016: equivalent HTTPS/SSH/scp-like URLs produce the same <code>provider</code>, <code>provider_host</code>, <code>full_path</code>, <code>protocol</code> and safe <code>clone_url</code>.</li>
+<li>Verify provider-specific path rules for the MVP provider: GitLab supports nested groups or GitHub requires exactly <code>owner/repo</code>; Bitbucket and Azure DevOps path rules are platform/extension tests.</li>
+<li>Verify negative URL parsing cases: userinfo in persisted URL, unsupported protocol, empty segments, <code>..</code>, backslash, provider path shape mismatch.</li>
+<li>Verify machine-readable URL validation errors: <code>provider_host_required</code>, <code>unsupported_provider_url</code>, <code>unsupported_url_protocol</code>, <code>invalid_repository_path</code>, <code>invalid_provider_host</code>, <code>credential_userinfo_not_allowed</code>, <code>provider_path_shape_mismatch</code>.</li>
+<li>Verify that the same <code>full_path</code> can exist in different <code>provider_host</code> values or different providers without a unique constraint conflict.</li>
+<li>Verify that <code>clone_url</code> is nullable and has no unique constraint.</li>
+<li>Verify that <code>clone_url</code> is not used for lookup/upsert/deduplication and that different SSH/HTTPS transport URLs for one repository converge to one repository card.</li>
+<li>Verify that persisted <code>clone_url</code>, <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events</code> and logs do not contain credentials, tokens, passwords or URL userinfo.</li>
+<li>Verify multi-host provider profiles: one provider has several <code>repository_provider_instances</code> with different <code>provider_host</code>.</li>
+<li>Verify multi-credential per host: one <code>repository_provider_instance</code> has several <code>repository_credentials</code> with different <code>usages</code> and <code>scope_hint</code>.</li>
+<li>Verify that raw credential values are rejected, while <code>secretref://env/...</code> is accepted and masked in API responses.</li>
+<li>Verify usage validation: clone/pull require <code>git_transport</code>; GitLab recursive group clone and webhook verification are platform/extension tests.</li>
+<li>Verify that repo job payloads contain <code>credential_id</code>, but not secret refs or resolved secrets.</li>
+</ul>
+<h3 id="repository-operation-conflicts">Repository Operation Conflicts</h3>
+<ul>
+<li>Create an active <code>repo_clone</code>, <code>repo_pull</code> or <code>repo_sync</code> job for <code>lock_key = repository:&lt;id&gt;</code>.</li>
+<li>Repeat the same request with the same <code>Idempotency-Key</code> and same payload; expected: existing <code>job_id</code> is returned.</li>
+<li>Repeat the request with the same <code>Idempotency-Key</code> but different payload; expected: <code>409 Conflict</code> or <code>validation_error</code>.</li>
+<li>Send a new <code>clone</code>, <code>pull</code> or <code>sync</code> request without the same <code>Idempotency-Key</code>; expected: <code>409 Conflict</code> with code <code>repository_operation_already_running</code>.</li>
+<li>Verify that conflict details contain <code>repository_id</code>, <code>lock_key</code>, <code>active_job_id</code> and <code>active_job_type</code>.</li>
+<li>Send two concurrent clone requests for one normalized <code>provider + provider_host + full_path</code> before <code>repository_id</code> exists; expected: pre-create identity conflict prevents duplicate jobs/repository rows, and exact <code>Idempotency-Key</code> replay returns the existing <code>job_ref</code>.</li>
+<li>Send two concurrent clone requests to one normalized target path for different repositories; expected: second request receives <code>409 conflict</code> with <code>repository_target_path_busy</code>.</li>
+<li>Verify that the MVP does not create merged/replacement/cancel/superseding jobs for a conflicting repository operation.</li>
+</ul>
+<h3 id="module-registry">Module Registry</h3>
+<ul>
+<li>After initial migrations/seed, verify registered modules: <code>core</code>, <code>worker-runtime</code>, <code>config-manager</code>, <code>module-runtime</code>, <code>status-monitor</code>, <code>global-scanner</code>, <code>repository-manager</code>, <code>project-scanner</code>, <code>security-validator</code>, <code>auth</code>, <code>web</code>.</li>
+<li>Verify that <code>GET /api/modules</code> returns registered modules with state from <code>module_states</code>.</li>
+<li>Verify that a registered module without an available implementation gets state <code>unavailable</code>.</li>
+<li>Verify that <code>POST /api/modules/restart</code> for an unknown module returns validation/not found error.</li>
+<li>Verify that <code>POST /api/modules/restart</code> or reload for an <code>unavailable</code> module returns a controlled error without panic and without changing unrelated module states.</li>
+</ul>
+<h3 id="secret-masking">Secret Masking</h3>
+<ul>
+<li>Import sensitive config keys with values <code>secretref://env/...</code>; expected: <code>config_entries.value</code> stores the reference, not the resolved secret.</li>
+<li>Call <code>GET /api/config</code>; expected: sensitive values are masked and do not expose resolved secret name/value beyond allowed reference metadata.</li>
+<li>Verify masking modes: admin with <code>system.config.read</code> may see full <code>secretref://env/NAME</code>, viewer/runtime summary receives masked metadata without env var name, no response returns a resolved value.</li>
+<li>Try importing a literal secret into a sensitive key, including <code>external_databases.username</code> and <code>external_databases.password</code>; expected: <code>validation_error</code> without partial application.</li>
+<li>Verify that <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>job_events.payload</code>, <code>workflow_statuses.summary_payload</code>, <code>audit_log.payload</code> and logs do not contain resolved secrets.</li>
+</ul>
+<h3 id="authorization">Authorization</h3>
+<ul>
+<li>Verify that <code>GET /api/health</code> is available without authentication and returns only safe metadata without config values, filesystem paths, DSNs, users, secrets or object-scoped details.</li>
+<li>For Stage 01, verify <code>health_status.v1</code> shape: response contains <code>instance_id</code>, <code>mode</code>, safe <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code>.</li>
+<li>Verify that every endpoint in the authorization matrix in <a href="access-control.html"><code>access-control.md</code></a> has a positive and negative permission test.</li>
+<li>Verify that <code>system.runtime.read</code> can read aggregate runtime/list metadata but does not expose object-scoped details without corresponding object permissions.</li>
+<li>Verify that object-scoped <code>*.read</code> permissions allow reading only the matching object scope.</li>
+<li>Verify that group role bindings are inherited by group members.</li>
+<li>Verify that local auth failures use generic errors and do not reveal whether a username exists.</li>
+<li>Verify that password hashes, reset tokens and reset token hashes are never returned by API, logs, jobs, events, workflow summaries or audit payloads.</li>
+</ul>
+<h3 id="payload-schemas-and-findings">Payload Schemas and Findings</h3>
+<ul>
+<li>Verify <code>jobs.payload</code> and <code>jobs.result_payload</code> schema versions for every job type.</li>
+<li>For <code>project_scans.result_payload</code>, verify <code>schema_version = project_scans.result.v1</code>.</li>
+<li>For <code>security_findings.fingerprint_components</code>, verify <code>schema_version = security_finding.fingerprint.v1</code>.</li>
+<li>Verify that <code>security_findings.fingerprint</code> has format <code>fp:v1:&lt;sha256&gt;</code> and matches canonical JSON from ADR 0017.</li>
+<li>Verify that fingerprint does not include <code>job_id</code>, <code>project_scan_id</code>, line/column, title, description, remediation or severity.</li>
+<li>Verify that <code>resource_ref</code> or <code>finding_key</code> is required for a persisted finding.</li>
+<li>Repeat scan with a new <code>job_id</code>/<code>project_scan_id</code>; expected: existing <code>security_findings</code> row is updated by fingerprint, <code>last_seen_at</code> changes and no duplicate is created.</li>
+<li>Repeat scan with a line shift for the same resource/rule; expected: fingerprint is stable.</li>
+<li>Repeat scan with another <code>rule_set_id</code> or <code>workspace_id</code>; expected: fingerprint differs.</li>
+<li>Repeat scan after file rename; expected: fingerprint changes unless adapter has documented stable <code>finding_key</code> behavior.</li>
+<li>Verify workspace-specific finding: same rule/resource in different <code>workspace_id</code> produces different fingerprint.</li>
+<li>Verify finding without <code>resource_ref</code>: persisted only when stable non-secret <code>finding_key</code> exists.</li>
+<li>For <code>job_events.payload</code>, verify <code>schema_version = job_events.payload.v1</code>.</li>
+<li>For <code>workflow_statuses.summary_payload</code>, verify <code>schema_version = workflow_status.summary.v1</code>.</li>
+<li>Verify that payload/result does not contain secrets, tokens, private keys or raw Terraform source.</li>
+</ul>
+<h3 id="status-aggregation">Status Aggregation</h3>
+<ul>
+<li>Verify that every worker handler writes <code>job_events</code> for key transitions: <code>claimed</code>, <code>started</code>, <code>progress</code>, <code>succeeded|failed</code>.</li>
+<li>Verify that <code>status-monitor</code> aggregates jobs with one <code>job_group_id</code> into <code>workflow_statuses</code>.</li>
+<li>Verify that <code>GET /api/status/workflows/{job_group_id}</code> returns a single aggregate status.</li>
+<li>Verify that <code>GET /api/project-scans/{id}</code> returns aggregate status from <code>status-monitor</code>, not requiring UI-side aggregation.</li>
+<li>Verify that parent <code>project_scan</code> job does not wait for child <code>security_validation_scan</code> job, but the workflow remains <code>running</code> until child jobs finish.</li>
+</ul>
+<h3 id="toolchain-coverage">Toolchain Coverage</h3>
+<ul>
+<li>For <code>project-scanner</code>, verify that runtime flow includes <code>terraform validate</code> and <code>TFLint</code>.</li>
+<li>For <code>security-validator</code>, verify that <code>Trivy</code> runs only when present in <code>project_security_scan_settings.enabled_modules</code>.</li>
+<li>Verify that <code>terraform</code>, <code>TFLint</code> and <code>Trivy</code> run through the tool profile runtime from ADR 0018, not through parser logic inside scanner service.</li>
+<li>Verify version discovery for each required tool and selection of active <code>tool_profiles</code> by <code>tool</code>, discovered version and configured version policy.</li>
+<li>Verify default <code>certified_only</code> policy: certified version runs, unsupported version returns controlled <code>tool_version_unsupported</code>, missing binary returns <code>tool_not_found</code>.</li>
+<li>Verify <code>compatible_range</code> policy: compatible but uncertified version may run and result payload marks <code>compatibility_status = compatible</code>, <code>certification_status = uncertified</code>.</li>
+<li>Verify <code>latest_best_effort</code> policy requires explicit opt-in and marks results as uncertified.</li>
+<li>Verify that <code>jobs.project_scan.result.v1</code>, <code>jobs.security_validation_scan.result.v1</code> and <code>project_scans.result.v1</code> include tool/profile metadata and do not include raw tool output.</li>
+<li>Verify profile validation fixtures: sample stdout/stderr plus expected normalized DTO produce stable normalized results and expected fingerprint components.</li>
+<li>Verify negative profile fixtures: missing required fields, unsupported schema, parse failure and secret-like values produce controlled validation errors or redacted diagnostics.</li>
+<li>Verify that tool profile files cannot contain shell fragments, arbitrary scripts, eval behavior or commands outside explicit version discovery and scan command templates.</li>
+<li>Verify migration to a fresh tool version without code changes: add/update profile file, validate fixtures, import, activate, run scan and confirm normalized DTO/fingerprint stability.</li>
+<li>Verify <code>tool-profile-analyzer</code>: captured output can produce a candidate profile and validation fixtures, but generated profiles use <code>source_type = generated_candidate</code>, are inactive by default and are never selected until explicit validation and activation.</li>
+<li>Verify analyzer diagnostics for fingerprint-affecting fields: unresolved <code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code> or <code>check_type</code> blocks activation until fixtures validate them.</li>
+<li>Verify bundled profile fixtures for <code>terraform validate</code> success/error, <code>TFLint</code> finding, <code>Trivy config</code> finding, secret-like redaction, unsupported version, missing binary and malformed output.</li>
+<li>For extension adapters, verify that <code>gitleaks</code>, <code>checkov</code>, <code>opa</code> and <code>conftest</code> can be registered in <code>scanning.security_scan.modules</code> without changing the API contract, but are not mandatory MVP acceptance.</li>
+</ul>
+<h3 id="storage-invariants">Storage Invariants</h3>
+<ul>
+<li>Verify unique constraints from <a href="data-model.html"><code>data-model.md</code></a>.</li>
+<li>Verify that migrations are stage-owned: Stage 01 does not create target tables for later stages without the owning code/API/worker behavior and tests.</li>
+<li>Verify that <code>repositories.provider + repositories.provider_host + repositories.full_path</code> is unique, while <code>repositories.full_path</code> is not globally unique.</li>
+<li>Verify FK/delete behavior for <code>projects</code>, <code>workspaces</code>, <code>project_scans</code>, <code>job_locks</code>, <code>role_bindings</code> and <code>scim_identities</code>.</li>
+<li>Verify that expired <code>job_locks</code> do not block new operations.</li>
+<li>Verify that logical migration versions are synchronized across supported dialect directories.</li>
+<li>For Stage 01, storage contract suite runs on SQLite and PostgreSQL.</li>
+<li>For Stage 10, the same storage contract suite runs on MySQL and MSSQL.</li>
+<li>Run PostgreSQL storage contract suite against Aurora PostgreSQL writer endpoint before declaring Aurora PostgreSQL supported.</li>
+<li>Run MySQL storage contract suite against Aurora MySQL writer endpoint before declaring Aurora MySQL supported.</li>
+<li>Verify that migrations and runtime do not require superuser privileges on Aurora PostgreSQL.</li>
+<li>Verify that Aurora MySQL tests use InnoDB-compatible schema assumptions.</li>
+<li>Verify that Babelfish for Aurora PostgreSQL does not pass as an <code>mssql</code> adapter target without a separate compatibility decision.</li>
+</ul>
+<p>Implemented baseline coverage:</p>
+<ul>
+<li><code>make test</code> runs <code>gofmt</code> check, <code>go vet ./...</code> and <code>go test ./...</code>;</li>
+<li>shared storage contract tests run for SQLite in every <code>go test ./...</code> run;</li>
+<li>the same storage contract suite runs for PostgreSQL when <code>THELPER_POSTGRES_DSN</code> is set, including the Docker <code>offline</code> test runner and GitHub Actions;</li>
+<li>PostgreSQL storage tests guard destructive cleanup and require a test database name unless <code>THELPER_ALLOW_DESTRUCTIVE_STORAGE_TESTS=1</code> is set;</li>
+<li>tests assert that Stage 01 migrations do not create later-stage tables;</li>
+<li>tests assert synchronized logical migration versions for SQLite/PostgreSQL;</li>
+<li>tests assert idempotent Stage 01 migration application.</li>
+</ul>
+<h3 id="worker-execution">Worker Execution</h3>
+<ul>
+<li>Verify that API/CLI create jobs in <code>queued</code> status but do not execute long-running operations inline.</li>
+<li>Start a separate <code>thelper-worker</code> and verify atomic claim plus transition <code>queued -&gt; running -&gt; succeeded|failed</code>.</li>
+<li>Start <code>thelper-worker</code> with the same storage provider/DSN settings as <code>thelper</code>, and verify that it applies migrations, resolves the active storage profile and consumes jobs from the active database.</li>
+<li>Verify that <code>leased_by</code> and worker diagnostics use format <code>&lt;hostname&gt;:&lt;pid&gt;:&lt;worker_uuid&gt;</code>.</li>
+<li>Start several worker processes and verify that <code>job_locks</code> prevent conflicting operations with the same <code>lock_key</code>.</li>
+<li>Start several worker processes on one queued job and verify that only one worker receives the lease.</li>
+<li>Verify heartbeat update for a long-running job: <code>jobs.heartbeat_at</code> and <code>jobs.lease_expires_at</code> update on ticks, while <code>job_events</code> heartbeat rows are bounded diagnostics and are not required for every tick.</li>
+<li>Verify expired lease recovery: job returns to <code>queued</code> with <code>run_after</code> or becomes <code>failed</code> after <code>max_attempts</code> is exhausted.</li>
+<li>Verify retry/backoff through <code>attempt_count</code>, <code>max_attempts</code> and <code>run_after</code>.</li>
+<li>Verify default retry policy: <code>max_attempts = 3</code>, initial backoff <code>5s</code>, multiplier <code>2</code>, max backoff <code>5m</code>, jitter within allowed bounds.</li>
+<li>Verify lock contention: worker does not start the handler, clears the lease, returns the job to <code>queued</code>, sets <code>run_after</code> and writes <code>job_events</code>.</li>
+<li>Verify retention cleanup: old <code>job_events</code> and released/expired <code>job_locks</code> older than retention are deleted, while active jobs/locks and <code>audit_log</code> are not deleted.</li>
+<li>Verify that stopping a worker process does not stop the <code>thelper</code> API runtime.</li>
+<li>For SQLite, verify effective <code>workers.concurrency = 1</code>, one active worker process via database-fingerprint worker lock, <code>journal_mode = WAL</code>, <code>foreign_keys = ON</code>, configured <code>busy_timeout</code>, rejection <code>sqlite_worker_concurrency_unsupported</code> when applying higher concurrency to active SQLite profile, and stale worker lock replacement after the original process is gone.</li>
+<li>Verify that enqueue rejects <code>jobs.payload</code> with secret-like JSON keys, URL userinfo or unresolved <code>secretref://...</code> values before persistence.</li>
+<li>For PostgreSQL, verify that provider-specific concurrency can be higher than SQLite without changing SQLite provider settings.</li>
+</ul>
+<h3 id="singleton-runtime">Singleton Runtime</h3>
+<ul>
+<li>Start <code>thelper</code>, then open Tauri GUI; expected: GUI connects to the existing runtime.</li>
+<li>Start Tauri GUI without active <code>thelper</code>; expected: GUI starts local <code>thelper</code>, and <code>Web UI</code> connects to the same runtime.</li>
+<li>Try to start a second <code>thelper</code>; expected: the process discovers the existing runtime and does not create a second active instance.</li>
+<li>Verify runtime lock file: contains <code>instance_id</code>, <code>pid</code>, <code>host</code>, <code>api_listen_address</code>, <code>started_at</code>, <code>updated_at</code>, <code>config_database_fingerprint</code>.</li>
+<li>Verify <code>/api/health</code>: returns the same <code>health_status.v1</code> DTO shape as Stage 01, without breaking schema change.</li>
+<li>Verify that runtime lock <code>config_database_fingerprint</code> matches safe <code>/api/health.database_fingerprint</code>.</li>
+<li>Verify stale lock replacement: if PID is absent and health probe fails, a new runtime replaces the stale lock.</li>
+<li>Verify fail-closed behavior: if PID and health probe give contradictory state, the second runtime does not start and returns a diagnostic error.</li>
+</ul>
+<h3 id="frontend-ui-contract">Frontend UI Contract</h3>
+<ul>
+<li>Verify that <code>Web UI</code> and <code>GUI</code> use the route tree from <a href="frontend-ui-contract.html"><code>docs/en/frontend-ui-contract.md</code></a>.</li>
+<li>Verify that a route available in <code>Web UI</code> is available in <code>GUI</code> for the same release scope, unless explicitly marked local-only or unavailable by backend API scope.</li>
+<li>Verify that frontend clients use one typed API client and documented backend API only.</li>
+<li>Verify that list-heavy screens are compact and table-first: projects, repositories, findings, jobs, modules, audit and auth administration lists.</li>
+<li>Verify that object detail pages use content headers and tabs for subviews instead of unrelated page shells.</li>
+<li>Verify that long-running operations show <code>job_id</code>, status, latest event and links to job/status details.</li>
+<li>Verify that <code>GUI</code> uses runtime lock file plus <code>GET /api/health</code> for local discovery/readiness and authenticated <code>/api/status</code> for detailed runtime state.</li>
+<li>Verify that Tauri packaging/signing policy and update/distribution channel policy are documented before release artifact publication.</li>
+</ul>
+<h3 id="scanner-fixtures">Scanner Fixtures</h3>
+<ul>
+<li><code>basic_tf_project</code>: directory with <code>main.tf</code>.</li>
+<li><code>nested_tf_project</code>: parent with <code>main.tf</code> and nested <code>child/main.tf</code>.</li>
+<li><code>git_repo_marker_directory</code>: <code>.git/</code> directory.</li>
+<li><code>git_repo_marker_file</code>: <code>.git</code> regular file for worktree/submodule, first non-empty line starts with <code>gitdir:</code>.</li>
+<li><code>git_repo_marker_file_invalid</code>: <code>.git</code> regular file without first non-empty line <code>gitdir:</code>.</li>
+<li><code>git_marker_negative_gitignore</code>: <code>.gitignore</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitattributes</code>: <code>.gitattributes</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitmodules</code>: <code>.gitmodules</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>git_marker_negative_github_dir</code>: <code>.github/</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitlab_ci</code>: <code>.gitlab-ci.yml</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>git_marker_negative_gitkeep</code>: <code>.gitkeep</code> without <code>.git/</code> and without <code>.git</code> file.</li>
+<li><code>ignored_directory</code>: directory excluded by <code>.t-helper.ignore</code>.</li>
+<li><code>negative_ignore_pattern</code>: rule <code>!pattern</code>, preserved without application in the exclude-only MVP matcher.</li>
+<li><code>symlinked_directory</code>: symlinked directory skipped when <code>follow_symlinks = false</code>.</li>
+</ul>
+<h3 id="stage-04-scanner-registry-behavior">Stage 04 Scanner Registry Behavior</h3>
+<ul>
+<li>Verify that global scanner does not open <code>*.tf</code> files for discovery and uses only directory entry names.</li>
+<li>Verify that global scanner creates/updates only <code>projects</code> and enqueues <code>project_discovery</code> jobs, then continues traversal without waiting for them.</li>
+<li>Verify that <code>.git</code> regular file is read only by the <code>project_discovery</code> job up to the implementation limit and is validated by the first non-empty line <code>gitdir:</code>.</li>
+<li>Verify that global scanner does not read <code>.git</code>, <code>.git/config</code> and does not invoke the <code>git</code> CLI.</li>
+<li>Verify <code>follow_symlinks = false</code>: symlinked directories skipped, <code>directories_skipped</code> and <code>symlinks_skipped</code> updated.</li>
+<li>Verify filesystem-only Git repository fallback identity from project discovery: <code>provider = generic</code>, <code>provider_host = local</code>, <code>root_path_id = &lt;containing root path&gt;</code>, <code>full_path = &lt;root_path-relative path&gt;</code>, <code>clone_url = null</code>; identical <code>full_path</code> values in different root paths must not merge into one repository card.</li>
+<li>Verify same-repository relationship: multiple local Terraform projects in one Git repository remain separate <code>projects</code> rows, share <code>repository_id</code> when known, and get <code>project_links.link_type = same_repository</code>.</li>
+<li>Verify idempotent upsert keys: repeated scan updates <code>projects.last_seen_at</code> by <code>root_path_id + relative_path</code> and does not create duplicate <code>repositories</code> for the same generic local path.</li>
+<li>Verify missing behavior: previously discovered project absent from completed scan gets <code>projects.status = missing</code> and is not deleted.</li>
+<li>Verify default project listing: <code>GET /api/projects</code> without <code>status</code> returns only <code>active</code>, while <code>status=missing|disabled|all</code> returns corresponding non-active records.</li>
+<li>Verify missing project scan guard: <code>POST /api/project-scans</code> for <code>projects.status = missing</code> returns controlled validation error.</li>
+<li>Verify rediscovery: later global scan of same <code>root_path_id + relative_path</code> changes <code>projects.status</code> from <code>missing</code> to <code>active</code>.</li>
+<li>Verify progressive field population: global scan fills only filesystem registry fields, project discovery fills <code>repository_id</code>/<code>project_links</code>, repository manager enriches repository card, and project scan data is not written as summary fields on <code>projects</code>.</li>
+<li>Verify partial directory errors: per-directory error writes <code>job_events</code>, increments <code>errors_count</code>, and job may still finish <code>succeeded</code> when at least one root path was processed successfully.</li>
+<li>Verify all-root failure: when every requested root path fails before useful traversal, job finishes <code>failed</code>.</li>
+<li>Verify MVP symlink contract: requests/config attempting <code>follow_symlinks = true</code> are rejected with controlled validation error until Stage 09 runtime hardening.</li>
+</ul>
+<h3 id="stage-05-repository-enrichment">Stage 05 Repository Enrichment</h3>
+<ul>
+<li>Verify enrich in place: generic <code>provider = generic</code>, <code>provider_host = local</code> repository gets provider-aware identity and keeps the same <code>repositories.id</code> when no provider-aware card exists.</li>
+<li>Verify relink and supersede: when provider-aware repository card already exists, projects are relinked to it and generic repository becomes <code>status = superseded</code> with <code>superseded_by_repository_id</code>.</li>
+<li>Verify that project rows are never merged during repository enrichment.</li>
+<li>Verify that <code>superseded</code> repository rejects clone/pull/sync/webhook/polling operations with controlled validation error.</li>
+<li>Verify default repository listing: <code>GET /api/repos</code> without <code>status</code> returns only <code>active</code>, while explicit <code>status</code> filters can include <code>superseded</code>, <code>missing</code> or <code>disabled</code>.</li>
+</ul>
+<h3 id="stage-05-path-safety">Stage 05 Path Safety</h3>
+<ul>
+<li>Verify rejection for <code>../</code> in <code>target_directory</code>, <code>new_target_directory</code>, repository name and provider path.</li>
+<li>Verify symlink inside root cannot make <code>local_path</code> escape selected <code>root_path</code>.</li>
+<li>Verify case-insensitive collision on case-insensitive filesystem.</li>
+<li>Verify Unicode normalization before uniqueness and containment checks.</li>
+<li>Verify existing empty directory accepted only after containment/conflict checks.</li>
+<li>Verify existing non-empty non-Git directory returns controlled validation error.</li>
+<li>Verify existing Git repository with expected remote turns clone into pull.</li>
+<li>Verify existing Git repository with different remote rejects clone.</li>
+</ul>
+<h3 id="api-compatibility">API Compatibility</h3>
+<ul>
+<li>Verify that <code>GET /api/scans/{job_id}</code> returns global scan job during the MVP.</li>
+<li>Verify that new frontend client code uses canonical <code>GET /api/jobs/{id}</code> or status endpoints.</li>
+<li>Verify that compatibility endpoint removal requires a documented deprecation cycle.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="access-control.html"><span>Core Docs</span>Auth, SCIM и RBAC</a>
+<a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="frontend-ui-contract.html"><span>Core Docs</span>Frontend UI Delivery Contract</a>
+<a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+<a href="roadmap.html"><span>Core Docs</span>Roadmap и приёмка</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="stage-00-delivery-contract.html"><span>Core Docs</span>Stage 00 Delivery Contract</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html"><span>Implementation Specs</span>Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html"><span>Implementation Specs</span>Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html"><span>Implementation Specs</span>Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html"><span>Implementation Specs</span>Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html"><span>Implementation Specs</span>Stage 10: Storage Adapter Expansion</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html" aria-current="page">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../test-plan.html">Русская страница</a>
+      <a href="test-plan.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/test-plan.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>
