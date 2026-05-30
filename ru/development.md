@@ -158,25 +158,28 @@ owned by Stage 05 and later.
   not applied until full `.gitignore` semantics are implemented in a later
   hardening stage.
 
-## Project Pages
+## Страница проекта
 
-- `docs/index.html` is the default Russian GitHub Pages entrypoint.
-- `docs/en.html` is the English language variant.
-- Both pages share `docs/pages.css` and `docs/pages.js`.
-- Russian Markdown sources live under `docs/`; corresponding English sources
-  live under `docs/en/` with the same relative paths.
-- `docs/build-pages.js` renders the paired Markdown sources to styled
-  dependency-free Russian and English HTML pages for the published artifact,
-  skips `docs/en/` as a separate catalog root and rewrites internal Markdown
-  links to generated same-language HTML links.
-- Generated document pages share the same navigation shell, local table of
-  contents, related-document links, backlinks and full documentation catalog.
-- `.github/workflows/pages.yml` publishes the `docs` directory through GitHub
-  Actions to the `gh-pages` branch.
-- Repository Pages settings must use source `Deploy from a branch`, branch
-  `gh-pages`, folder `/ (root)`.
-- The Pages landing page is documentation/presentation only and is separate
-  from the Stage 08 React/Tauri frontend deliverable.
+- `docs/index.html` - default Russian GitHub Pages entrypoint.
+- `docs/en.html` - английская языковая версия.
+- Обе страницы используют `docs/pages.css` и `docs/pages.js`.
+- Landing pages используют текущую темную framed layout со sticky navigation,
+  product overview hero, знаком T-Helper и feature strip.
+- Русские Markdown-источники находятся в `docs/ru/`; соответствующие английские
+  источники находятся в `docs/en/` с теми же относительными путями.
+- `docs/build-pages.js` рендерит парные Markdown-источники в стилизованные
+  dependency-free русские и английские HTML pages для published artifact,
+  пропускает `docs/en/` как отдельный catalog root и переписывает внутренние
+  Markdown-ссылки в сгенерированные same-language HTML links.
+- Сгенерированные document pages используют общую navigation shell, локальный
+  table of contents, related-document links, backlinks и полный documentation
+  catalog.
+- `.github/workflows/pages.yml` публикует директорию `docs` через GitHub
+  Actions в ветку `gh-pages`.
+- Repository Pages settings должны использовать source `Deploy from a branch`,
+  branch `gh-pages`, folder `/ (root)`.
+- Pages landing page является только documentation/presentation и отделена от
+  Stage 08 React/Tauri frontend deliverable.
 
 ## Secret references in development
 

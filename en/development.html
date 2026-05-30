@@ -169,8 +169,9 @@
 <li><code>docs/index.html</code> is the default Russian GitHub Pages entrypoint.</li>
 <li><code>docs/en.html</code> is the English language variant.</li>
 <li>Both pages share <code>docs/pages.css</code> and <code>docs/pages.js</code>.</li>
-<li><code>docs/build-pages.js</code> renders every <code>docs/**/*.md</code> file to styled dependency-free Russian and English HTML pages for the published artifact and rewrites internal Markdown links to generated same-language HTML links.</li>
-<li>Generated document pages share the same navigation shell, local table of contents, related-document links, backlinks and full documentation catalog.</li>
+<li>The landing pages use the current dark framed layout with sticky navigation, a product overview hero, the T-Helper mark and a feature strip.</li>
+<li><code>docs/build-pages.js</code> renders paired Markdown sources from <code>docs/ru/</code> and <code>docs/en/</code> to styled dependency-free Russian and English HTML pages for the published artifact and rewrites internal Markdown links to generated same-language HTML links.</li>
+<li>Generated document pages share the same navigation shell, local table of contents, related-document links, backlinks, full documentation catalog and dark visual system.</li>
 <li><code>.github/workflows/pages.yml</code> publishes the <code>docs</code> directory through GitHub Actions to the <code>gh-pages</code> branch.</li>
 <li>Repository Pages settings must use source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
 <li>The Pages landing page is documentation/presentation only and is separate from the Stage 08 React/Tauri frontend deliverable.</li>

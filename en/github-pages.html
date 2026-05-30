@@ -59,7 +59,7 @@
           <h1 id="github-pages">GitHub Pages</h1>
 <h2 id="purpose">Purpose</h2>
 <p>The repository includes a static bilingual GitHub Pages landing page for the project. The page is intentionally separate from the Stage 08 product frontend: it is repository documentation and project presentation, not the runtime Web UI.</p>
-<p>Both language variants use the same brand-led first viewport with dark navigation, Terraform discovery/security artwork and direct documentation entry points.</p>
+<p>Both language variants use the same dark framed layout with sticky navigation, a product overview hero, the T-Helper mark, a feature strip, Terraform discovery/security positioning and direct documentation entry points. Generated documentation pages use the same dark visual system with a sticky header, sidebar table of contents, related links, backlinks and full documentation catalog.</p>
 <h2 id="files">Files</h2>
 <ul>
 <li><code>docs/index.html</code> - Russian landing page and default GitHub Pages entrypoint.</li>
@@ -95,6 +95,7 @@
 <ul>
 <li>Keep Russian and English Markdown sources aligned when updating documentation or page copy.</li>
 <li>Keep the brand-led hero, product mark and primary documentation entry points visible in the first viewport for both language variants.</li>
+<li>Keep the landing page and generated documentation pages on the same dark visual system unless the Pages design contract is deliberately changed.</li>
 <li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
 <li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
 <li>Keep cross-document references as relative Markdown links or inline <code>docs/en/...md</code> / <code>docs/ru/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>
