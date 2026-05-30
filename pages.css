@@ -1,10 +1,10 @@
 :root {
-  color-scheme: dark light;
+  color-scheme: dark;
   --ink: #f7f9ff;
   --text: #f7f9ff;
   --muted: #aeb8ca;
   --paper: #050b18;
-  --surface: #ffffff;
+  --surface: #071120;
   --line: rgba(148, 166, 207, 0.2);
   --accent: #8d42ff;
   --accent-2: #19d7e9;
@@ -27,9 +27,9 @@ html {
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 18% 8%, rgba(126, 65, 255, 0.16), transparent 22rem),
-    radial-gradient(circle at 88% 16%, rgba(20, 215, 222, 0.12), transparent 26rem),
-    #030817;
+    radial-gradient(circle at 12% 0%, rgba(126, 65, 255, 0.14), transparent 24rem),
+    radial-gradient(circle at 88% 8%, rgba(20, 215, 222, 0.11), transparent 26rem),
+    linear-gradient(180deg, #050a14 0%, #020713 44%, #030817 100%);
   color: var(--text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -39,12 +39,12 @@ body {
 
 .page-frame {
   width: min(calc(100% - 32px), 1536px);
-  margin: 32px auto 0;
+  margin: 22px auto 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 9px;
-  background: #040a16;
-  box-shadow: 0 30px 90px rgba(5, 10, 24, 0.28);
+  background: #030a16;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
 }
 
 a {
@@ -62,7 +62,7 @@ code {
   left: 16px;
   top: -48px;
   z-index: 20;
-  background: var(--ink);
+  background: var(--accent-dark);
   color: white;
   padding: 10px 14px;
   transition: top 180ms ease;
@@ -196,19 +196,18 @@ code {
   transform: translateY(-1px);
 }
 
-.hero {
+.product-overview {
   position: relative;
-  min-height: calc(100svh - 130px);
   overflow: hidden;
   background:
     radial-gradient(circle at 74% 54%, rgba(18, 216, 200, 0.18), transparent 25rem),
     radial-gradient(circle at 62% 32%, rgba(117, 51, 255, 0.26), transparent 31rem),
     linear-gradient(180deg, #050d1d 0%, #020817 100%);
   color: white;
-  padding: 0 clamp(22px, 4vw, 64px) 0;
+  padding: clamp(44px, 6vw, 78px) clamp(22px, 4vw, 64px) 0;
 }
 
-.hero::before {
+.product-overview::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -217,12 +216,12 @@ code {
     linear-gradient(90deg, rgba(68, 97, 180, 0.18) 1px, transparent 1px);
   background-size: 72px 72px;
   mask-image: linear-gradient(90deg, transparent, black 18%, black 86%, transparent);
-  transform: perspective(900px) rotateX(62deg) translateY(98px);
+  transform: perspective(900px) rotateX(62deg) translateY(50px);
   transform-origin: center top;
   opacity: 0.6;
 }
 
-.hero::after {
+.product-overview::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -247,7 +246,7 @@ code {
   font-size: clamp(13px, 1.6vw, 15px);
 }
 
-.hero-grid {
+.overview-grid {
   position: relative;
   z-index: 1;
   display: grid;
@@ -256,10 +255,10 @@ code {
   gap: clamp(24px, 5vw, 92px);
   width: min(100%, 1360px);
   margin: 0 auto;
-  min-height: clamp(440px, calc(100svh - 340px), 640px);
+  min-height: 470px;
 }
 
-.hero-copy {
+.overview-copy {
   max-width: 650px;
 }
 
@@ -272,30 +271,30 @@ code {
   text-transform: uppercase;
 }
 
-.hero h1 {
+.product-overview h1 {
   margin: 0;
   font-size: clamp(45px, 5vw, 74px);
   line-height: 1.02;
   letter-spacing: 0;
 }
 
-.hero h1 span {
+.product-overview h1 span {
   color: #874aff;
 }
 
-.hero h1 em {
+.product-overview h1 em {
   color: var(--accent-3);
   font-style: normal;
 }
 
-.hero-lead {
+.overview-lead {
   max-width: 560px;
   margin: 22px 0 0;
   color: rgba(255, 255, 255, 0.84);
   font-size: clamp(17px, 1.7vw, 21px);
 }
 
-.hero-actions {
+.overview-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -377,7 +376,7 @@ code {
   z-index: -1;
 }
 
-.hero-mark {
+.overview-mark {
   width: min(100%, 640px);
   filter: drop-shadow(0 42px 34px rgba(0, 0, 0, 0.42));
   animation: floatMark 5.8s ease-in-out infinite;
@@ -788,25 +787,31 @@ code {
 }
 
 .doc-page {
-  --ink: #101316;
-  --text: #101316;
-  --muted: #5d6570;
-  --paper: #f7f8f6;
-  --line: rgba(16, 19, 22, 0.14);
-  --accent: #7a34ff;
-  --accent-dark: #4f20dc;
-  background: var(--surface);
+  --ink: #f7f9ff;
+  --text: #f7f9ff;
+  --muted: #aeb8ca;
+  --paper: #071120;
+  --surface: #050b18;
+  --line: rgba(148, 166, 207, 0.2);
+  --accent: #8d42ff;
+  --accent-dark: #9b67ff;
+  background:
+    radial-gradient(circle at 14% 3%, rgba(141, 66, 255, 0.12), transparent 24rem),
+    radial-gradient(circle at 86% 6%, rgba(25, 215, 233, 0.08), transparent 24rem),
+    #030817;
   color: var(--ink);
 }
 
 .doc-header {
   position: sticky;
+  top: 0;
+  z-index: 30;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(2, 8, 20, 0.94);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(18px);
   mix-blend-mode: normal;
-  box-shadow: 0 12px 32px rgba(16, 19, 22, 0.08);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .doc-header .lang-switch a {
@@ -815,8 +820,8 @@ code {
 
 .doc-header .lang-switch a:hover,
 .doc-header .lang-switch a.is-active {
-  background: var(--ink);
-  color: white;
+  background: #ffffff;
+  color: #101528;
 }
 
 .doc-shell {
@@ -869,7 +874,7 @@ code {
 }
 
 .doc-global-links a:hover {
-  color: var(--accent-dark);
+  color: var(--accent-2);
   transform: translateX(3px);
 }
 
@@ -977,7 +982,7 @@ code {
 .markdown-body blockquote {
   padding: 14px 20px;
   border-left: 4px solid var(--accent);
-  background: var(--paper);
+  background: rgba(11, 24, 44, 0.86);
   color: var(--muted);
 }
 
@@ -988,13 +993,16 @@ code {
 .markdown-body pre {
   overflow: auto;
   padding: 18px;
-  background: #111418;
+  border: 1px solid rgba(148, 166, 207, 0.2);
+  background: #020713;
   color: #f7f8f6;
 }
 
 .markdown-body :not(pre) > code {
   padding: 0.12em 0.34em;
-  background: rgba(16, 19, 22, 0.08);
+  border: 1px solid rgba(148, 166, 207, 0.18);
+  background: rgba(141, 66, 255, 0.12);
+  color: #d9ccff;
 }
 
 .markdown-body table {
@@ -1012,7 +1020,7 @@ code {
 }
 
 .markdown-body th {
-  background: var(--paper);
+  background: rgba(11, 24, 44, 0.86);
   text-align: left;
 }
 
@@ -1025,7 +1033,7 @@ code {
 }
 
 .doc-footer {
-  background: var(--paper);
+  background: #030817;
   color: var(--muted);
 }
 
@@ -1065,7 +1073,7 @@ code {
   display: grid;
   gap: 8px;
   padding: 14px;
-  background: var(--surface);
+  background: rgba(7, 17, 32, 0.92);
   color: var(--ink);
   transition:
     background 180ms ease,
@@ -1074,8 +1082,8 @@ code {
 }
 
 .doc-relation-links a:hover {
-  background: var(--paper);
-  color: var(--accent-dark);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent-2);
   transform: translateX(3px);
 }
 
@@ -1130,7 +1138,7 @@ code {
 
 .doc-directory-links a:hover,
 .doc-directory-links a[aria-current="page"] {
-  color: var(--accent-dark);
+  color: var(--accent-2);
 }
 
 .doc-directory-links a:hover {
@@ -1174,10 +1182,10 @@ code {
 
 @media (max-width: 960px) {
   .site-header {
-    position: absolute;
+    position: relative;
     mix-blend-mode: normal;
-    width: min(calc(100% - 24px), 1536px);
-    margin-top: 12px;
+    width: 100%;
+    margin-top: 0;
     padding: 14px 16px;
   }
 
@@ -1193,16 +1201,16 @@ code {
     margin-left: 0;
   }
 
-  .hero {
+  .product-overview {
     min-height: auto;
-    padding-top: 104px;
+    padding-top: 42px;
     background:
       radial-gradient(circle at 78% 20%, rgba(25, 215, 233, 0.18), transparent 20rem),
       radial-gradient(circle at 30% 28%, rgba(141, 66, 255, 0.18), transparent 20rem),
       linear-gradient(180deg, #061125 0%, #030917 100%);
   }
 
-  .hero-grid,
+  .overview-grid,
   .split-layout {
     grid-template-columns: 1fr;
   }
@@ -1220,6 +1228,7 @@ code {
 
   .feature-strip {
     width: 100%;
+    margin-left: 0;
   }
 
   .feature-strip article:nth-child(2n) {
@@ -1255,6 +1264,11 @@ code {
 }
 
 @media (max-width: 640px) {
+  .page-frame {
+    width: min(calc(100% - 20px), 1536px);
+    margin-top: 10px;
+  }
+
   .brand {
     font-size: 20px;
   }
@@ -1269,7 +1283,7 @@ code {
     display: none;
   }
 
-  .hero {
+  .product-overview {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -1278,7 +1292,7 @@ code {
     margin-bottom: 28px;
   }
 
-  .hero-actions {
+  .overview-actions {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1291,7 +1305,7 @@ code {
     min-height: 270px;
   }
 
-  .hero-mark {
+  .overview-mark {
     width: min(100%, 360px);
   }
 
