@@ -6,8 +6,9 @@ The repository includes a static bilingual GitHub Pages landing page for the
 project. The page is intentionally separate from the Stage 08 product frontend:
 it is repository documentation and project presentation, not the runtime Web UI.
 
-Both language variants start with a visible notice that the project is
-implemented exclusively by AI.
+Both language variants use the same brand-led first viewport with dark
+navigation, Terraform discovery/security artwork and direct documentation
+entry points.
 
 ## Files
 
@@ -70,8 +71,8 @@ The workflow permissions are intentionally limited to:
 
 - Keep Russian and English Markdown sources aligned when updating
   documentation or page copy.
-- Keep the AI-only implementation notice visible before the hero content in
-  both language variants.
+- Keep the brand-led hero, product mark and primary documentation entry points
+  visible in the first viewport for both language variants.
 - Keep links inside the Pages artifact relative to `docs` unless the target
   file is intentionally linked on GitHub.
 - Keep generated document pages buildable with the repository-local Node.js

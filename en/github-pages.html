@@ -7,6 +7,8 @@
     <title>GitHub Pages - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="../github-pages.html">
     <link rel="alternate" hreflang="en" href="github-pages.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
     <link rel="stylesheet" href="../pages.css">
   </head>
   <body class="doc-page">
@@ -14,8 +16,8 @@
 
     <header class="site-header doc-header" aria-label="Documentation navigation">
       <a class="brand" href="../en.html" aria-label="T-Helper">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span>T-Helper</span>
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
       </a>
       <nav class="nav-links" aria-label="Documentation sections">
         <a href="../en.html#docs">Docs</a>
@@ -57,7 +59,7 @@
           <h1 id="github-pages">GitHub Pages</h1>
 <h2 id="purpose">Purpose</h2>
 <p>The repository includes a static bilingual GitHub Pages landing page for the project. The page is intentionally separate from the Stage 08 product frontend: it is repository documentation and project presentation, not the runtime Web UI.</p>
-<p>Both language variants start with a visible notice that the project is implemented exclusively by AI.</p>
+<p>Both language variants use the same brand-led first viewport with dark navigation, Terraform discovery/security artwork and direct documentation entry points.</p>
 <h2 id="files">Files</h2>
 <ul>
 <li><code>docs/index.html</code> - Russian landing page and default GitHub Pages entrypoint.</li>
@@ -92,7 +94,7 @@
 <h2 id="maintenance-contract">Maintenance contract</h2>
 <ul>
 <li>Keep Russian and English Markdown sources aligned when updating documentation or page copy.</li>
-<li>Keep the AI-only implementation notice visible before the hero content in both language variants.</li>
+<li>Keep the brand-led hero, product mark and primary documentation entry points visible in the first viewport for both language variants.</li>
 <li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
 <li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
 <li>Keep cross-document references as relative Markdown links or inline <code>docs/en/...md</code> / <code>docs/ru/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>

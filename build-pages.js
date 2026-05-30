@@ -669,6 +669,8 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
     <title>${escapeHtml(title)} - T-Helper Docs</title>
     <link rel="alternate" hreflang="ru" href="${ruHref}">
     <link rel="alternate" hreflang="en" href="${enHref}">
+    <link rel="icon" href="${prefix}assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="${prefix}assets/t-helper-app-icon.svg">
     <link rel="stylesheet" href="${prefix}pages.css">
   </head>
   <body class="doc-page">
@@ -676,8 +678,8 @@ function docShell({ relativeMdPath, title, body, headings, docs, outgoingDocs, i
 
     <header class="site-header doc-header" aria-label="${locale.navAria}">
       <a class="brand" href="${homeHref(relativeMdPath, lang)}" aria-label="T-Helper">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span>T-Helper</span>
+        <img class="brand-mark" src="${prefix}assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
       </a>
       <nav class="nav-links" aria-label="${locale.navSectionsAria}">
         <a href="${homeHref(relativeMdPath, lang)}#docs">${locale.docs}</a>
