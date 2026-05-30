@@ -47,60 +47,61 @@
         </nav>
         <nav class="doc-toc">
           <a class="toc-level-1" href="#github-pages">GitHub Pages</a>
-<a class="toc-level-2" href="#purpose">Purpose</a>
-<a class="toc-level-2" href="#files">Files</a>
+<a class="toc-level-2" href="#назначение">Назначение</a>
+<a class="toc-level-2" href="#файлы">Файлы</a>
 <a class="toc-level-2" href="#deployment">Deployment</a>
-<a class="toc-level-2" href="#maintenance-contract">Maintenance contract</a>
+<a class="toc-level-2" href="#контракт-сопровождения">Контракт сопровождения</a>
         </nav>
       </aside>
 
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="github-pages">GitHub Pages</h1>
-<h2 id="purpose">Purpose</h2>
-<p>The repository includes a static bilingual GitHub Pages landing page for the project. The page is intentionally separate from the Stage 08 product frontend: it is repository documentation and project presentation, not the runtime Web UI.</p>
-<p>Both language variants use the same brand-led first viewport with dark navigation, Terraform discovery/security artwork and direct documentation entry points.</p>
-<h2 id="files">Files</h2>
+<h2 id="назначение">Назначение</h2>
+<p>Репозиторий содержит статическую двуязычную GitHub Pages landing page проекта. Страница намеренно отделена от продуктового frontend Stage 08: это документация и презентация репозитория, а не runtime Web UI.</p>
+<p>Обе языковые версии используют одну темную framed layout со sticky navigation, product overview hero, знаком T-Helper, feature strip, позиционированием вокруг Terraform discovery/security и прямыми входами в документацию. Сгенерированные страницы документации используют ту же темную визуальную систему со sticky header, боковым table of contents, связанными документами, backlinks и полным каталогом документации.</p>
+<h2 id="файлы">Файлы</h2>
 <ul>
-<li><code>docs/index.html</code> - Russian landing page and default GitHub Pages entrypoint.</li>
-<li><code>docs/en.html</code> - English landing page.</li>
-<li>generated <code>*.html</code> documentation pages in the artifact root - Russian documentation shell.</li>
-<li>generated <code>en/**/*.html</code> documentation pages - English documentation shell.</li>
-<li><code>docs/**/*.md</code> outside <code>docs/en/</code> - Russian Markdown documentation sources.</li>
-<li><code>docs/en/**/*.md</code> - corresponding English Markdown documentation sources with the same relative paths.</li>
-<li><code>docs/pages.css</code> - shared responsive styles.</li>
-<li><code>docs/pages.js</code> - shared reveal and hero interaction behavior.</li>
-<li><code>docs/.nojekyll</code> - disables Jekyll processing for the Pages artifact.</li>
+<li><code>docs/index.html</code> - русская landing page и default entrypoint GitHub Pages.</li>
+<li><code>docs/en.html</code> - английская landing page.</li>
+<li>сгенерированные <code>*.html</code> pages в корне артефакта - русская documentation shell.</li>
+<li>сгенерированные <code>en/**/*.html</code> pages - английская documentation shell.</li>
+<li><code>docs/ru/**/*.md</code> - русские Markdown-источники документации.</li>
+<li><code>docs/en/**/*.md</code> - соответствующие английские Markdown-источники с теми же относительными путями.</li>
+<li><code>docs/pages.css</code> - общие responsive styles.</li>
+<li><code>docs/pages.js</code> - общее reveal и hero interaction behavior.</li>
+<li><code>docs/.nojekyll</code> - отключает Jekyll processing для Pages artifact.</li>
 <li><code>.github/workflows/pages.yml</code> - GitHub Actions deployment workflow.</li>
 </ul>
-<p>The landing language switcher uses plain static links:</p>
+<p>Переключатель языка на landing page использует обычные статические ссылки:</p>
 <ul>
-<li>Russian to English: <code>en.html</code>;</li>
-<li>English to Russian: <code>index.html</code>.</li>
+<li>с русского на английский: <code>en.html</code>;</li>
+<li>с английского на русский: <code>index.html</code>.</li>
 </ul>
-<p>Generated document pages also include a static RU/EN switcher for the same document path. This keeps the published site usable even when JavaScript is unavailable.</p>
-<p>Markdown documents under <code>docs/ru/**/*.md</code> are the canonical Russian sources. Matching Markdown documents under <code>docs/en/**/*.md</code> are the canonical English sources for the same document paths. During publication, <code>docs/build-pages.js</code> uses <code>docs/ru</code> as the path catalog, generates Russian pages at the Pages root and English pages under <code>en/</code>, rewrites internal Markdown links to the generated same-language HTML pages and links inline document references such as <a href="api.html"><code>docs/ru/api.md</code></a> or <a href="api.html"><code>docs/en/api.md</code></a> when the target exists. The published Pages site therefore shows documentation as complete styled pages with common navigation, local table of contents, related documents, backlinks and a full documentation catalog. The raw same-language <code>.md</code> source remains available from each generated document page.</p>
+<p>Сгенерированные страницы документации также содержат статический переключатель RU/EN для того же пути документа. Благодаря этому опубликованный сайт остается работоспособным даже без JavaScript.</p>
+<p>Markdown-документы в <code>docs/ru/**/*.md</code> являются каноническими русскими источниками. Соответствующие документы в <code>docs/en/**/*.md</code> являются каноническими английскими источниками для тех же путей. При публикации <code>docs/build-pages.js</code> использует <code>docs/ru</code> как каталог путей, генерирует русские страницы в корне Pages и английские страницы в <code>en/</code>, переписывает внутренние Markdown-ссылки на сгенерированные HTML-страницы той же языковой версии и связывает inline-ссылки на документы, например <a href="api.html"><code>docs/ru/api.md</code></a> или <a href="api.html"><code>docs/en/api.md</code></a>, если целевой файл существует. Поэтому опубликованный Pages site показывает документацию как полноценные стилизованные страницы с общей навигацией, локальным table of contents, связанными документами, backlinks и полным каталогом документации. Исходный <code>.md</code> той же языковой версии остается доступен с каждой сгенерированной страницы документа.</p>
 <h2 id="deployment">Deployment</h2>
-<p>The <code>github-pages</code> workflow publishes the <code>docs</code> directory to the <code>gh-pages</code> branch on pushes to <code>master</code> and on manual <code>workflow_dispatch</code> runs.</p>
-<p>Repository settings must use:</p>
+<p>Workflow <code>github-pages</code> публикует директорию <code>docs</code> в ветку <code>gh-pages</code> при push в <code>master</code> и при ручном запуске <code>workflow_dispatch</code>.</p>
+<p>Настройки Pages в репозитории:</p>
 <ul>
-<li>Pages source: <code>Deploy from a branch</code>;</li>
+<li>source: <code>Deploy from a branch</code>;</li>
 <li>branch: <code>gh-pages</code>;</li>
 <li>folder: <code>/ (root)</code>.</li>
 </ul>
-<p>This branch-based deployment avoids the GitHub Pages REST API calls used by <code>actions/configure-pages</code> and <code>actions/deploy-pages</code>. Those REST calls can fail with <code>Resource not accessible by integration</code> when the repository or organization does not allow <code>GITHUB_TOKEN</code> to create or configure the Pages site.</p>
-<p>The workflow permissions are intentionally limited to:</p>
+<p>Такой branch-based deployment не использует GitHub Pages REST API calls из <code>actions/configure-pages</code> и <code>actions/deploy-pages</code>. Эти REST calls могут завершаться ошибкой <code>Resource not accessible by integration</code>, если репозиторий или организация не разрешает <code>GITHUB_TOKEN</code> создавать или конфигурировать Pages site.</p>
+<p>Permissions workflow намеренно ограничены:</p>
 <ul>
 <li><code>contents: write</code>.</li>
 </ul>
-<h2 id="maintenance-contract">Maintenance contract</h2>
+<h2 id="контракт-сопровождения">Контракт сопровождения</h2>
 <ul>
-<li>Keep Russian and English Markdown sources aligned when updating documentation or page copy.</li>
-<li>Keep the brand-led hero, product mark and primary documentation entry points visible in the first viewport for both language variants.</li>
-<li>Keep links inside the Pages artifact relative to <code>docs</code> unless the target file is intentionally linked on GitHub.</li>
-<li>Keep generated document pages buildable with the repository-local Node.js script; do not require package installation for Pages publication.</li>
-<li>Keep cross-document references as relative Markdown links or inline <code>docs/ru/...md</code> / <code>docs/en/...md</code> references so the Pages generator can produce HTML links and backlinks.</li>
-<li>Do not treat the Pages landing page as the Stage 08 Web UI; runtime UI contracts remain in <a href="frontend-ui-contract.html"><code>docs/ru/frontend-ui-contract.md</code></a>.</li>
+<li>При обновлении документации или page copy синхронизируйте русские и английские Markdown-источники.</li>
+<li>Для обеих языковых версий сохраняйте brand-led hero, product mark и основные входы в документацию видимыми в первом viewport.</li>
+<li>Сохраняйте landing page и сгенерированные страницы документации в общей темной визуальной системе, если Pages design contract не меняется явно.</li>
+<li>Ссылки внутри Pages artifact должны оставаться относительными к <code>docs</code>, если целевой файл не должен намеренно открываться на GitHub.</li>
+<li>Сгенерированные страницы документации должны собираться repository-local Node.js script без установки packages для публикации Pages.</li>
+<li>Cross-document references должны оставаться относительными Markdown-ссылками или inline-ссылками вида <code>docs/ru/...md</code> / <code>docs/en/...md</code>, чтобы генератор Pages мог строить HTML links и backlinks.</li>
+<li>Не трактуйте Pages landing page как Stage 08 Web UI; runtime UI contracts остаются в <a href="frontend-ui-contract.html"><code>docs/ru/frontend-ui-contract.md</code></a>.</li>
 </ul>
         </article>
 

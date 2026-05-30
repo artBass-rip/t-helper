@@ -25,13 +25,15 @@ generated bilingual documentation pages:
 - English page: [docs/en.html](docs/en.html)
 - Deployment workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml)
 
-The landing page explicitly states at the top that the project is implemented
-exclusively by AI. Russian Markdown sources live under `docs/`; corresponding
-English Markdown sources live under `docs/en/` with the same relative paths.
-During publication, `docs/build-pages.js` renders those paired sources into
-Russian and English HTML shells with local navigation, related documents and
-same-language links. Pages are published from the `docs` directory through
-GitHub Actions to the `gh-pages` branch.
+The landing page uses the current dark framed Pages layout: sticky navigation,
+a product overview hero, the T-Helper mark, feature strip and dark
+documentation shell. It explicitly states at the top that the project is
+implemented exclusively by AI. Russian Markdown sources live under `docs/ru/`;
+corresponding English Markdown sources live under `docs/en/` with the same
+relative paths. During publication, `docs/build-pages.js` renders those paired
+sources into Russian and English HTML shells with local navigation, related
+documents and same-language links. Pages are published from the `docs`
+directory through GitHub Actions to the `gh-pages` branch.
 Repository Pages settings must use source `Deploy from a branch`, branch
 `gh-pages`, folder `/ (root)`.
 

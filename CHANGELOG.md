@@ -29,6 +29,8 @@ grouped by completed roadmap stages and merge commits.
 - Changed the Pages workflow to publish the `docs` directory to the `gh-pages`
   branch instead of using the GitHub Pages REST deployment API.
 - Added GitHub Pages documentation and linked it from both README variants.
+- Restyled GitHub Pages with a dark framed layout, sticky documentation header,
+  responsive product overview hero and shared dark documentation shell.
 - Updated development, local environment and test-plan documentation to
   describe the executable baseline.
 - Next planned implementation stage: Stage 06 project scanner/security

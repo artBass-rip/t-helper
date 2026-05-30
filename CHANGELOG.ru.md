@@ -30,6 +30,9 @@
 - Pages workflow переведен на публикацию директории `docs` в ветку `gh-pages`
   вместо GitHub Pages REST deployment API.
 - Добавлена документация GitHub Pages и ссылки на неё из обеих версий README.
+- GitHub Pages переведены на темную framed layout с sticky header для
+  документации, responsive product overview hero и общей темной HTML-оболочкой
+  документации.
 - Development, local environment и test-plan документация обновлены под
   executable baseline.
 - Следующий плановый этап реализации: Stage 06 project scanner/security

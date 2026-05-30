@@ -6,9 +6,12 @@ The repository includes a static bilingual GitHub Pages landing page for the
 project. The page is intentionally separate from the Stage 08 product frontend:
 it is repository documentation and project presentation, not the runtime Web UI.
 
-Both language variants use the same brand-led first viewport with dark
-navigation, Terraform discovery/security artwork and direct documentation
-entry points.
+Both language variants use the same dark framed layout with sticky navigation,
+a product overview hero, the T-Helper mark, a feature strip, Terraform
+discovery/security positioning and direct documentation entry points. Generated
+documentation pages use the same dark visual system with a sticky header,
+sidebar table of contents, related links, backlinks and full documentation
+catalog.
 
 ## Files
 
@@ -69,6 +72,8 @@ The workflow permissions are intentionally limited to:
   documentation or page copy.
 - Keep the brand-led hero, product mark and primary documentation entry points
   visible in the first viewport for both language variants.
+- Keep the landing page and generated documentation pages on the same dark
+  visual system unless the Pages design contract is deliberately changed.
 - Keep links inside the Pages artifact relative to `docs` unless the target
   file is intentionally linked on GitHub.
 - Keep generated document pages buildable with the repository-local Node.js

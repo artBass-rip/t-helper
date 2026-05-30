@@ -52,7 +52,7 @@
 <a class="toc-level-2" href="#test-policy">Test policy</a>
 <a class="toc-level-2" href="#migration-layout">Migration layout</a>
 <a class="toc-level-2" href="#stage-04-runtime-behavior">Stage 04 runtime behavior</a>
-<a class="toc-level-2" href="#project-pages">Project Pages</a>
+<a class="toc-level-2" href="#страница-проекта">Страница проекта</a>
 <a class="toc-level-2" href="#secret-references-in-development">Secret references in development</a>
 <a class="toc-level-2" href="#stage-01-implementation-checklist">Stage 01 implementation checklist</a>
         </nav>
@@ -164,17 +164,18 @@
 <li>Traversal stops below a discovered Terraform project.</li>
 <li>Stage 04 ignore matching is exclude-only. <code>!pattern</code> rules are preserved but not applied until full <code>.gitignore</code> semantics are implemented in a later hardening stage.</li>
 </ul>
-<h2 id="project-pages">Project Pages</h2>
+<h2 id="страница-проекта">Страница проекта</h2>
 <ul>
-<li><code>docs/index.html</code> is the default Russian GitHub Pages entrypoint.</li>
-<li><code>docs/en.html</code> is the English language variant.</li>
-<li>Both pages share <code>docs/pages.css</code> and <code>docs/pages.js</code>.</li>
-<li>Russian Markdown sources live under <code>docs/</code>; corresponding English sources live under <code>docs/en/</code> with the same relative paths.</li>
-<li><code>docs/build-pages.js</code> renders the paired Markdown sources to styled dependency-free Russian and English HTML pages for the published artifact, skips <code>docs/en/</code> as a separate catalog root and rewrites internal Markdown links to generated same-language HTML links.</li>
-<li>Generated document pages share the same navigation shell, local table of contents, related-document links, backlinks and full documentation catalog.</li>
-<li><code>.github/workflows/pages.yml</code> publishes the <code>docs</code> directory through GitHub Actions to the <code>gh-pages</code> branch.</li>
-<li>Repository Pages settings must use source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
-<li>The Pages landing page is documentation/presentation only and is separate from the Stage 08 React/Tauri frontend deliverable.</li>
+<li><code>docs/index.html</code> - default Russian GitHub Pages entrypoint.</li>
+<li><code>docs/en.html</code> - английская языковая версия.</li>
+<li>Обе страницы используют <code>docs/pages.css</code> и <code>docs/pages.js</code>.</li>
+<li>Landing pages используют текущую темную framed layout со sticky navigation, product overview hero, знаком T-Helper и feature strip.</li>
+<li>Русские Markdown-источники находятся в <code>docs/ru/</code>; соответствующие английские источники находятся в <code>docs/en/</code> с теми же относительными путями.</li>
+<li><code>docs/build-pages.js</code> рендерит парные Markdown-источники в стилизованные dependency-free русские и английские HTML pages для published artifact, пропускает <code>docs/en/</code> как отдельный catalog root и переписывает внутренние Markdown-ссылки в сгенерированные same-language HTML links.</li>
+<li>Сгенерированные document pages используют общую navigation shell, локальный table of contents, related-document links, backlinks и полный documentation catalog.</li>
+<li><code>.github/workflows/pages.yml</code> публикует директорию <code>docs</code> через GitHub Actions в ветку <code>gh-pages</code>.</li>
+<li>Repository Pages settings должны использовать source <code>Deploy from a branch</code>, branch <code>gh-pages</code>, folder <code>/ (root)</code>.</li>
+<li>Pages landing page является только documentation/presentation и отделена от Stage 08 React/Tauri frontend deliverable.</li>
 </ul>
 <h2 id="secret-references-in-development">Secret references in development</h2>
 <p>Development configuration should use <code>secretref://env/...</code> for sensitive values.</p>
