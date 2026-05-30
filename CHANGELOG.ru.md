@@ -7,6 +7,8 @@
 
 ## Не выпущено
 
+- Stage 05 repository manager MVP закрыт как текущий завершенный backend
+  baseline; активный roadmap focus перенесен на Stage 06A/06B.
 - Проведен аудит документации репозитория относительно текущего code baseline;
   исправлены development/local-environment документы, которые всё ещё
   описывали Stage 04 как текущий этап.
@@ -41,8 +43,8 @@
   документации.
 - Development, local environment и test-plan документация обновлены под
   executable baseline.
-- Следующий плановый этап реализации: Stage 06 project scanner/security
-  validator MVP.
+- Следующий активный roadmap block: Stage 06A/06B external toolchain profiles,
+  project scanner и security validator MVP.
 - Stage 09 implementation spec и roadmap теперь фиксируют приоритизированный
   runtime/scanner optimization backlog из code review.
 - Добавлен русский журнал изменений: [`CHANGELOG.ru.md`](CHANGELOG.ru.md).

@@ -6,15 +6,16 @@
 метаданных репозиториев, локального security-анализа и централизованного
 управления runtime-конфигурацией, модулями, jobs и доступом.
 
-Текущий репозиторий находится на **Stage 05 repository manager MVP baseline**.
-Реализована executable backend foundation: entrypoints сервисов, storage
+**Stage 05: Repository Manager MVP закрыт.** Реализована executable backend
+foundation: entrypoints сервисов, storage
 adapters, миграции, health checks, persisted runtime configuration, module
 lifecycle, singleton runtime lock, jobs/workers/status, global scanning,
 Terraform project discovery, root paths, project registry, scanner/registry
 HTTP APIs и repository manager clone/pull/sync workflows.
 
-Project/security scans, authentication/RBAC и frontend намеренно отнесены к
-следующим roadmap stages.
+Следующий активный roadmap block - Stage 06A/06B: external toolchain profiles,
+project scanner и security validator MVP. Authentication/RBAC и frontend
+намеренно отнесены к более поздним roadmap stages.
 
 ## Страница проекта
 
@@ -59,7 +60,7 @@ copyright holder.
 - Stage 05 repository manager APIs для provider profiles, masked credentials,
   safe repository identity normalization, clone/pull/sync job enqueueing и
   worker execution.
-- SQLite и PostgreSQL storage adapters для текущего MVP baseline.
+- SQLite и PostgreSQL storage adapters для закрытого Stage 05 MVP baseline.
 - HTTP APIs для health, config, modules, jobs/status, scanner/registry и
   repository management.
 
@@ -194,7 +195,7 @@ SQLite tests запускаются по умолчанию.
   deployment modes и runtime flow.
 - [docs/ru/interfaces.md](docs/ru/interfaces.md) - CLI, backend API, configuration и
   global scanning behavior.
-- [docs/ru/api.md](docs/ru/api.md) - текущий Stage 05 HTTP API baseline, будущие
+- [docs/ru/api.md](docs/ru/api.md) - закрытый Stage 05 HTTP API baseline, будущие
   endpoint contracts и response schemas.
 - [docs/ru/configuration.md](docs/ru/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability и validation.

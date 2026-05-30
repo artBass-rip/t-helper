@@ -13,6 +13,9 @@ Terraform discovery/security и прямыми входами в докумен�
 header, боковым table of contents, связанными документами, backlinks и полным
 каталогом документации.
 
+Landing pages обозначают Stage 05 repository manager MVP как закрытый backend
+baseline и переводят активный roadmap focus на Stage 06A/06B.
+
 ## Файлы
 
 - `docs/index.html` - русская landing page и default entrypoint GitHub Pages.

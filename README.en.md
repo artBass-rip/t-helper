@@ -6,15 +6,16 @@
 tracking repository metadata, running local security analysis, and managing
 runtime configuration, modules, jobs and access control from one backend.
 
-The repository is currently at the **Stage 05 repository manager MVP baseline**.
-The executable backend foundation is implemented: service entrypoints, storage
+**Stage 05: Repository Manager MVP is closed.** The executable backend
+foundation is implemented: service entrypoints, storage
 adapters, migrations, health checks, persisted runtime configuration, module
 lifecycle, singleton runtime locking, jobs/workers/status, global scanning,
 Terraform project discovery, root paths, project registry, scanner/registry
 HTTP APIs and repository manager clone/pull/sync workflows.
 
-Project/security scans, authentication/RBAC and the frontend are intentionally
-owned by later roadmap stages.
+The next active roadmap block is Stage 06A/06B: external toolchain profiles,
+project scanner and security validator MVP. Authentication/RBAC and the
+frontend remain intentionally owned by later roadmap stages.
 
 ## Project Pages
 
@@ -60,7 +61,7 @@ copyright holder.
 - Stage 05 repository manager APIs for provider profiles, masked credentials,
   safe repository identity normalization, clone/pull/sync job enqueueing and
   worker execution.
-- SQLite and PostgreSQL storage adapters for the current MVP baseline.
+- SQLite and PostgreSQL storage adapters for the closed Stage 05 MVP baseline.
 - HTTP APIs for health, config, modules, jobs/status, scanner/registry and
   repository management.
 
@@ -194,7 +195,7 @@ Use `make race` for manual or nightly race detector checks.
   deployment modes and runtime flow.
 - [docs/en/interfaces.md](docs/en/interfaces.md) - CLI, backend API, configuration
   and global scanning behavior.
-- [docs/en/api.md](docs/en/api.md) - current Stage 05 HTTP API baseline, future
+- [docs/en/api.md](docs/en/api.md) - closed Stage 05 HTTP API baseline, future
   endpoint contracts and response schemas.
 - [docs/en/configuration.md](docs/en/configuration.md) - `config.json`,
   `.t-helper.ignore`, reloadability and validation.

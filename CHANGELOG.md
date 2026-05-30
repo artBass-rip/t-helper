@@ -7,6 +7,8 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Closed Stage 05 repository manager MVP as the current completed backend
+  baseline and moved the active roadmap focus to Stage 06A/06B.
 - Audited the repository documentation against the current code baseline and
   corrected development/local-environment docs that still described Stage 04 as
   current.
@@ -39,8 +41,8 @@ grouped by completed roadmap stages and merge commits.
   responsive product overview hero and shared dark documentation shell.
 - Updated development, local environment and test-plan documentation to
   describe the executable baseline.
-- Next planned implementation stage: Stage 06 project scanner/security
-  validator MVP.
+- Next active roadmap block: Stage 06A/06B external toolchain profiles,
+  project scanner and security validator MVP.
 - Stage 09 implementation spec and roadmap now capture the prioritized
   runtime/scanner optimization backlog from the code review.
 - Russian changelog added as [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
