@@ -63,7 +63,7 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</h1>
-<p>Дата актуализации: 2026-05-29.</p>
+<p>Дата актуализации: 2026-05-31.</p>
 <p>Этот документ фиксирует уже выполненные оптимизации, текущий quality gate и оставшийся backlog, который должен внедряться итеративно без массовых механических рефакторингов.</p>
 <h2 id="текущий-статус">Текущий статус</h2>
 <p>Выполнено:</p>
@@ -79,6 +79,7 @@
 <p>Проверенный baseline после оптимизации:</p>
 <pre><code class="language-text">make test</code></pre>
 <p>Примечание: часть тестов открывает локальный listener <code>127.0.0.1:0</code>, поэтому в sandboxed окружениях может потребоваться разрешение на bind.</p>
+<p>Аудит репозитория от 2026-05-31 показал, что executable baseline соответствует Stage 05. Основной drift был в development/local-environment документах, которые всё ещё называли Stage 04 текущим baseline; эти документы обновлены под Stage 05 repository manager APIs, migrations и worker behavior.</p>
 <h2 id="принятые-проектные-решения">Принятые проектные решения</h2>
 <ul>
 <li>Каноническое решение по HTTP route registration и транзакционному helper: <a href="adr/0019-code-quality-and-route-registration.html"><code>adr/0019-code-quality-and-route-registration.md</code></a>.</li>
