@@ -10,6 +10,8 @@
     <title>T-Helper</title>
     <link rel="alternate" hreflang="ru" href="index.html">
     <link rel="alternate" hreflang="en" href="en.html">
+    <link rel="icon" href="assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/t-helper-app-icon.svg">
     <link rel="stylesheet" href="pages.css">
   </head>
   <body>
@@ -17,14 +19,25 @@
 
     <header class="site-header" aria-label="Navigation">
       <a class="brand" href="#top" aria-label="T-Helper">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span>T-Helper</span>
+        <img class="brand-mark" src="assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
       </a>
       <nav class="nav-links" aria-label="Page sections">
-        <a href="#status">Status</a>
+        <a href="#status">Features</a>
         <a href="#architecture">Architecture</a>
+        <a href="en/development.html">Installation</a>
+        <a href="en/api.html">Usage</a>
+        <a href="en/configuration.html">Configuration</a>
+        <a href="en/access-control.html">Security</a>
+        <a href="en/roadmap.html">Roadmap</a>
         <a href="#docs">Docs</a>
       </nav>
+      <a class="github-link" href="https://github.com/artBass-rip/t-helper" aria-label="GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M12 .5A12 12 0 0 0 8.2 23.9c.6.1.8-.2.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .1 1.8 2 3.4 1.5.1-.8.4-1.3.7-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0C17.2 5 18.2 5.3 18.2 5.3c.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.4 5.9.4.4.8 1.1.8 2.2v3.5c0 .4.2.7.8.6A12 12 0 0 0 12 .5z"/>
+        </svg>
+      </a>
+      <a class="header-cta" href="#docs">Get Started</a>
       <div class="lang-switch" aria-label="Language switcher">
         <a href="index.html">RU</a>
         <a class="is-active" href="en.html" aria-current="page">EN</a>
@@ -33,50 +46,61 @@
 
     <main id="main">
       <section class="hero" id="top" aria-labelledby="page-title">
-        <div class="ai-note">
-          This project is implemented exclusively by AI: architecture, code, documentation and this page are created through an AI-driven process.
-        </div>
-
         <div class="hero-grid">
           <div class="hero-copy" data-reveal>
-            <p class="eyebrow">On-premise Terraform operations platform</p>
-            <h1 id="page-title">T-Helper</h1>
+            <p class="eyebrow">On-premise Terraform security platform</p>
+            <h1 id="page-title">Discover. <span>Analyze.</span> <em>Secure.</em></h1>
             <p class="hero-lead">
-              A platform for Terraform project discovery, repository metadata,
-              local security analysis and runtime configuration management.
+              t-helper automatically discovers Terraform repositories and modules,
+              performs local security analysis and helps you build and maintain
+              secure infrastructure.
             </p>
             <div class="hero-actions" aria-label="Primary actions">
-              <a class="button primary" href="https://github.com/artBass-rip/t-helper/blob/master/README.md">README</a>
-              <a class="button secondary" href="en/architecture.md">Architecture</a>
+              <a class="button primary" href="#docs">Get Started <span aria-hidden="true">→</span></a>
+              <a class="button secondary" href="https://github.com/artBass-rip/t-helper">View on GitHub</a>
+            </div>
+            <div class="trust-badges" aria-label="Benefits">
+              <span>On-premise</span>
+              <span>Local Security</span>
+              <span>RBAC</span>
+              <span>No Data Leaves</span>
             </div>
           </div>
 
-          <div class="system-visual" aria-label="Current platform diagram" data-reveal>
-            <div class="visual-grid" aria-hidden="true">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-            </div>
-            <div class="node core">
-              <span>core API</span>
-              <strong>thelper</strong>
-            </div>
-            <div class="node scan">
-              <span>scanner</span>
-              <strong><code>*.tf</code> discovery</strong>
-            </div>
-            <div class="node worker">
-              <span>worker</span>
-              <strong>jobs + leases</strong>
-            </div>
-            <div class="node store">
-              <span>storage</span>
-              <strong>SQLite / PostgreSQL</strong>
-            </div>
-            <div class="trace trace-a"></div>
-            <div class="trace trace-b"></div>
-            <div class="trace trace-c"></div>
+          <div class="system-visual" aria-label="t-helper product illustration" data-reveal>
+            <img class="hero-mark" src="assets/t-helper-mark.svg" alt="">
           </div>
+        </div>
+
+        <div class="feature-strip" data-reveal aria-label="Key features">
+          <article>
+            <span class="feature-icon feature-discover" aria-hidden="true"></span>
+            <div>
+              <h3>Discover</h3>
+              <p>Automatically discover Terraform repositories and modules across your Git providers.</p>
+            </div>
+          </article>
+          <article>
+            <span class="feature-icon feature-analyze" aria-hidden="true"></span>
+            <div>
+              <h3>Analyze</h3>
+              <p>Perform local security analysis using static code analysis and best practices checks.</p>
+            </div>
+          </article>
+          <article>
+            <span class="feature-icon feature-secure" aria-hidden="true"></span>
+            <div>
+              <h3>Secure</h3>
+              <p>Keep data on-premise with RBAC, secrets management and audit logs.</p>
+            </div>
+          </article>
+          <article>
+            <span class="feature-icon feature-visualize" aria-hidden="true"></span>
+            <div>
+              <h3>Visualize</h3>
+              <p>Get actionable insights through focused dashboards and reports.</p>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -178,63 +202,63 @@
           <h2 id="docs-title">Canonical materials</h2>
         </div>
         <div class="doc-links" data-reveal>
-          <a href="en/requirements.md">
+          <a href="en/requirements.html">
             <span>Requirements</span>
             Functional and non-functional requirements.
           </a>
-          <a href="en/api.md">
+          <a href="en/api.html">
             <span>HTTP API</span>
             Endpoint contracts and response schemas.
           </a>
-          <a href="en/configuration.md">
+          <a href="en/configuration.html">
             <span>Configuration</span>
             <code>config.json</code>, <code>.t-helper.ignore</code>, reloadability and validation.
           </a>
-          <a href="en/architecture.md">
+          <a href="en/architecture.html">
             <span>Architecture</span>
             Modules, runtime flow, storage strategy and deployment modes.
           </a>
-          <a href="en/interfaces.md">
+          <a href="en/interfaces.html">
             <span>Interfaces</span>
             CLI, backend API, configuration and frontend contracts.
           </a>
-          <a href="en/data-model.md">
+          <a href="en/data-model.html">
             <span>Data model</span>
             Persistent entities, migrations, indexes and invariants.
           </a>
-          <a href="en/payload-schemas.md">
+          <a href="en/payload-schemas.html">
             <span>Payload schemas</span>
             Versioned JSON schemas for jobs and module state.
           </a>
-          <a href="en/development.md">
+          <a href="en/development.html">
             <span>Development</span>
             Local development and test contract.
           </a>
-          <a href="en/access-control.md">
+          <a href="en/access-control.html">
             <span>Access control</span>
             Auth, SCIM, RBAC, permissions and audit scope.
           </a>
-          <a href="en/roadmap.md">
+          <a href="en/roadmap.html">
             <span>Roadmap</span>
             Stages, acceptance criteria and delivery decisions.
           </a>
-          <a href="en/test-plan.md">
+          <a href="en/test-plan.html">
             <span>Test plan</span>
             Coverage map for API, storage, runtime and UI contracts.
           </a>
-          <a href="en/traceability.md">
+          <a href="en/traceability.html">
             <span>Traceability</span>
             Requirement links to API, data model, permissions and tests.
           </a>
-          <a href="en/implementation-specs/README.md">
+          <a href="en/implementation-specs/README.html">
             <span>Implementation specs</span>
             Stage-by-stage delivery contracts and DoD.
           </a>
-          <a href="en/adr/0001-go-backend-http-stack.md">
+          <a href="en/adr/0001-go-backend-http-stack.html">
             <span>ADR</span>
             Architecture decisions for backend, storage, jobs and runtime.
           </a>
-          <a href="en/code-optimization.md">
+          <a href="en/code-optimization.html">
             <span>Optimization</span>
             Completed optimizations, quality gate and remaining backlog.
           </a>

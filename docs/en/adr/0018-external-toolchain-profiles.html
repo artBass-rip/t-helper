@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0018: External toolchain profiles - T-Helper documentation.">
+    <title>ADR 0018: External toolchain profiles - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../../adr/0018-external-toolchain-profiles.html">
+    <link rel="alternate" hreflang="en" href="0018-external-toolchain-profiles.html">
+    <link rel="icon" href="../../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../../en.html#docs">Docs</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../../adr/0018-external-toolchain-profiles.html">RU</a>
+        <a class="is-active" href="0018-external-toolchain-profiles.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/adr/0018-external-toolchain-profiles.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../../en.html">T-Helper Docs</a>
+        <span>adr/0018-external-toolchain-profiles.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0018-external-toolchain-profiles">ADR 0018: External toolchain profiles</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#profile-analyzer">Profile analyzer</a>
+<a class="toc-level-2" href="#migration-strategy">Migration strategy</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="adr-0018-external-toolchain-profiles">ADR 0018: External toolchain profiles</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p>Stage 06 scanner integrations use profile-based external tool compatibility. <code>project-scanner</code> and <code>security-validator</code> do not parse raw CLI output directly. They call a shared tool adapter runtime:</p>
+<pre><code class="language-text">tool runner
+  -&gt; version discovery
+  -&gt; tool profile selection
+  -&gt; command execution
+  -&gt; output parser
+  -&gt; normalization mapper
+  -&gt; internal scan DTO / findings</code></pre>
+<p>The stable contract inside <code>t-helper</code> is the normalized scan DTO and persisted entities. CLI command shapes, supported version ranges, output parsing and field mapping are described by versioned tool profile files.</p>
+<p>Bundled profile files live under:</p>
+<pre><code class="language-text">tool-profiles/
+  terraform/
+  tflint/
+  trivy/
+  checkov/</code></pre>
+<p>MVP profiles are required for:</p>
+<ul>
+<li><code>terraform validate</code>;</li>
+<li><code>TFLint</code>;</li>
+<li><code>Trivy</code> as the mandatory Stage 06 MVP security scanner.</li>
+</ul>
+<p>Tool profiles are declarative and may use only approved parser primitives:</p>
+<ul>
+<li>JSON with JSONPath or JMESPath selectors;</li>
+<li>regex named groups;</li>
+<li>line parsers;</li>
+<li>enum and severity mapping tables;</li>
+<li>default values;</li>
+<li>required field validation;</li>
+<li>redaction rules.</li>
+</ul>
+<p>Tool profiles must not contain:</p>
+<ul>
+<li>shell fragments;</li>
+<li>arbitrary scripts or eval behavior;</li>
+<li>network calls;</li>
+<li>file reads outside the captured tool output;</li>
+<li>commands other than explicit version discovery and scan command templates.</li>
+</ul>
+<p>Profile fields include:</p>
+<ul>
+<li><code>schema_version</code>;</li>
+<li><code>tool</code>;</li>
+<li><code>profile_id</code>;</li>
+<li><code>profile_version</code>;</li>
+<li><code>certified_versions</code>;</li>
+<li><code>compatible_versions</code>;</li>
+<li><code>version_discovery</code>;</li>
+<li><code>scan_command</code>;</li>
+<li><code>exit_codes</code>;</li>
+<li><code>parser</code>;</li>
+<li><code>mapping</code>;</li>
+<li><code>fingerprint</code>;</li>
+<li><code>redaction</code>.</li>
+</ul>
+<p>Runtime version policy supports:</p>
+<pre><code class="language-text">certified_only
+compatible_range
+latest_best_effort</code></pre>
+<p>Default MVP policy is <code>certified_only</code>. In <code>compatible_range</code>, supported but uncertified versions may run and must be marked as <code>compatible</code> / <code>uncertified</code> in result metadata. In <code>latest_best_effort</code>, unknown release versions may run only with explicit opt-in and must be marked as <code>uncertified</code>.</p>
+<p>Machine-readable errors:</p>
+<pre><code class="language-text">tool_not_found
+tool_version_unsupported
+tool_version_uncertified
+tool_output_parse_failed
+tool_schema_unsupported
+tool_profile_not_found
+tool_profile_validation_failed</code></pre>
+<p>Raw CLI output is not the primary persistence contract. <code>jobs.result_payload</code>, <code>project_scans.result_payload</code> and <code>security_findings</code> store normalized metadata and must not contain raw Terraform source, secrets, private keys, tokens or credential-bearing URLs. Diagnostic snippets may be stored only after redaction, size limits and explicit schema fields.</p>
+<h2 id="profile-analyzer">Profile analyzer</h2>
+<p><code>t-helper</code> may include an optional <code>tool-profile-analyzer</code> used by maintainers or operators to prepare new profile versions without changing <code>t-helper</code> code.</p>
+<p>The analyzer consumes:</p>
+<ul>
+<li>raw sample stdout/stderr;</li>
+<li>command exit code;</li>
+<li>discovered tool version;</li>
+<li>expected normalized DTO fixtures when available;</li>
+<li>an existing profile version as a baseline when available.</li>
+</ul>
+<p>The analyzer may generate candidate profile files, parser selectors, mapping tables and validation fixtures. Generated profiles are never activated automatically. They must pass profile validation and be imported/activated explicitly through CLI/API before runtime uses them.</p>
+<p>Analyzer output must include confidence and unresolved mapping diagnostics. Any field that affects fingerprints (<code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code>, <code>check_type</code>) requires explicit validation against fixtures before activation.</p>
+<h2 id="migration-strategy">Migration strategy</h2>
+<p>Fresh tool versions are adopted without changing <code>t-helper</code> code when their output can be represented by existing parser primitives:</p>
+<ol>
+<li>Capture new tool outputs on approved fixtures.</li>
+<li>Run profile validation against the existing profile.</li>
+<li>If compatible, extend <code>compatible_versions</code> or <code>certified_versions</code>.</li>
+<li>If output changed, create a new profile version.</li>
+<li>Validate expected normalized DTOs, exit code behavior, redaction and fingerprint components.</li>
+<li>Import and explicitly activate the new profile.</li>
+</ol>
+<p>Acceptance tests use certified profile versions. Latest-version testing may run as a non-blocking compatibility suite, but does not define MVP acceptance.</p>
+<h2 id="rationale">Rationale</h2>
+<p>External CLI tools do not provide a stable internal API for <code>t-helper</code>. JSON schemas, exit codes, rule identifiers, severity names and diagnostic fields can change between releases. Hard-coding parser logic in scanners would make Stage 06 acceptance unstable and require <code>t-helper</code> code changes for routine tool upgrades.</p>
+<p>Profile-based compatibility keeps the scanner code stable while allowing operators to certify new external tool versions through data files and fixtures.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 06 implements a shared tool runner, profile registry, profile validator and normalized DTO mapper.</li>
+<li>Bundled profiles are required for the Stage 06 MVP toolchain.</li>
+<li>New tool versions can be adopted by adding or updating profile files when no new parser primitive is needed.</li>
+<li>If a tool output change cannot be represented by supported profile primitives, a code change or a new adapter capability is required.</li>
+<li>Tests must cover certified, compatible and unsupported versions, profile validation, redaction and fingerprint stability.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="../implementation-specs/README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+<a href="../implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="../implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+<a href="../implementation-specs/stage-11-security-tooling-policy-packs.html"><span>Implementation Specs</span>Stage 11: Security Tooling and Policy Packs</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="../implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="../implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="../implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="../implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="../implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="../implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="../implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="../implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="../implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="../implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="../implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="../implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="../implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="../implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="../implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="../implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="../implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="../implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="0018-external-toolchain-profiles.html" aria-current="page">ADR 0018: External toolchain profiles</a>
+<a href="0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../../adr/0018-external-toolchain-profiles.html">Русская страница</a>
+      <a href="0018-external-toolchain-profiles.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/adr/0018-external-toolchain-profiles.md">Source Markdown</a>
+    </footer>
+
+    <script src="../../pages.js"></script>
+  </body>
+</html>

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 04: Scanner and Registry MVP - T-Helper documentation.">
+    <title>Stage 04: Scanner and Registry MVP - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../../implementation-specs/stage-04-scanner-mvp.html">
+    <link rel="alternate" hreflang="en" href="stage-04-scanner-mvp.html">
+    <link rel="icon" href="../../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../../en.html#docs">Docs</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../../implementation-specs/stage-04-scanner-mvp.html">RU</a>
+        <a class="is-active" href="stage-04-scanner-mvp.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/implementation-specs/stage-04-scanner-mvp.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../../en.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-04-scanner-mvp.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-04-scanner-and-registry-mvp">Stage 04: Scanner and Registry MVP</a>
+<a class="toc-level-2" href="#goal">Goal</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#implementation-contract">Implementation contract</a>
+<a class="toc-level-3" href="#discovery-algorithm-notes">Discovery algorithm notes</a>
+<a class="toc-level-3" href="#upsert-and-identity-rules">Upsert and identity rules</a>
+<a class="toc-level-3" href="#filesystem-read-boundaries">Filesystem read boundaries</a>
+<a class="toc-level-3" href="#symlink-policy">Symlink policy</a>
+<a class="toc-level-3" href="#ignore-rule-behavior">Ignore-rule behavior</a>
+<a class="toc-level-3" href="#scan-result-and-status-policy">Scan result and status policy</a>
+<a class="toc-level-3" href="#required-fixtures">Required fixtures</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#deferred-decisions">Deferred decisions</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#risks">Risks</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="stage-04-scanner-and-registry-mvp">Stage 04: Scanner and Registry MVP</h1>
+<h2 id="goal">Goal</h2>
+<p>Implement a discovery layer that finds Terraform projects under <code>root_path</code>, applies ignore rules, registers each locally discovered project as a separate DB record and enqueues background project discovery jobs for later Git relationship detection.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><a href="../requirements.html"><code>docs/en/requirements.md</code></a></li>
+<li><a href="../interfaces.html"><code>docs/en/interfaces.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../payload-schemas.html"><code>docs/en/payload-schemas.md</code></a></li>
+<li><a href="../test-plan.html"><code>docs/en/test-plan.md</code></a></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li><code>global-scanner</code> module;</li>
+<li><code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>;</li>
+<li>minimal registry-mode <code>repositories</code> through background project discovery jobs, not directly from global filesystem traversal;</li>
+<li><code>project_links</code> for linking separate local project records that belong to one Git repository;</li>
+<li><code>environments</code> and <code>workspaces</code> backend read models/API for the Frontend MVP;</li>
+<li>conservative MVP lifecycle for <code>project</code> / <code>environment</code> / <code>workspace</code>: scanner creates and updates <code>projects</code>, while links to <code>environment</code> and <code>workspace</code> are preserved only if already known or explicitly set;</li>
+<li>bounded worker pool for traversal; SQLite runtime uses an effective traversal concurrency of 1 to avoid local database writer contention, while other storage providers use bounded parallel traversal;</li>
+<li>exclude-only matcher with preservation of <code>!pattern</code>;</li>
+<li>Terraform project detection by <code>*.tf</code>;</li>
+<li>enqueue a background <code>project_discovery</code> job for each created or updated project;</li>
+<li>determine project Git relationships only in the <code>project_discovery</code> job using the MVP Git marker allowlist: <code>.git/</code> directory or <code>.git</code> file whose first non-empty line is <code>gitdir:</code>;</li>
+<li>negative handling for <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> inside <code>project_discovery</code>;</li>
+<li>API for scan/root paths/ignore rules/projects/environments/workspaces.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>provider-aware repository operations;</li>
+<li>provider-aware URL parsing, remote enrichment and clone/pull/sync behavior from Stage 05;</li>
+<li>reading <code>.git/config</code> or shelling out to <code>git</code> from <code>global-scanner</code>;</li>
+<li>project-level checks and security findings;</li>
+<li>auth enforcement beyond documented permission contracts;</li>
+<li>automatic linking rules for <code>project</code> / <code>environment</code> / <code>workspace</code> based on naming conventions or Terraform source parsing;</li>
+<li>full <code>.gitignore</code> semantics.</li>
+<li><code>follow_symlinks = true</code>; MVP supports only <code>follow_symlinks = false</code>, extended symlink traversal is deferred to Stage 09 runtime hardening.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li><code>global-scanner</code> module;</li>
+<li><code>project_discovery</code> worker handler for local project metadata discovery;</li>
+<li>migrations/read models for <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>project_links</code>, <code>environments</code>, <code>workspaces</code>;</li>
+<li>registry API for root paths, scans, projects, environments, workspaces and ignore rules;</li>
+<li>scan fixtures and acceptance tests;</li>
+<li>discovery algorithm notes.</li>
+</ul>
+<h2 id="implementation-contract">Implementation contract</h2>
+<h3 id="discovery-algorithm-notes">Discovery algorithm notes</h3>
+<ul>
+<li><code>POST /api/scans</code> and <code>jobs.global_scan.payload.v1</code> resolve requested <code>root_path_ids</code> through the registry and deduplicate repeated IDs while preserving request order.</li>
+<li><code>global-scanner</code> materializes <code>scanning.global_scan</code>, loads ignore rules per root, then traverses each root with a bounded in-process worker pool. SQLite runs traversal with effective concurrency <code>1</code>; other providers use <code>workers.concurrency</code> capped at <code>64</code>, with default <code>4</code>.</li>
+<li>Traversal uses directory entries and <code>lstat</code> metadata only. Terraform project detection checks entry names for <code>*.tf</code>; it does not open Terraform source files and stops traversal below a detected Terraform working directory.</li>
+<li><code>.git</code> directories are skipped by global traversal. Repository detection is deferred to <code>project_discovery</code>, which walks upward from the project path to the root path and checks only the allowlisted <code>.git</code> marker.</li>
+<li>Stage 04 filesystem boundary tests use an injected filesystem adapter to assert that global scan does not open Terraform source, <code>.git</code> marker files or <code>.git/config</code>, and that project discovery reads at most <code>4 KiB</code> from <code>.git</code> marker files.</li>
+</ul>
+<h3 id="upsert-and-identity-rules">Upsert and identity rules</h3>
+<ul>
+<li><code>root_paths</code> upsert key: normalized absolute <code>path</code>.</li>
+<li>Public <code>PUT /api/root-paths</code> treats <code>root_paths.source</code> as read-only. API-created or API-updated rows are owned as <code>source = api</code>; <code>source = config</code> is reserved for materialized <code>scanning.global_scan</code> entries.</li>
+<li><code>projects</code> upsert key: <code>root_path_id + relative_path</code>.</li>
+<li>Global filesystem scan never merges local project records. Every discovered Terraform working directory gets its own <code>projects</code> row keyed by <code>root_path_id + relative_path</code>.</li>
+<li>Project records are created with the full project schema from the beginning; fields whose information is not known yet remain nullable/default and are filled later by project discovery, repository manager, project scans or explicit user/admin input.</li>
+<li><code>global_scan</code> fills <code>projects.name</code>, <code>projects.path</code>, <code>projects.relative_path</code>, <code>projects.root_path_id</code>, <code>projects.terraform_marker</code>, <code>projects.status = active</code>, <code>projects.detected_at</code>, <code>projects.last_seen_at</code>, <code>projects.created_at</code> and <code>projects.updated_at</code>.</li>
+<li><code>project_discovery</code> fills <code>projects.repository_id</code> when repository membership is known and creates <code>project_links</code> for same-repository relationships.</li>
+<li>Stage 05 repository manager enriches repository cards, not project rows; project rows remain separate and only their <code>repository_id</code> relation may be updated.</li>
+<li>Stage 06 project/security scans write scan data to scan/finding tables, not summary fields on <code>projects</code>.</li>
+<li>Manual/admin input may set <code>projects.environment_id</code>, <code>projects.default_workspace_id</code> and future explicit metadata fields.</li>
+<li><code>repositories</code> provider-aware upsert key remains <code>provider + provider_host + full_path</code>.</li>
+<li>Stage 04 generic local fallback identity is scoped by root path: <code>provider + provider_host + root_path_id + full_path</code>. This prevents two different scan roots with the same relative repository path from being merged.</li>
+<li>Generic local repository upsert must be idempotent under concurrent <code>project_discovery</code> jobs for projects in the same Git repository. A unique identity conflict is handled by re-reading/updating the existing repository card rather than failing the job.</li>
+<li>Stage 04 global scan does not create repository cards directly. It enqueues <code>jobs.job_type = project_discovery</code> for each created/updated project and continues traversal without waiting for that job.</li>
+<li><code>project_discovery</code> performs local Git marker discovery for one project. If the project belongs to a Git working tree but provider identity is not known, project discovery creates or updates a conservative generic repository card:</li>
+<li><code>provider = generic</code>;</li>
+<li><code>provider_host = local</code>;</li>
+<li><code>full_path = &lt;root_path-relative normalized repository path&gt;</code>;</li>
+<li><code>root_path_id</code> points to the containing root path;</li>
+<li><code>local_path</code> points to the normalized discovered repository path;</li>
+<li><code>clone_url = null</code>.</li>
+<li>If multiple local project records belong to the same Git repository, project discovery does not merge project records. It sets the same <code>repository_id</code> where known and writes <code>project_links</code> with <code>link_type = same_repository</code>.</li>
+<li>Stage 05 provider-aware repository manager may later enrich repository cards after explicit provider URL parsing/remote validation, but it must not merge separate project records into one project.</li>
+</ul>
+<h3 id="filesystem-read-boundaries">Filesystem read boundaries</h3>
+<ul>
+<li><code>global-scanner</code> reads directory entries and metadata required for traversal.</li>
+<li><code>global-scanner</code> must not open <code>*.tf</code> files during Stage 04 discovery; Terraform project detection is based on filenames only.</li>
+<li><code>global-scanner</code> must not read <code>.git</code>, <code>.git/config</code> or execute <code>git</code>.</li>
+<li><code>project_discovery</code> may read a <code>.git</code> regular file only as Git metadata and only up to an implementation limit of <code>4 KiB</code>; marker is valid when the first non-empty line starts with <code>gitdir:</code>.</li>
+<li><code>project_discovery</code> must not execute <code>git</code> or Terraform/toolchain commands.</li>
+</ul>
+<h3 id="symlink-policy">Symlink policy</h3>
+<ul>
+<li>Default Stage 04 behavior is <code>follow_symlinks = false</code>.</li>
+<li>Symlinked directories are skipped by default and counted as skipped directories.</li>
+<li>A root path that is itself a symlink is rejected for Stage 04 traversal when <code>follow_symlinks = false</code>; the job fails if no requested root path can be processed.</li>
+<li><code>follow_symlinks = true</code> is not supported in MVP and is deferred to Stage 09. A future implementation must include opt-in configuration, cycle detection, root containment checks, traversal counters and max-depth/max-visited guards.</li>
+</ul>
+<h3 id="ignore-rule-behavior">Ignore-rule behavior</h3>
+<ul>
+<li>Ignore rules are applied relative to <code>root_path</code>.</li>
+<li>MVP matcher is exclude-only.</li>
+<li>Rule order is preserved on import/storage for future full <code>.gitignore</code> semantics.</li>
+<li>Negative rules beginning with <code>!</code> are imported and returned by API without loss, but do not affect Stage 04 matching.</li>
+<li>Ignored directories are not traversed deeper.</li>
+</ul>
+<h3 id="scan-result-and-status-policy">Scan result and status policy</h3>
+<ul>
+<li><code>projects_created</code> counts newly inserted project rows.</li>
+<li><code>projects_updated</code> counts existing project rows whose discovery metadata or <code>last_seen_at</code> is updated.</li>
+<li><code>project_discovery_jobs_enqueued</code> counts background project discovery jobs created by global scan.</li>
+<li>Repository counters are not part of <code>jobs.global_scan.result.v1</code>; repository cards are created/updated by <code>project_discovery</code> jobs.</li>
+<li><code>directories_skipped</code> counts ignored directories, skipped symlink directories and immediate child directories skipped because traversal stops below a detected Terraform working directory.</li>
+<li>Per-directory errors are recorded in <code>job_events</code> and increment <code>errors_count</code>.</li>
+<li>If at least one requested root path is processed successfully, the job may finish with <code>jobs.status = succeeded</code> even when <code>errors_count &gt; 0</code>.</li>
+<li>If all requested root paths fail before useful traversal, the job must finish with <code>jobs.status = failed</code>.</li>
+<li><code>jobs.status</code> does not use <code>partial</code>; partial scan quality is represented through <code>errors_count</code>, result payload counters and <code>job_events</code>.</li>
+<li>Missing previously discovered projects are not deleted in MVP. If a project under a scanned <code>root_path</code> is not seen in a completed scan, scanner sets <code>projects.status = missing</code> and keeps the row for audit/UI continuity.</li>
+<li>Missing status does not replace or merge project records. If the project is later discovered again, the same row returns to <code>active</code>.</li>
+<li><code>GET /api/projects</code> returns <code>active</code> projects by default. Missing/disabled projects are returned only when <code>status?</code> explicitly requests them or when <code>status=all</code>.</li>
+<li>Missing projects are read-only for project scan operations until rediscovered; <code>POST /api/project-scans</code> must reject <code>projects.status = missing</code> with a controlled validation error.</li>
+<li>Stale <code>project_discovery</code> jobs for <code>projects.status = missing</code> or <code>disabled</code> are no-op and must not create repository cards, links or <code>projects.repository_id</code>.</li>
+<li>If a later global scan finds the same <code>root_path_id + relative_path</code>, the project is automatically reactivated by setting <code>status = active</code> and updating <code>last_seen_at</code>.</li>
+</ul>
+<h3 id="required-fixtures">Required fixtures</h3>
+<ul>
+<li><code>basic_tf_project</code>: directory with <code>main.tf</code>.</li>
+<li><code>nested_tf_project</code>: parent with <code>main.tf</code> and nested <code>child/main.tf</code>; nested child is not registered separately.</li>
+<li><code>git_repo_marker_directory</code>: valid <code>.git/</code> directory for <code>project_discovery</code>.</li>
+<li><code>git_repo_marker_file</code>: valid <code>.git</code> regular file with first non-empty line starting with <code>gitdir:</code> for <code>project_discovery</code>.</li>
+<li><code>git_repo_marker_file_invalid</code>: <code>.git</code> regular file without valid <code>gitdir:</code>.</li>
+<li><code>same_git_repository_projects</code>: two Terraform working directories related to the same Git repository; separate project rows remain and <code>project_links.link_type = same_repository</code> is created.</li>
+<li>negative marker fixtures: <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code>.</li>
+<li><code>ignored_directory</code>: directory excluded by <code>.t-helper.ignore</code>.</li>
+<li><code>negative_ignore_pattern</code>: <code>!pattern</code> stored without applying in exclude-only matcher.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li>scan detects Terraform working directories by <code>*.tf</code>;</li>
+<li>global scan creates/updates only project records and enqueues <code>project_discovery</code> jobs;</li>
+<li><code>project_discovery</code> detects only allowed Git markers: <code>.git/</code> directory and <code>.git</code> file with <code>gitdir:</code>;</li>
+<li>similar files/directories <code>.gitignore</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, <code>.gitlab-ci.yml</code>, <code>.github/</code>, <code>.gitkeep</code> do not create a repository link/card;</li>
+<li>scanner does not shell out to <code>git</code> during discovery;</li>
+<li>scanner does not read Terraform source and does not read <code>.git/config</code> in Stage 04;</li>
+<li>filesystem-only Git repositories without provider identity are registered by the project discovery job as <code>provider = generic</code>, <code>provider_host = local</code>;</li>
+<li>different Terraform projects inside one Git repository remain separate <code>projects</code> rows and are linked through <code>project_links</code>;</li>
+<li>symlinked directories skipped by default when <code>follow_symlinks = false</code>;</li>
+<li>nested Terraform directories under a found project are not registered separately;</li>
+<li>repeated scan does not create duplicates;</li>
+<li>concurrent <code>project_discovery</code> jobs for one Git repository do not create duplicate generic repository cards and do not fail on repository identity conflicts;</li>
+<li>projects found earlier but absent from a new scan are not deleted and receive <code>status = missing</code>;</li>
+<li><code>!pattern</code> is preserved without being applied in the exclude-only matcher;</li>
+<li>scanner does not create an implicit <code>environment</code> or <code>workspace</code> without an explicit input rule/data;</li>
+<li>if a project's link to <code>environment</code> or <code>workspace</code> is already known, repeated scan preserves it;</li>
+<li>environments/workspaces read endpoints work and have FK/read tests;</li>
+<li><code>root_paths.source</code> ownership is enforced: API cannot claim config-owned source values through request payloads;</li>
+<li>stale project discovery for missing/disabled projects does not mutate repository registry state;</li>
+<li>results are written to <code>jobs.global_scan.result.v1</code>.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>no Stage 04 blockers remain for the Git marker allowlist; the MVP allowlist is closed by this spec.</li>
+</ul>
+<h2 id="deferred-decisions">Deferred decisions</h2>
+<ul>
+<li>automatic linking rules for <code>project</code> / <code>environment</code> / <code>workspace</code>;</li>
+<li>default seed/import behavior for environments/workspaces beyond minimal read models and FK constraints.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 04.</li>
+<li>Acceptance: <code>ACC-MVP-001</code>, <code>ACC-MVP-002</code>, <code>ACC-MVP-003</code>, <code>ACC-MVP-004</code>, <code>ACC-MVP-005</code>, <code>ACC-MVP-015</code>, <code>ACC-MVP-021</code>.</li>
+<li>API: root paths, scans, projects, environments, workspaces, ignore rules.</li>
+<li>Data model: <code>root_paths</code>, <code>ignore_rules</code>, <code>projects</code>, <code>project_links</code>, <code>repositories</code>, <code>environments</code>, <code>workspaces</code>.</li>
+</ul>
+<h2 id="risks">Risks</h2>
+<ul>
+<li>incorrect path normalization and duplicate project cards;</li>
+<li>excessive number of <code>stat/open</code> operations in a large tree;</li>
+<li>incorrect handling of <code>.git</code> file for worktree/submodule.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="../api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="../data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="../interfaces.html"><span>Core Docs</span>CLI, API и конфигурация</a>
+<a href="../payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+<a href="../requirements.html"><span>Core Docs</span>Требования</a>
+<a href="../test-plan.html"><span>Core Docs</span>Test plan</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="README.html">Пакет ТЗ по stage внедрения</a>
+<a href="stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="stage-04-scanner-mvp.html" aria-current="page">Stage 04: Scanner and Registry MVP</a>
+<a href="stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="../adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="../adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="../adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="../adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="../adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="../adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="../adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="../adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="../adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="../adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="../adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="../adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="../adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="../adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="../adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="../adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="../adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="../adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="../adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../../implementation-specs/stage-04-scanner-mvp.html">Русская страница</a>
+      <a href="stage-04-scanner-mvp.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/implementation-specs/stage-04-scanner-mvp.md">Source Markdown</a>
+    </footer>
+
+    <script src="../../pages.js"></script>
+  </body>
+</html>

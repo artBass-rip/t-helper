@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Модель данных - T-Helper documentation.">
+    <title>Модель данных - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="data-model.html">
+    <link rel="alternate" hreflang="en" href="en/data-model.html">
+    <link rel="icon" href="assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <img class="brand-mark" src="assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="is-active" href="data-model.html" aria-current="page">RU</a>
+        <a class="" href="en/data-model.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/data-model.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>data-model.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#модель-данных">Модель данных</a>
+<a class="toc-level-2" href="#stage-owned-migrations">Stage-Owned Migrations</a>
+<a class="toc-level-2" href="#базовые-сущности">Базовые сущности</a>
+<a class="toc-level-3" href="#rootpaths">root_paths</a>
+<a class="toc-level-3" href="#projects">projects</a>
+<a class="toc-level-3" href="#projectlinks">project_links</a>
+<a class="toc-level-3" href="#projectscansettings">project_scan_settings</a>
+<a class="toc-level-3" href="#projectsecurityscansettings">project_security_scan_settings</a>
+<a class="toc-level-3" href="#repositories">repositories</a>
+<a class="toc-level-3" href="#repositoryproviderinstances">repository_provider_instances</a>
+<a class="toc-level-3" href="#repositorycredentials">repository_credentials</a>
+<a class="toc-level-3" href="#ignorerules">ignore_rules</a>
+<a class="toc-level-3" href="#environments">environments</a>
+<a class="toc-level-3" href="#workspaces">workspaces</a>
+<a class="toc-level-3" href="#configentries">config_entries</a>
+<a class="toc-level-3" href="#storageprofiles">storage_profiles</a>
+<a class="toc-level-3" href="#storageprovidersettings">storage_provider_settings</a>
+<a class="toc-level-3" href="#modulestates">module_states</a>
+<a class="toc-level-3" href="#jobs">jobs</a>
+<a class="toc-level-3" href="#joblocks">job_locks</a>
+<a class="toc-level-3" href="#projectscans">project_scans</a>
+<a class="toc-level-3" href="#jobevents">job_events</a>
+<a class="toc-level-3" href="#workflowstatuses">workflow_statuses</a>
+<a class="toc-level-3" href="#auditlog">audit_log</a>
+<a class="toc-level-2" href="#security-сущности">Security-сущности</a>
+<a class="toc-level-3" href="#securityrulesets">security_rule_sets</a>
+<a class="toc-level-3" href="#toolprofiles">tool_profiles</a>
+<a class="toc-level-3" href="#toolprofilevalidationresults">tool_profile_validation_results</a>
+<a class="toc-level-3" href="#securityfindings">security_findings</a>
+<a class="toc-level-2" href="#auth-и-rbac-сущности">Auth и RBAC сущности</a>
+<a class="toc-level-3" href="#users">users</a>
+<a class="toc-level-3" href="#localusercredentials">local_user_credentials</a>
+<a class="toc-level-3" href="#passwordresettokens">password_reset_tokens</a>
+<a class="toc-level-3" href="#usersessions">user_sessions</a>
+<a class="toc-level-3" href="#authbootstrapcredentials">auth_bootstrap_credentials</a>
+<a class="toc-level-3" href="#groups">groups</a>
+<a class="toc-level-3" href="#groupmembers">group_members</a>
+<a class="toc-level-3" href="#permissions">permissions</a>
+<a class="toc-level-3" href="#roles">roles</a>
+<a class="toc-level-3" href="#rolepermissions">role_permissions</a>
+<a class="toc-level-3" href="#rolebindings">role_bindings</a>
+<a class="toc-level-3" href="#scimidentities">scim_identities</a>
+<a class="toc-level-2" href="#связи-между-сущностями">Связи между сущностями</a>
+<a class="toc-level-2" href="#nullable-fk-и-delete-behavior">Nullable, FK и delete behavior</a>
+<a class="toc-level-2" href="#индексы-и-уникальность">Индексы и уникальность</a>
+<a class="toc-level-2" href="#cross-storage-правила">Cross-storage правила</a>
+<a class="toc-level-2" href="#дизайн-заметки">Дизайн-заметки</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="модель-данных">Модель данных</h1>
+<p>Этот документ описывает целевую persistent data model. Он не означает, что все таблицы должны появиться в первой миграции.</p>
+<p>Physical migrations are stage-owned: a table or index is introduced only by the stage that also ships the code, API or worker behavior and tests for its invariants. Stage 01 must not create the whole target schema in advance.</p>
+<h2 id="stage-owned-migrations">Stage-Owned Migrations</h2>
+<p>Expected migration ownership:</p>
+<ul>
+<li>Stage 01: migration metadata, storage bootstrap metadata, health/schema version support and only the minimal system tables required by the backend skeleton.</li>
+<li>Stage 02: <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code>, <code>module_states</code>, imported system <code>ignore_rules</code> and runtime lifecycle state.</li>
+<li>Stage 03: <code>jobs</code>, <code>job_locks</code>, <code>job_events</code>, <code>workflow_statuses</code>.</li>
+<li>Stage 04: <code>root_paths</code>, project-scoped/runtime scanner <code>ignore_rules</code> behavior, <code>projects</code>, <code>project_links</code>, minimal <code>repositories</code>, <code>environments</code>, <code>workspaces</code>.</li>
+<li>Stage 05: full repository model, <code>repository_provider_instances</code>, <code>repository_credentials</code>, repository enrichment/supersede fields and repository-operation indexes.</li>
+<li>Stage 06A: <code>tool_profiles</code>, <code>tool_profile_validation_results</code>.</li>
+<li>Stage 06B: <code>project_scan_settings</code>, <code>project_security_scan_settings</code>, <code>project_scans</code>, <code>security_rule_sets</code>, <code>security_findings</code>.</li>
+<li>Stage 07: <code>users</code>, <code>local_user_credentials</code>, <code>password_reset_tokens</code>, <code>user_sessions</code>, <code>auth_bootstrap_credentials</code>, <code>groups</code>, <code>group_members</code>, <code>permissions</code>, <code>roles</code>, <code>role_permissions</code>, <code>role_bindings</code>, <code>scim_identities</code>, <code>audit_log</code>.</li>
+<li>Platform stages: add only the schema needed for their enabled platform capabilities.</li>
+</ul>
+<p>If a later implementation needs to move a table between stages, the owning implementation spec must be updated together with roadmap, traceability and test plan.</p>
+<h2 id="базовые-сущности">Базовые сущности</h2>
+<h3 id="rootpaths"><code>root_paths</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>path</code></li>
+<li><code>source</code></li>
+<li><code>enabled</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>source</code> принимает <code>config</code> или <code>api</code>. <code>scanning.global_scan</code> sync owns only <code>source = config</code> rows: removed config roots are disabled, while API-created roots are preserved.</p>
+<h3 id="projects"><code>projects</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>path</code></li>
+<li><code>relative_path</code></li>
+<li><code>root_path_id</code></li>
+<li><code>terraform_marker</code></li>
+<li><code>status</code></li>
+<li><code>repository_id</code></li>
+<li><code>environment_id</code></li>
+<li><code>default_workspace_id</code></li>
+<li><code>detected_at</code></li>
+<li><code>last_seen_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>status</code> для Stage 04:</p>
+<ul>
+<li><code>active</code> - проект обнаружен последним scan или создан/обновлён явно;</li>
+<li><code>missing</code> - проект ранее обнаруживался под scanned <code>root_path</code>, но не найден в последнем completed scan;</li>
+<li><code>disabled</code> - проект выключен административно и не должен автоматически участвовать в project scan workflows.</li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>projects.root_path_id + projects.relative_path</code> unique;</li>
+<li>Stage 04 scanner creates/updates projects by <code>root_path_id + relative_path</code>;</li>
+<li>every locally discovered Terraform working directory remains a separate <code>projects</code> row, even when multiple projects belong to the same Git repository;</li>
+<li>project rows are created with the full schema from the beginning; fields whose information is not known at creation time remain nullable/default and are filled by later discovery/scanning/management stages;</li>
+<li>missing projects are not deleted by scanner;</li>
+<li>repeat scan must preserve known <code>repository_id</code>, <code>environment_id</code> and <code>default_workspace_id</code> unless an explicit update changes them.</li>
+</ul>
+<h3 id="projectlinks"><code>project_links</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>source_project_id</code></li>
+<li><code>target_project_id</code></li>
+<li><code>link_type</code></li>
+<li><code>repository_id</code></li>
+<li><code>detected_by_job_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>link_type</code>:</p>
+<ul>
+<li><code>same_repository</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>project links express relationships between separate local project records; they do not merge projects;</li>
+<li><code>source_project_id</code> and <code>target_project_id</code> must reference different project rows;</li>
+<li>for <code>same_repository</code>, <code>repository_id</code> should reference the repository shared by both projects when known;</li>
+<li>duplicate links for the same unordered project pair and <code>link_type</code> must not be created.</li>
+</ul>
+<h3 id="projectscansettings"><code>project_scan_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>scan_enabled</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>run_after_clone</code></li>
+<li><code>run_after_pull</code></li>
+<li><code>scan_type</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Настройки project-level scan задаются относительно отдельного проекта и не являются глобальными default-параметрами <code>config.json</code>.</p>
+<h3 id="projectsecurityscansettings"><code>project_security_scan_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>enabled</code></li>
+<li><code>enabled_modules</code></li>
+<li><code>schedule_enabled</code></li>
+<li><code>schedule_frequency</code></li>
+<li><code>validate_code</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>enabled_modules</code> должен ссылаться только на модули из глобального каталога <code>scanning.security_scan.modules</code>.</p>
+<h3 id="repositories"><code>repositories</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>provider_instance_id</code></li>
+<li><code>provider</code></li>
+<li><code>provider_host</code></li>
+<li><code>full_path</code></li>
+<li><code>clone_url</code></li>
+<li><code>default_branch</code></li>
+<li><code>root_path_id</code></li>
+<li><code>target_directory</code></li>
+<li><code>local_path</code></li>
+<li><code>auth_type</code></li>
+<li><code>default_credential_id</code></li>
+<li><code>status</code></li>
+<li><code>discovery_source</code></li>
+<li><code>superseded_by_repository_id</code></li>
+<li><code>identity_confirmed_at</code></li>
+<li><code>auto_sync_enabled</code></li>
+<li><code>webhook_enabled</code></li>
+<li><code>poll_interval</code></li>
+<li><code>last_pull_at</code></li>
+<li><code>last_error</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>provider</code> принимает одно из значений: <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code>, <code>generic</code>;</li>
+<li><code>status</code> принимает <code>active</code>, <code>missing</code>, <code>superseded</code> или <code>disabled</code>;</li>
+<li><code>discovery_source</code> принимает <code>filesystem</code>, <code>provider</code>, <code>clone</code> или <code>manual</code>;</li>
+<li><code>provider_instance_id</code> ссылается на configured provider host/profile, если repository был создан через managed provider integration;</li>
+<li><code>provider_host</code> хранит нормализованный host provider instance, например <code>gitlab.foodtech.team</code> или <code>github.com</code>;</li>
+<li>identity репозитория задаётся tuple <code>provider + provider_host + full_path</code>;</li>
+<li>for Stage 04 filesystem-only generic local cards (<code>provider = generic</code>, <code>provider_host = local</code>), identity is scoped by <code>root_path_id + full_path</code> so different scan roots with the same relative repository path do not collapse into one repository card;</li>
+<li><code>full_path</code> уникален только в пределах <code>provider + provider_host</code>;</li>
+<li><code>full_path</code> хранит namespace/project path внутри provider instance без protocol, host, leading slash и trailing <code>.git</code>;</li>
+<li><code>root_path_id</code> обязателен для клонированных репозиториев;</li>
+<li><code>target_directory</code> хранит выбранную пользователем директорию внутри <code>root_path</code>;</li>
+<li><code>local_path</code> вычисляется внутри выбранного <code>root_path</code> и не должен указывать за пределы этого path;</li>
+<li><code>clone_url</code> nullable, не unique, является safe normalized transport endpoint и не является identity key;</li>
+<li><code>clone_url</code> не используется для lookup/upsert/deduplication и не должен содержать credentials, tokens, passwords или userinfo;</li>
+<li>разные <code>clone_url</code>, нормализуемые в один <code>provider + provider_host + full_path</code>, должны ссылаться на одну repository card;</li>
+<li>Stage 04 global filesystem scan does not create repository cards directly;</li>
+<li>Stage 04 <code>project_discovery</code> job may create/update conservative repository card with <code>provider = generic</code>, <code>provider_host = local</code>, <code>root_path_id = &lt;containing root path&gt;</code>, <code>full_path = &lt;root_path-relative normalized repository path&gt;</code>, <code>clone_url = null</code>, <code>status = active</code>, <code>discovery_source = filesystem</code> and <code>identity_confirmed_at = null</code>;</li>
+<li>Stage 05 repository manager may enrich generic local cards after provider-aware identity resolution, but separate project records must not be merged;</li>
+<li>if provider-aware identity is resolved and no managed repository card exists, the generic repository card is enriched in place and keeps the same <code>repositories.id</code>;</li>
+<li>if provider-aware identity is resolved and a managed repository card already exists, project relations are moved to the managed card and the generic card becomes <code>status = superseded</code>;</li>
+<li><code>superseded_by_repository_id</code> may be set only when <code>status = superseded</code>;</li>
+<li><code>superseded</code> repositories must not participate in clone, pull, sync, webhook or polling operations;</li>
+<li><code>identity_confirmed_at</code> is set when provider-aware identity has been validated by repository manager or explicit provider workflow;</li>
+<li><code>auth_type</code> является legacy/default transport hint для карточки repository и принимает <code>ssh</code>, <code>https</code> или <code>token</code>; actual auth material берётся из <code>repository_credentials</code>;</li>
+<li><code>default_credential_id</code> nullable и указывает credential, используемый по умолчанию для repository operations, если request не передал explicit <code>credential_id</code>;</li>
+<li>активные <code>clone</code>, <code>pull</code>, <code>sync</code> по одному <code>repository.id</code> должны иметь не более одного lock/job в состоянии <code>queued</code> или <code>running</code>.</li>
+</ul>
+<h3 id="repositoryproviderinstances"><code>repository_provider_instances</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>provider</code></li>
+<li><code>provider_host</code></li>
+<li><code>display_name</code></li>
+<li><code>deployment_type</code></li>
+<li><code>api_base_url</code></li>
+<li><code>web_base_url</code></li>
+<li><code>default_clone_protocol</code></li>
+<li><code>enabled</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>Stage 05 MVP stores <code>display_name</code> as <code>name</code> and does not yet persist <code>deployment_type</code> or <code>default_clone_protocol</code>; those fields remain the forward data-model contract for later provider-profile expansion.</li>
+<li><code>provider</code> принимает <code>gitlab</code>, <code>github</code>, <code>bitbucket</code>, <code>azure_devops</code> или <code>generic</code>;</li>
+<li><code>deployment_type</code> принимает <code>cloud</code>, <code>self_managed</code>, <code>enterprise_server</code>, <code>data_center</code> или <code>organization</code>;</li>
+<li><code>provider_host</code> normalizes host or organization host identifier and distinguishes multi-domain/on-premise installations;</li>
+<li><code>provider + provider_host</code> unique;</li>
+<li>provider instance stores host/profile metadata only, not secrets.</li>
+<li>Stage 05 MVP accepts <code>api_base_url</code> and <code>web_base_url</code> only as HTTPS URLs without userinfo; their host must normalize to the same value as <code>provider_host</code>.</li>
+</ul>
+<h3 id="repositorycredentials"><code>repository_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>provider_instance_id</code></li>
+<li><code>name</code></li>
+<li><code>auth_type</code></li>
+<li><code>username</code></li>
+<li><code>usages</code></li>
+<li><code>scope_hint</code></li>
+<li><code>token_ref</code></li>
+<li><code>password_ref</code></li>
+<li><code>private_key_ref</code></li>
+<li><code>passphrase_ref</code></li>
+<li><code>webhook_secret_ref</code></li>
+<li><code>last_validated_at</code></li>
+<li><code>last_error</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>Stage 05 MVP persists a single <code>secret_ref</code> selected by <code>auth_type</code> instead of separate <code>token_ref</code>, <code>password_ref</code>, <code>private_key_ref</code>, <code>passphrase_ref</code> and <code>webhook_secret_ref</code> columns; the separate columns are the forward data-model contract for richer credential material.</li>
+<li><code>provider_instance_id</code> обязателен;</li>
+<li><code>auth_type</code> принимает <code>ssh_key</code>, <code>https_token</code>, <code>https_basic</code>, <code>oauth_token</code>, <code>app_password</code>, <code>webhook_secret</code>;</li>
+<li><code>usages</code> содержит один или несколько values: <code>git_transport</code>, <code>provider_api</code>, <code>webhook</code>;</li>
+<li>secret fields store only <code>secretref://...</code> values and never resolved secrets;</li>
+<li>MVP accepts only <code>secretref://env/...</code> secret refs;</li>
+<li>API responses mask secret refs and never return resolved secrets;</li>
+<li>one provider instance may have multiple credentials with different usages, scope hints and permissions;</li>
+<li>repository operations must validate that selected <code>credential_id</code> belongs to the same provider instance, supports the required usage and has an <code>auth_type</code> compatible with the selected transport protocol.</li>
+</ul>
+<h3 id="ignorerules"><code>ignore_rules</code></h3>
+<p>Stage 02 creates this table for imported system-level <code>.t-helper.ignore</code> rules from <code>thelper-ctl -reconfigure</code>. Stage 04 owns scanner/API behavior for <code>root_path</code> and <code>project</code> scopes.</p>
+<ul>
+<li><code>id</code></li>
+<li><code>scope_type</code></li>
+<li><code>scope_id</code></li>
+<li><code>pattern</code></li>
+<li><code>origin</code></li>
+<li><code>sort_order</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>origin</code>:</p>
+<ul>
+<li><code>ui</code></li>
+<li><code>config_import</code></li>
+<li><code>system_default</code></li>
+</ul>
+<p>Допустимые <code>scope_type</code>:</p>
+<ul>
+<li><code>system</code></li>
+<li><code>root_path</code></li>
+<li><code>project</code></li>
+</ul>
+<p>Для MVP matcher может поддерживать только exclude-only правила. Отрицательные правила <code>!pattern</code> должны храниться без потери данных и применяться после добавления full <code>.gitignore</code> semantics. <code>sort_order</code> сохраняет порядок импорта/API upsert для будущей полной <code>.gitignore</code> семантики.</p>
+<h3 id="environments"><code>environments</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>code</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="workspaces"><code>workspaces</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>environment_id</code></li>
+<li><code>name</code></li>
+<li><code>is_default</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="configentries"><code>config_entries</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>key</code></li>
+<li><code>value</code></li>
+<li><code>value_type</code></li>
+<li><code>scope</code></li>
+<li><code>version</code></li>
+<li><code>updated_at</code></li>
+<li><code>updated_by</code></li>
+</ul>
+<p>Минимальные конфигурационные ключи:</p>
+<ul>
+<li><code>system_settings.app_name</code></li>
+<li><code>system_settings.version</code></li>
+<li><code>system_settings.mode</code></li>
+<li><code>database.database_type</code></li>
+<li><code>database.database_path</code></li>
+<li><code>external_databases.enabled</code></li>
+<li><code>external_databases.provider</code></li>
+<li><code>external_databases.engine_flavor</code></li>
+<li><code>external_databases.host</code></li>
+<li><code>external_databases.port</code></li>
+<li><code>external_databases.username</code></li>
+<li><code>external_databases.password</code></li>
+<li><code>external_databases.database_name</code></li>
+<li><code>scanning.global_scan</code></li>
+<li><code>scanning.security_scan.modules</code></li>
+<li><code>repositories.default_auth_type</code></li>
+<li><code>repositories.poll_interval_default</code></li>
+<li><code>repositories.auto_sync_default</code></li>
+<li><code>security.active_rule_set_id</code></li>
+<li><code>api.listen_address</code></li>
+<li><code>auth.local_enabled</code></li>
+<li><code>workers.enabled</code></li>
+<li><code>workers.concurrency</code></li>
+<li><code>modules.enabled</code></li>
+<li><code>logging.level</code></li>
+<li><code>logging.format</code></li>
+<li><code>logging.log_path</code></li>
+</ul>
+<p><code>external_databases.provider</code> принимает значения <code>postgresql</code>, <code>mysql</code> или <code>mssql</code>. <code>external_databases.engine_flavor</code> optional и принимает значения <code>standard</code> или <code>aurora</code>; он не меняет storage dialect, но используется для diagnostics, validation и operational guidance.</p>
+<h3 id="storageprofiles"><code>storage_profiles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>slot</code></li>
+<li><code>provider</code></li>
+<li><code>engine_flavor</code></li>
+<li><code>status</code></li>
+<li><code>config_payload</code></li>
+<li><code>database_fingerprint</code></li>
+<li><code>last_migrated_from_profile_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>slot</code>:</p>
+<ul>
+<li><code>current</code></li>
+<li><code>migration</code></li>
+<li><code>historical</code></li>
+</ul>
+<p>Допустимые <code>status</code>:</p>
+<ul>
+<li><code>active</code></li>
+<li><code>migration_target</code></li>
+<li><code>migration_in_progress</code></li>
+<li><code>migration_succeeded</code></li>
+<li><code>migration_failed</code></li>
+<li><code>superseded</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>одновременно может быть только один profile со <code>slot = current</code> и <code>status = active</code>;</li>
+<li><code>migration</code> profile может обновляться через <code>thelper-ctl -reconfigure</code> или <code>thelper-ctl -migrate-db</code>;</li>
+<li>active runtime использует только <code>current</code> profile;</li>
+<li>переключение active DB выполняется только после successful <code>thelper-ctl -migrate-db</code>;</li>
+<li>старая DB configuration не удаляется после переключения и остаётся historical/rollback metadata;</li>
+<li><code>config_payload</code> хранит normalized storage settings and secret refs only, not resolved secrets;</li>
+<li><code>database_fingerprint</code> не должен раскрывать DSN, path, credentials или userinfo. Stage 01 derives the health fingerprint from safe storage locator components and exposes only the opaque fingerprint through <code>GET /api/health</code>.</li>
+</ul>
+<h3 id="storageprovidersettings"><code>storage_provider_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>storage_profile_id</code></li>
+<li><code>provider</code></li>
+<li><code>workers_concurrency</code></li>
+<li><code>worker_process_limit</code></li>
+<li><code>busy_timeout</code></li>
+<li><code>lease_duration</code></li>
+<li><code>heartbeat_interval</code></li>
+<li><code>sqlite_journal_mode</code></li>
+<li><code>sqlite_foreign_keys</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>settings scoped to one storage profile/provider do not change another provider's settings;</li>
+<li>for <code>sqlite</code>, MVP requires <code>worker_process_limit = 1</code>, <code>workers_concurrency = 1</code>, <code>sqlite_journal_mode = WAL</code>, <code>sqlite_foreign_keys = true</code>;</li>
+<li>for <code>postgresql</code>, worker limits are installation-specific and may be higher than <code>sqlite</code>;</li>
+<li>provider-specific settings are applied by the selected storage adapter at runtime start.</li>
+</ul>
+<h3 id="modulestates"><code>module_states</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>module_name</code></li>
+<li><code>state</code></li>
+<li><code>pid</code></li>
+<li><code>host</code></li>
+<li><code>details</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>state</code>:</p>
+<ul>
+<li><code>starting</code></li>
+<li><code>running</code></li>
+<li><code>reloading</code></li>
+<li><code>restarting</code></li>
+<li><code>degraded</code></li>
+<li><code>stopped</code></li>
+<li><code>unavailable</code></li>
+<li><code>failed</code></li>
+</ul>
+<p><code>unavailable</code> означает, что модуль известен registry, но недоступен в текущей сборке, профиле запуска или stage реализации. <code>restart</code>/<code>reload</code> такого модуля должен возвращать controlled error.</p>
+<p>Initial module registry seed:</p>
+<ul>
+<li><code>core</code></li>
+<li><code>worker-runtime</code></li>
+<li><code>config-manager</code></li>
+<li><code>module-runtime</code></li>
+<li><code>status-monitor</code></li>
+<li><code>global-scanner</code></li>
+<li><code>repository-manager</code></li>
+<li><code>project-scanner</code></li>
+<li><code>security-validator</code></li>
+<li><code>auth</code></li>
+<li><code>web</code></li>
+</ul>
+<h3 id="jobs"><code>jobs</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_type</code></li>
+<li><code>status</code></li>
+<li><code>actor</code></li>
+<li><code>correlation_id</code></li>
+<li><code>idempotency_key</code></li>
+<li><code>parent_job_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>lock_key</code></li>
+<li><code>attempt_count</code></li>
+<li><code>max_attempts</code></li>
+<li><code>leased_by</code></li>
+<li><code>lease_expires_at</code></li>
+<li><code>heartbeat_at</code></li>
+<li><code>run_after</code></li>
+<li><code>priority</code></li>
+<li><code>payload</code></li>
+<li><code>result_payload</code></li>
+<li><code>created_at</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>error_message</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>job_type</code>:</p>
+<ul>
+<li><code>global_scan</code></li>
+<li><code>project_discovery</code></li>
+<li><code>project_scan</code></li>
+<li><code>security_validation_scan</code></li>
+<li><code>repo_clone</code></li>
+<li><code>repo_pull</code></li>
+<li><code>repo_sync</code></li>
+<li><code>config_reload</code></li>
+<li><code>module_restart</code></li>
+<li><code>scim_sync</code></li>
+</ul>
+<p>Допустимые <code>status</code>:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>idempotency_key</code> уникален для повторяемых write requests в пределах разумного TTL;</li>
+<li><code>parent_job_id</code> nullable и ссылается на parent orchestration job в <code>jobs.id</code>;</li>
+<li><code>job_group_id</code> объединяет jobs одного workflow, например <code>project_scan:&lt;project_scan_id&gt;</code>;</li>
+<li>child job должен использовать тот же <code>job_group_id</code>, что и parent job;</li>
+<li><code>lock_key</code> заполняется для операций, которые должны сериализоваться;</li>
+<li><code>leased_by</code> заполняется только после atomic claim конкретным <code>thelper-worker</code>;</li>
+<li><code>lease_expires_at</code> определяет срок владения job worker-процессом;</li>
+<li><code>heartbeat_at</code> обновляется worker-процессом во время долгого выполнения;</li>
+<li>истёкший lease позволяет вернуть job в <code>queued</code> или завершить его как <code>failed</code>, если исчерпаны <code>max_attempts</code>;</li>
+<li><code>run_after</code> используется для отложенного запуска и retry/backoff;</li>
+<li><code>attempt_count</code> не должен превышать <code>max_attempts</code>;</li>
+<li>job lease отвечает за владение конкретным job, а <code>job_locks</code> отвечают за сериализацию бизнес-ресурсов;</li>
+<li><code>payload</code> и <code>result_payload</code> имеют версионируемую JSON-схему, описанную в <a href="payload-schemas.html"><code>payload-schemas.md</code></a>;</li>
+<li>активный job имеет статус <code>queued</code> или <code>running</code>.</li>
+</ul>
+<h3 id="joblocks"><code>job_locks</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>lock_key</code></li>
+<li><code>job_id</code></li>
+<li><code>owner</code></li>
+<li><code>status</code></li>
+<li><code>created_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>released_at</code></li>
+</ul>
+<p>Допустимые <code>status</code>:</p>
+<ul>
+<li><code>held</code></li>
+<li><code>released</code></li>
+<li><code>expired</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>одновременно может существовать только один lock со статусом <code>held</code> для одного <code>lock_key</code>;</li>
+<li>для repository operations final <code>lock_key</code> строится как <code>repository:&lt;repository_id&gt;</code>, чтобы сериализовать <code>clone</code>, <code>pull</code> и <code>sync</code> между собой;</li>
+<li>clone additionally uses pre-create lock keys <code>repository-identity:&lt;provider&gt;:&lt;provider_host&gt;:&lt;full_path&gt;</code> and <code>repository-path:&lt;root_path_id&gt;:&lt;normalized_target_path&gt;</code> before a stable <code>repository_id</code> exists;</li>
+<li>released/expired repository-operation reservations are removed by an explicit cleanup storage primitive and may also be pruned opportunistically before new reservations are created;</li>
+<li>истёкшие locks не должны блокировать новые операции, но должны сохраняться для audit/debug.</li>
+</ul>
+<h3 id="projectscans"><code>project_scans</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_id</code></li>
+<li><code>project_id</code></li>
+<li><code>rule_set_id</code></li>
+<li><code>scan_type</code></li>
+<li><code>status</code></li>
+<li><code>created_at</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>result_payload</code></li>
+<li><code>error_message</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>scan_type</code>:</p>
+<ul>
+<li><code>terraform_static</code></li>
+<li><code>terraform_validate</code></li>
+<li><code>terraform_security</code></li>
+<li><code>terraform_full</code></li>
+<li><code>security_validation</code></li>
+</ul>
+<p>Допустимые <code>status</code>:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>partial</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p><code>project_scans.job_id</code> указывает на parent <code>jobs.job_type = project_scan</code>. Aggregate <code>project_scans.status</code> и <code>project_scans.result_payload</code> обновляются <code>status-monitor</code>, а не отдельными worker handlers.</p>
+<h3 id="jobevents"><code>job_events</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>job_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>event_type</code></li>
+<li><code>status</code></li>
+<li><code>worker_id</code></li>
+<li><code>metric_name</code></li>
+<li><code>metric_value</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Допустимые базовые <code>event_type</code>:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>claimed</code></li>
+<li><code>started</code></li>
+<li><code>heartbeat</code></li>
+<li><code>progress</code></li>
+<li><code>child_created</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>cancelled</code></li>
+<li><code>lease_expired</code></li>
+<li><code>retry_scheduled</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>job_events</code> описывают факты выполнения jobs и не являются aggregate state;</li>
+<li>payload не должен содержать секреты, tokens, приватные ключи или raw Terraform source;</li>
+<li>workers пишут <code>job_events</code>, а <code>status-monitor</code> строит aggregate read models.</li>
+</ul>
+<h3 id="workflowstatuses"><code>workflow_statuses</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>workflow_type</code></li>
+<li><code>workflow_id</code></li>
+<li><code>job_group_id</code></li>
+<li><code>aggregate_status</code></li>
+<li><code>progress_current</code></li>
+<li><code>progress_total</code></li>
+<li><code>summary_payload</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые базовые <code>workflow_type</code>:</p>
+<ul>
+<li><code>project_scan</code></li>
+<li><code>project_discovery</code></li>
+<li><code>global_scan</code></li>
+<li><code>repository_operation</code></li>
+<li><code>config_operation</code></li>
+<li><code>module_operation</code></li>
+<li><code>scim_sync</code></li>
+</ul>
+<p>Допустимые <code>aggregate_status</code>:</p>
+<ul>
+<li><code>queued</code></li>
+<li><code>running</code></li>
+<li><code>succeeded</code></li>
+<li><code>failed</code></li>
+<li><code>partial</code></li>
+<li><code>cancelled</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>workflow_statuses.workflow_type + workflow_id</code> unique;</li>
+<li><code>workflow_statuses.job_group_id</code> unique;</li>
+<li><code>workflow_statuses</code> являются read model, которым владеет <code>status-monitor</code>;</li>
+<li>UI и внутренние сервисы читают workflow status из aggregate read model, а не собирают его самостоятельно из child jobs.</li>
+</ul>
+<h3 id="auditlog"><code>audit_log</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>actor</code></li>
+<li><code>action</code></li>
+<li><code>entity_type</code></li>
+<li><code>entity_id</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h2 id="security-сущности">Security-сущности</h2>
+<h3 id="securityrulesets"><code>security_rule_sets</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>version</code></li>
+<li><code>source_type</code></li>
+<li><code>checksum</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>source_type</code>:</p>
+<ul>
+<li><code>bundled</code></li>
+<li><code>local_upload</code></li>
+<li><code>local_path</code></li>
+</ul>
+<h3 id="toolprofiles"><code>tool_profiles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>tool</code></li>
+<li><code>profile_id</code></li>
+<li><code>profile_version</code></li>
+<li><code>schema_version</code></li>
+<li><code>source_type</code></li>
+<li><code>source_path</code></li>
+<li><code>checksum</code></li>
+<li><code>certified_versions</code></li>
+<li><code>compatible_versions</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>tool</code> для Stage 06A/06B MVP:</p>
+<ul>
+<li><code>terraform</code></li>
+<li><code>tflint</code></li>
+<li><code>trivy</code></li>
+</ul>
+<p><code>checkov</code>, <code>gitleaks</code>, <code>opa</code> и <code>conftest</code> are extension tool/profile targets outside mandatory Stage 06A/06B MVP acceptance.</p>
+<p>Допустимые <code>source_type</code>:</p>
+<ul>
+<li><code>bundled</code></li>
+<li><code>local_upload</code></li>
+<li><code>local_path</code></li>
+<li><code>generated_candidate</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>tool + profile_id + profile_version</code> unique;</li>
+<li>активный profile выбирается по <code>tool</code>, configured version policy и discovered tool version;</li>
+<li>bundled certified profiles are required for <code>terraform validate</code>, <code>TFLint</code> and <code>Trivy</code>;</li>
+<li>profile files follow ADR 0018 and must pass validation before activation;</li>
+<li><code>generated_candidate</code> profiles created by <code>tool-profile-analyzer</code> are inactive by default and must never be selected by runtime until explicitly validated and activated;</li>
+<li>profile content must not contain raw secrets, shell fragments, arbitrary scripts or commands outside explicit version discovery and scan command templates.</li>
+</ul>
+<h3 id="toolprofilevalidationresults"><code>tool_profile_validation_results</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>tool_profile_id</code></li>
+<li><code>tool</code></li>
+<li><code>tool_version</code></li>
+<li><code>fixture_set</code></li>
+<li><code>validation_status</code></li>
+<li><code>diagnostics</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Допустимые <code>validation_status</code>:</p>
+<ul>
+<li><code>passed</code></li>
+<li><code>failed</code></li>
+<li><code>warning</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>validation results store fixture diagnostics and profile validation metadata, not raw Terraform source or secrets;</li>
+<li>activation of local/generated profiles requires at least one successful validation result for the target tool version or approved compatible version range.</li>
+</ul>
+<h3 id="securityfindings"><code>security_findings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>project_id</code></li>
+<li><code>repository_id</code></li>
+<li><code>workspace_id</code></li>
+<li><code>job_id</code></li>
+<li><code>rule_set_id</code></li>
+<li><code>check_type</code></li>
+<li><code>rule_id</code></li>
+<li><code>severity</code></li>
+<li><code>status</code></li>
+<li><code>file_path</code></li>
+<li><code>resource_ref</code></li>
+<li><code>title</code></li>
+<li><code>description</code></li>
+<li><code>remediation</code></li>
+<li><code>fingerprint</code></li>
+<li><code>fingerprint_schema_version</code></li>
+<li><code>fingerprint_components</code></li>
+<li><code>first_seen_at</code></li>
+<li><code>last_seen_at</code></li>
+<li><code>detected_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Допустимые <code>severity</code>:</p>
+<ul>
+<li><code>info</code></li>
+<li><code>low</code></li>
+<li><code>medium</code></li>
+<li><code>high</code></li>
+<li><code>critical</code></li>
+</ul>
+<p>Допустимые <code>status</code>:</p>
+<ul>
+<li><code>open</code></li>
+<li><code>accepted</code></li>
+<li><code>false_positive</code></li>
+<li><code>fixed</code></li>
+<li><code>suppressed</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>fingerprint</code> имеет формат <code>fp:v1:&lt;sha256&gt;</code> согласно ADR 0017;</li>
+<li><code>fingerprint_schema_version</code> для MVP принимает <code>security_finding.fingerprint.v1</code>;</li>
+<li><code>fingerprint_components</code> хранит canonical JSON components без секретов и raw Terraform source;</li>
+<li><code>resource_ref</code> или stable <code>finding_key</code> внутри <code>fingerprint_components</code> обязателен для persisted finding;</li>
+<li><code>first_seen_at</code> фиксирует первое обнаружение fingerprint;</li>
+<li><code>last_seen_at</code> обновляется при каждом scan, где finding присутствует;</li>
+<li><code>detected_at</code> сохраняется как backward-compatible alias/initial detection timestamp и должен совпадать с <code>first_seen_at</code> для новых rows.</li>
+</ul>
+<h2 id="auth-и-rbac-сущности">Auth и RBAC сущности</h2>
+<h3 id="users"><code>users</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>username</code></li>
+<li><code>email</code></li>
+<li><code>display_name</code></li>
+<li><code>auth_source</code></li>
+<li><code>external_id</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p><code>users</code> is the shared identity entity for local and external auth sources. Local password hashes are not stored in <code>users</code>.</p>
+<h3 id="localusercredentials"><code>local_user_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>password_hash</code></li>
+<li><code>password_hash_algorithm</code></li>
+<li><code>password_updated_at</code></li>
+<li><code>password_must_change</code></li>
+<li><code>failed_attempt_count</code></li>
+<li><code>locked_until</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>user_id</code> обязателен и unique;</li>
+<li><code>password_hash</code> хранит Argon2id PHC string;</li>
+<li><code>password_hash_algorithm</code> в MVP принимает <code>argon2id</code>;</li>
+<li>raw password никогда не сохраняется;</li>
+<li>successful login сбрасывает <code>failed_attempt_count</code>;</li>
+<li>5 consecutive failed attempts устанавливают <code>locked_until</code> на 15 минут от момента блокировки;</li>
+<li>если Argon2id PHC parameters слабее текущих defaults, hash обновляется после successful login.</li>
+</ul>
+<h3 id="passwordresettokens"><code>password_reset_tokens</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>token_hash</code></li>
+<li><code>expires_at</code></li>
+<li><code>used_at</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>reset token хранится только как hash;</li>
+<li>raw reset token никогда не сохраняется;</li>
+<li>token является one-time-use и недействителен после <code>used_at</code> или <code>expires_at</code>;</li>
+<li>завершение reset flow выставляет <code>local_user_credentials.password_must_change = true</code>, если отдельная administrative policy не задаёт другое поведение.</li>
+</ul>
+<h3 id="usersessions"><code>user_sessions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>token_hash</code></li>
+<li><code>auth_source</code></li>
+<li><code>created_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>revoked_at</code></li>
+<li><code>last_seen_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li><code>user_id</code> обязателен и ссылается на <code>users.id</code>;</li>
+<li>raw session token никогда не сохраняется;</li>
+<li><code>token_hash</code> хранит только hash opaque session token;</li>
+<li>session недействительна после <code>revoked_at</code> или <code>expires_at</code>;</li>
+<li>API responses возвращают только opaque <code>session_id</code> и safe user metadata, но не bearer token hash.</li>
+</ul>
+<h3 id="authbootstrapcredentials"><code>auth_bootstrap_credentials</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>username</code></li>
+<li><code>password_hash</code></li>
+<li><code>shown_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>used_at</code></li>
+<li><code>created_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>bootstrap user создаётся автоматически только при первом запуске <code>thelper</code> на пустой auth state;</li>
+<li>username и initial password генерируются как случайные латинские буквы и цифры длиной 16 символов каждый;</li>
+<li>password хранится только как Argon2id PHC hash через <code>local_user_credentials</code>, raw password сохраняется только в памяти до single display;</li>
+<li>credentials показываются один раз в первом запущенном UI и в stdout active runtime;</li>
+<li>stdout/UI warning должен явно указывать, что bootstrap credentials действуют 24 часа;</li>
+<li>если bootstrap user не был использован в течение 24 часов, он удаляется вместе с credentials;</li>
+<li>после истечения или удаления bootstrap user новый bootstrap user автоматически не создаётся;</li>
+<li>если auth не был настроен и bootstrap credentials истекли, восстановление требует полного удаления данных и повторного запуска для новой пустой установки.</li>
+</ul>
+<h3 id="groups"><code>groups</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>external_id</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="groupmembers"><code>group_members</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>group_id</code></li>
+<li><code>user_id</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="permissions"><code>permissions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>code</code></li>
+<li><code>scope_type</code></li>
+<li><code>description</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="roles"><code>roles</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>name</code></li>
+<li><code>scope_type</code></li>
+<li><code>description</code></li>
+<li><code>is_system</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="rolepermissions"><code>role_permissions</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>role_id</code></li>
+<li><code>permission_id</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rolebindings"><code>role_bindings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>subject_type</code></li>
+<li><code>subject_id</code></li>
+<li><code>role_id</code></li>
+<li><code>scope_type</code></li>
+<li><code>scope_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="scimidentities"><code>scim_identities</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>user_id</code></li>
+<li><code>group_id</code></li>
+<li><code>provider</code></li>
+<li><code>external_id</code></li>
+<li><code>raw_payload</code></li>
+<li><code>last_sync_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="связи-между-сущностями">Связи между сущностями</h2>
+<ul>
+<li><code>root_path</code> содержит множество найденных <code>projects</code></li>
+<li><code>project</code> может быть связан с одним <code>repository</code></li>
+<li><code>project_link</code> relates two separate <code>projects</code>, optionally through one shared <code>repository</code></li>
+<li><code>repository</code> belongs to one optional <code>repository_provider_instance</code></li>
+<li><code>repository</code> can reference one default <code>repository_credential</code></li>
+<li><code>repository_provider_instance</code> has many <code>repository_credentials</code></li>
+<li><code>project</code> может иметь несколько <code>workspaces</code></li>
+<li><code>workspace</code> принадлежит паре <code>project</code> + <code>environment</code></li>
+<li><code>project_scan</code> относится к одному <code>project</code></li>
+<li><code>security_finding</code> может ссылаться на <code>project</code>, <code>repository</code>, <code>workspace</code>, <code>job</code>, <code>security_rule_set</code></li>
+<li><code>tool_profile_validation_result</code> belongs to one <code>tool_profile</code></li>
+<li><code>job_lock</code> относится к одному активному или завершённому <code>job</code></li>
+<li><code>local_user_credentials</code> belongs to one local-auth <code>user</code></li>
+<li><code>password_reset_tokens</code> belongs to one <code>user</code></li>
+<li><code>user_sessions</code> belongs to one <code>user</code></li>
+<li><code>auth_bootstrap_credentials</code> belongs to one bootstrap <code>user</code></li>
+<li><code>role_binding</code> связывает <code>user</code> или <code>group</code> с ролью в конкретном scope</li>
+</ul>
+<h2 id="nullable-fk-и-delete-behavior">Nullable, FK и delete behavior</h2>
+<p>Минимальные правила для SQL adapters:</p>
+<ul>
+<li><code>projects.root_path_id</code> обязателен и использует <code>ON DELETE RESTRICT</code>;</li>
+<li><code>project_links.source_project_id</code> и <code>project_links.target_project_id</code> обязательны и используют <code>ON DELETE CASCADE</code>;</li>
+<li><code>project_links.repository_id</code> nullable и использует <code>ON DELETE SET NULL</code>;</li>
+<li><code>project_scan_settings.project_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>project_security_scan_settings.project_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>projects.repository_id</code>, <code>projects.environment_id</code>, <code>projects.default_workspace_id</code> nullable и используют <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.provider_instance_id</code> nullable и использует <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.default_credential_id</code> nullable и использует <code>ON DELETE SET NULL</code>;</li>
+<li><code>repositories.superseded_by_repository_id</code> nullable и использует <code>ON DELETE SET NULL</code>;</li>
+<li><code>repository_credentials.provider_instance_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>workspaces.project_id</code> и <code>workspaces.environment_id</code> обязательны и используют <code>ON DELETE CASCADE</code> для <code>project</code>, <code>ON DELETE RESTRICT</code> для <code>environment</code>;</li>
+<li><code>project_scans.job_id</code> и <code>project_scans.project_id</code> обязательны; удаление связанных <code>jobs</code> и <code>projects</code> должно использовать <code>ON DELETE RESTRICT</code>;</li>
+<li><code>job_locks.job_id</code> обязателен; удаление связанных <code>jobs</code> должно использовать <code>ON DELETE RESTRICT</code>;</li>
+<li><code>security_findings.project_id</code>, <code>security_findings.repository_id</code>, <code>security_findings.workspace_id</code>, <code>security_findings.job_id</code>, <code>security_findings.rule_set_id</code> nullable, но finding должен ссылаться хотя бы на один из <code>project_id</code>, <code>repository_id</code>, <code>workspace_id</code> или <code>job_id</code>;</li>
+<li><code>tool_profile_validation_results.tool_profile_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>local_user_credentials.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>password_reset_tokens.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>user_sessions.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>role_bindings.scope_id = NULL</code> только для <code>system</code> scope; для объектных scopes <code>scope_id</code> обязателен;</li>
+<li><code>scim_identities</code> должен ссылаться ровно на один субъект: <code>user_id</code> или <code>group_id</code>;</li>
+<li>audit records не удаляются каскадно вместе с бизнес-сущностями.</li>
+</ul>
+<h2 id="индексы-и-уникальность">Индексы и уникальность</h2>
+<p>Минимальный набор для SQL adapters:</p>
+<ul>
+<li><code>root_paths.path</code> unique;</li>
+<li><code>projects.root_path_id + projects.relative_path</code> unique;</li>
+<li><code>project_links.source_project_id + project_links.target_project_id + project_links.link_type</code> unique after canonical ordering of project ids;</li>
+<li><code>project_links.repository_id</code> indexed;</li>
+<li><code>project_scan_settings.project_id</code> unique;</li>
+<li><code>project_security_scan_settings.project_id</code> unique;</li>
+<li>provider-aware repositories use unique <code>repositories.provider + repositories.provider_host + repositories.full_path</code>;</li>
+<li>Stage 04 generic local repositories use unique <code>repositories.provider + repositories.provider_host + repositories.root_path_id + repositories.full_path</code>;</li>
+<li><code>repositories.provider_host + repositories.full_path</code> indexed;</li>
+<li><code>repositories.provider_instance_id + repositories.full_path</code> indexed;</li>
+<li><code>repositories.local_path</code> indexed;</li>
+<li><code>repositories.status</code> indexed;</li>
+<li><code>repositories.discovery_source</code> indexed;</li>
+<li><code>repositories.superseded_by_repository_id</code> indexed;</li>
+<li><code>repository_provider_instances.provider + repository_provider_instances.provider_host</code> unique;</li>
+<li><code>repository_credentials.provider_instance_id + repository_credentials.name</code> unique;</li>
+<li><code>repository_credentials.provider_instance_id + repository_credentials.auth_type</code> indexed;</li>
+<li><code>ignore_rules.scope_type + ignore_rules.scope_id + ignore_rules.pattern</code> unique;</li>
+<li><code>environments.code</code> unique;</li>
+<li><code>workspaces.project_id + workspaces.name</code> unique;</li>
+<li><code>config_entries.key + config_entries.scope</code> unique;</li>
+<li><code>jobs.idempotency_key</code> unique where not null;</li>
+<li><code>jobs.parent_job_id</code> indexed;</li>
+<li><code>jobs.job_group_id + jobs.status</code> indexed;</li>
+<li><code>jobs.lock_key + jobs.status</code> indexed for active job lookup;</li>
+<li><code>jobs.status + run_after + priority + created_at</code> indexed for worker claim;</li>
+<li><code>jobs.lease_expires_at</code> indexed for expired lease recovery;</li>
+<li><code>jobs.leased_by + status</code> indexed for worker diagnostics;</li>
+<li><code>job_locks.lock_key</code> unique where <code>status = held</code>;</li>
+<li><code>project_scans.job_id</code> unique;</li>
+<li><code>project_scans.project_id + project_scans.status</code> indexed;</li>
+<li><code>job_events.job_group_id + job_events.created_at</code> indexed;</li>
+<li><code>job_events.job_id + job_events.created_at</code> indexed;</li>
+<li><code>workflow_statuses.workflow_type + workflow_statuses.workflow_id</code> unique;</li>
+<li><code>workflow_statuses.job_group_id</code> unique;</li>
+<li><code>security_findings.fingerprint</code> unique;</li>
+<li><code>security_findings.rule_set_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.project_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.repository_id + security_findings.status</code> indexed;</li>
+<li><code>security_findings.job_id</code> indexed;</li>
+<li><code>security_findings.severity + security_findings.status</code> indexed;</li>
+<li><code>tool_profiles.tool + tool_profiles.profile_id + tool_profiles.profile_version</code> unique;</li>
+<li><code>tool_profiles.tool + tool_profiles.active</code> indexed;</li>
+<li><code>tool_profile_validation_results.tool_profile_id + tool_profile_validation_results.tool_version</code> indexed;</li>
+<li><code>tool_profile_validation_results.validation_status</code> indexed;</li>
+<li><code>users.username</code> unique;</li>
+<li><code>users.email</code> unique where not null;</li>
+<li><code>local_user_credentials.user_id</code> unique;</li>
+<li><code>password_reset_tokens.user_id + expires_at</code> indexed;</li>
+<li><code>password_reset_tokens.expires_at</code> indexed;</li>
+<li><code>user_sessions.user_id + expires_at</code> indexed;</li>
+<li><code>user_sessions.token_hash</code> unique;</li>
+<li><code>user_sessions.expires_at</code> indexed;</li>
+<li><code>groups.name</code> unique;</li>
+<li><code>permissions.code</code> unique;</li>
+<li><code>roles.name + roles.scope_type</code> unique;</li>
+<li><code>role_bindings.subject_type + role_bindings.subject_id + role_bindings.role_id + role_bindings.scope_type + role_bindings.scope_id</code> unique.</li>
+</ul>
+<h2 id="cross-storage-правила">Cross-storage правила</h2>
+<ul>
+<li>SQL/SQL-like backends реализуют инварианты через миграции, constraints и индексы там, где это поддерживается.</li>
+<li>MVP storage adapters: <code>PostgreSQL</code> и <code>SQLite</code>.</li>
+<li>Platform storage adapters: <code>MySQL</code> и <code>MSSQL</code>.</li>
+<li>Aurora PostgreSQL поддерживается через <code>postgresql</code> adapter; Aurora MySQL поддерживается через <code>mysql</code> adapter.</li>
+<li>Babelfish for Aurora PostgreSQL не считается <code>mssql</code> adapter target без отдельного compatibility decision.</li>
+<li>Все SQL adapters используют синхронизированные logical migration versions с dialect-specific SQL.</li>
+<li>Adapters с ограниченной поддержкой SQL constraints должны дублировать критичные проверки на уровне приложения.</li>
+<li>Время хранится в UTC.</li>
+<li>Идентификаторы должны быть opaque для API consumers.</li>
+<li><code>payload</code>, <code>details</code> и <code>result_payload</code> должны иметь версионируемую JSON-схему, описанную в <a href="payload-schemas.html"><code>payload-schemas.md</code></a>.</li>
+</ul>
+<h2 id="дизайн-заметки">Дизайн-заметки</h2>
+<ul>
+<li>модель остаётся общей для SQL и non-SQL backends;</li>
+<li>SQL-адаптеры должны поддерживать миграции;</li>
+<li>критичные инварианты должны валидироваться и на уровне storage, и на уровне приложения;</li>
+<li>findings и project scans лучше проектировать как append-oriented сущности с явным статусом и timestamps.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Связанные документы</h2>
+          <div class="doc-relation-links">
+            <a href="payload-schemas.html"><span>Core Docs</span>Payload schemas</a>
+          </div>
+        </section>
+<section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html"><span>Implementation Specs</span>Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html"><span>Implementation Specs</span>Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html"><span>Implementation Specs</span>Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html"><span>Implementation Specs</span>Stage 07: Auth, RBAC, SCIM and Audit</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html" aria-current="page">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="data-model.html">Русская страница</a>
+      <a href="en/data-model.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/data-model.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

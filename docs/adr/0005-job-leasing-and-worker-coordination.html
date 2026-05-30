@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ADR 0005: Job leasing and worker coordination - T-Helper documentation.">
+    <title>ADR 0005: Job leasing and worker coordination - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="0005-job-leasing-and-worker-coordination.html">
+    <link rel="alternate" hreflang="en" href="../en/adr/0005-job-leasing-and-worker-coordination.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="../index.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="../index.html#docs">Документы</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="is-active" href="0005-job-leasing-and-worker-coordination.html" aria-current="page">RU</a>
+        <a class="" href="../en/adr/0005-job-leasing-and-worker-coordination.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/adr/0005-job-leasing-and-worker-coordination.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="../index.html">T-Helper Docs</a>
+        <span>adr/0005-job-leasing-and-worker-coordination.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#adr-0005-job-leasing-and-worker-coordination">ADR 0005: Job leasing and worker coordination</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#rationale">Rationale</a>
+<a class="toc-level-2" href="#required-job-fields">Required job fields</a>
+<a class="toc-level-2" href="#worker-behavior">Worker behavior</a>
+<a class="toc-level-2" href="#expired-leases">Expired leases</a>
+<a class="toc-level-2" href="#storage-specific-claim-semantics">Storage-specific claim semantics</a>
+<a class="toc-level-2" href="#consequences">Consequences</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="adr-0005-job-leasing-and-worker-coordination">ADR 0005: Job leasing and worker coordination</h1>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="decision">Decision</h2>
+<p><code>thelper-worker</code> processes must claim jobs through a storage-level atomic lease before executing them.</p>
+<p>Job leasing is separate from <code>job_locks</code>:</p>
+<ul>
+<li>job lease controls ownership of a specific <code>jobs.id</code>;</li>
+<li><code>job_locks</code> protect business resources such as <code>repository:&lt;repository_id&gt;</code>.</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>Multiple worker processes can see the same queued job. Without an atomic claim/lease mechanism, more than one worker could execute the same job.</p>
+<p><code>job_locks</code> are not enough because they serialize domain resources, not ownership of the job row itself.</p>
+<h2 id="required-job-fields">Required job fields</h2>
+<p>The <code>jobs</code> entity must include:</p>
+<ul>
+<li><code>attempt_count</code>;</li>
+<li><code>max_attempts</code>;</li>
+<li><code>leased_by</code>;</li>
+<li><code>lease_expires_at</code>;</li>
+<li><code>heartbeat_at</code>;</li>
+<li><code>run_after</code>;</li>
+<li><code>priority</code>.</li>
+</ul>
+<h2 id="worker-behavior">Worker behavior</h2>
+<p>Worker execution flow:</p>
+<ol>
+<li>Atomically claim one eligible queued job.</li>
+<li>Set <code>status = running</code>, <code>leased_by</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, and increment <code>attempt_count</code>.</li>
+<li>If the job has <code>lock_key</code>, acquire the corresponding <code>job_lock</code>.</li>
+<li>Execute the job handler.</li>
+<li>Periodically heartbeat while the job is running.</li>
+<li>Save <code>result_payload</code>.</li>
+<li>Release business <code>job_lock</code>, if acquired.</li>
+<li>Mark the job <code>succeeded</code> or <code>failed</code>.</li>
+</ol>
+<p>If a business lock cannot be acquired, the worker must clear the lease, return the job to <code>queued</code>, and set <code>run_after</code> using a short backoff.</p>
+<h2 id="expired-leases">Expired leases</h2>
+<p>Workers must recover expired leases:</p>
+<ul>
+<li>if <code>status = running</code> and <code>lease_expires_at</code> is in the past, the job is considered abandoned;</li>
+<li>if <code>attempt_count &lt; max_attempts</code>, the job is returned to <code>queued</code> with <code>run_after</code> backoff;</li>
+<li>if attempts are exhausted, the job is marked <code>failed</code>.</li>
+</ul>
+<h2 id="storage-specific-claim-semantics">Storage-specific claim semantics</h2>
+<p>PostgreSQL should use row-level locking such as <code>FOR UPDATE SKIP LOCKED</code>.</p>
+<p>SQLite should use a short write transaction and conditional update. The adapter must verify affected rows to ensure only one worker claimed the job.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Stage 03 must implement claim, heartbeat, lease expiry recovery, retry/backoff, and graceful worker shutdown.</li>
+<li><code>job_locks</code> remain required for repository and other conflict-prone domain operations.</li>
+<li>Worker logs and job results must include <code>worker_id</code> for diagnostics.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="../implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="../implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="../implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="../implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="../implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="../implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="../implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="../implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="../implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="../implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="../implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="../implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="../implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="../implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="../implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="../implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="../implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="../implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="../implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="0005-job-leasing-and-worker-coordination.html" aria-current="page">ADR 0005: Job leasing and worker coordination</a>
+<a href="0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="0005-job-leasing-and-worker-coordination.html">Русская страница</a>
+      <a href="../en/adr/0005-job-leasing-and-worker-coordination.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/adr/0005-job-leasing-and-worker-coordination.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

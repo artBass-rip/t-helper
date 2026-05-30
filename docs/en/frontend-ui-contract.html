@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Frontend UI Delivery Contract - T-Helper documentation.">
+    <title>Frontend UI Delivery Contract - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../frontend-ui-contract.html">
+    <link rel="alternate" hreflang="en" href="frontend-ui-contract.html">
+    <link rel="icon" href="../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../en.html#docs">Docs</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../frontend-ui-contract.html">RU</a>
+        <a class="is-active" href="frontend-ui-contract.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/frontend-ui-contract.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../en.html">T-Helper Docs</a>
+        <span>frontend-ui-contract.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#frontend-ui-delivery-contract">Frontend UI Delivery Contract</a>
+<a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#route-map">Route Map</a>
+<a class="toc-level-2" href="#navigation-model">Navigation Model</a>
+<a class="toc-level-2" href="#operational-density">Operational Density</a>
+<a class="toc-level-2" href="#tauri-gui-policy">Tauri GUI Policy</a>
+<a class="toc-level-2" href="#stage-08-entry-decisions">Stage 08 Entry Decisions</a>
+<a class="toc-level-2" href="#stage-08-exit-decisions">Stage 08 Exit Decisions</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="frontend-ui-delivery-contract">Frontend UI Delivery Contract</h1>
+<h2 id="purpose">Purpose</h2>
+<p>This document records the Stage 08 UI contract for the unified <code>Web UI</code> and local <code>GUI</code>. The goal is to prevent divergence in route tree, navigation model, density and runtime assumptions between the browser UI and the Tauri shell.</p>
+<p><code>Web UI</code> and <code>GUI</code> use one React/TypeScript codebase, one typed API client and one documented backend API. Differences are allowed only where the local nature of the <code>GUI</code> explicitly affects runtime discovery/startup.</p>
+<h2 id="route-map">Route Map</h2>
+<p>Top-level route tree for the Stage 08 MVP:</p>
+<pre><code class="language-text">/projects
+/projects/:id
+/repositories
+/repositories/:id
+/scans
+/project-scans/:id
+/findings
+/jobs
+/modules
+/config
+/audit
+/auth/users
+/auth/groups
+/auth/roles
+/auth/role-bindings</code></pre>
+<p>Stage 08 includes full MVP administrative screens for auth, RBAC, configuration and security rule sets when their backend APIs are part of the MVP release. Stage 12 hardens and extends these administrative surfaces for platform-only capabilities such as full SCIM sync management, advanced tool profile administration and additional release-scope controls.</p>
+<p>Route rules:</p>
+<ul>
+<li><code>Web UI</code> and <code>GUI</code> use one route tree;</li>
+<li>a route available in the <code>Web UI</code> must be available in the <code>GUI</code> for the same release scope, unless explicitly marked local-only or unavailable by backend API scope;</li>
+<li>frontend-only backend routes are forbidden;</li>
+<li>object detail routes use tabs for subviews instead of separate unrelated page shells;</li>
+<li>query parameters may hold filters, sorting, pagination cursors and selected tabs when this improves shareability/debugging.</li>
+</ul>
+<h2 id="navigation-model">Navigation Model</h2>
+<ul>
+<li>left sidebar for top-level operational areas;</li>
+<li>content header with title, object identity, status and primary actions;</li>
+<li>tabs for object detail subviews;</li>
+<li>tables for list-heavy resources;</li>
+<li>drawers or modals for focused create/edit flows;</li>
+<li>confirmation dialogs for operations that create jobs or change runtime state;</li>
+<li>long-running operations show <code>job_id</code>, status, latest event and links to job/status details;</li>
+<li>access-denied and unauthenticated states are first-class UI states, not generic errors.</li>
+</ul>
+<h2 id="operational-density">Operational Density</h2>
+<p>Stage 08 UI is an operational tool, not a landing page.</p>
+<p>Rules:</p>
+<ul>
+<li>default density is compact;</li>
+<li>list pages are table-first;</li>
+<li>filters are compact, persistent and close to the table they affect;</li>
+<li>cards are allowed for repeated summary items only when they improve scanning;</li>
+<li>nested cards are not allowed;</li>
+<li>no marketing hero or landing page is used as the first screen;</li>
+<li>dashboard summaries must link to concrete operational lists or objects;</li>
+<li>table rows must expose status, ownership/context and primary actions without requiring navigation for every common check;</li>
+<li>forms use documented backend schemas and client-side Zod validation.</li>
+</ul>
+<h2 id="tauri-gui-policy">Tauri GUI Policy</h2>
+<ul>
+<li><code>GUI</code> is local-only;</li>
+<li>remote access to <code>GUI</code> is unsupported;</li>
+<li><code>GUI</code> uses the same API client and route tree as <code>Web UI</code>;</li>
+<li><code>GUI</code> discovers runtime through runtime lock file plus <code>GET /api/health</code>;</li>
+<li>if runtime is absent, <code>GUI</code> may start local <code>thelper</code>;</li>
+<li>detailed runtime state uses authenticated <code>/api/status</code>, not <code>/api/health</code>;</li>
+<li>packaging/signing targets must be listed before release artifact publication;</li>
+<li>development builds may be unsigned if explicitly documented as non-release artifacts.</li>
+</ul>
+<h2 id="stage-08-entry-decisions">Stage 08 Entry Decisions</h2>
+<p>Stage 08 entry decisions accepted by Stage 00:</p>
+<ul>
+<li>this route map;</li>
+<li>navigation model;</li>
+<li>operational density rules;</li>
+<li>Tauri local runtime discovery/start policy for supported local OS targets.</li>
+</ul>
+<p>Changes to these decisions require updating this document together with <a href="implementation-specs/stage-00-delivery-contract.html"><code>docs/en/implementation-specs/stage-00-delivery-contract.md</code></a>, <a href="roadmap.html"><code>docs/en/roadmap.md</code></a> and <a href="traceability.html"><code>docs/en/traceability.md</code></a> where affected.</p>
+<h2 id="stage-08-exit-decisions">Stage 08 Exit Decisions</h2>
+<p>Release artifact publication requires:</p>
+<ul>
+<li>supported desktop OS targets listed;</li>
+<li>packaging/signing policy accepted;</li>
+<li>update/distribution channel policy documented or explicitly deferred.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="roadmap.html"><span>Core Docs</span>Roadmap и приёмка</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="architecture.html"><span>Core Docs</span>Архитектура T-Helper</a>
+<a href="github-pages.html"><span>Core Docs</span>GitHub Pages</a>
+<a href="roadmap.html"><span>Core Docs</span>Roadmap и приёмка</a>
+<a href="technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-00-delivery-contract.html"><span>Implementation Specs</span>Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html"><span>Implementation Specs</span>Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html"><span>Implementation Specs</span>Stage 12: Admin UI Hardening</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html" aria-current="page">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../frontend-ui-contract.html">Русская страница</a>
+      <a href="frontend-ui-contract.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/frontend-ui-contract.md">Source Markdown</a>
+    </footer>
+
+    <script src="../pages.js"></script>
+  </body>
+</html>

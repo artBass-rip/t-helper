@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Payload schemas - T-Helper documentation.">
+    <title>Payload schemas - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="payload-schemas.html">
+    <link rel="alternate" hreflang="en" href="en/payload-schemas.html">
+    <link rel="icon" href="assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">К содержанию</a>
+
+    <header class="site-header doc-header" aria-label="Навигация документации">
+      <a class="brand" href="index.html" aria-label="T-Helper">
+        <img class="brand-mark" src="assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Разделы документации">
+        <a href="index.html#docs">Документы</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="is-active" href="payload-schemas.html" aria-current="page">RU</a>
+        <a class="" href="en/payload-schemas.html">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/payload-schemas.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Навигация по документу">
+        <a class="doc-home" href="index.html">T-Helper Docs</a>
+        <span>payload-schemas.md</span>
+        <nav class="doc-global-links" aria-label="Ключевые документы">
+          <a href="requirements.html">Requirements</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="api.html">API</a>
+          <a href="data-model.html">Data model</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#payload-schemas">Payload schemas</a>
+<a class="toc-level-2" href="#общие-правила">Общие правила</a>
+<a class="toc-level-2" href="#jobs-payloads">Jobs payloads</a>
+<a class="toc-level-3" href="#jobsglobalscanpayloadv1">jobs.global_scan.payload.v1</a>
+<a class="toc-level-3" href="#jobsglobalscanresultv1">jobs.global_scan.result.v1</a>
+<a class="toc-level-3" href="#jobsprojectdiscoverypayloadv1">jobs.project_discovery.payload.v1</a>
+<a class="toc-level-3" href="#jobsprojectdiscoveryresultv1">jobs.project_discovery.result.v1</a>
+<a class="toc-level-3" href="#jobsprojectscanpayloadv1">jobs.project_scan.payload.v1</a>
+<a class="toc-level-3" href="#jobsprojectscanresultv1">jobs.project_scan.result.v1</a>
+<a class="toc-level-3" href="#jobssecurityvalidationscanpayloadv1">jobs.security_validation_scan.payload.v1</a>
+<a class="toc-level-3" href="#jobssecurityvalidationscanresultv1">jobs.security_validation_scan.result.v1</a>
+<a class="toc-level-3" href="#jobsrepoclonepayloadv1">jobs.repo_clone.payload.v1</a>
+<a class="toc-level-3" href="#jobsrepooperationresultv1">jobs.repo_operation.result.v1</a>
+<a class="toc-level-3" href="#jobsrepopullpayloadv1">jobs.repo_pull.payload.v1</a>
+<a class="toc-level-3" href="#jobsreposyncpayloadv1">jobs.repo_sync.payload.v1</a>
+<a class="toc-level-3" href="#jobsconfigreloadpayloadv1">jobs.config_reload.payload.v1</a>
+<a class="toc-level-3" href="#jobsconfigreloadresultv1">jobs.config_reload.result.v1</a>
+<a class="toc-level-3" href="#jobsfailureresultv1">jobs.failure.result.v1</a>
+<a class="toc-level-3" href="#configimportresultv1">config_import.result.v1</a>
+<a class="toc-level-3" href="#configreloadresultv1">config_reload.result.v1</a>
+<a class="toc-level-3" href="#jobsmodulerestartpayloadv1">jobs.module_restart.payload.v1</a>
+<a class="toc-level-3" href="#jobsmodulerestartresultv1">jobs.module_restart.result.v1</a>
+<a class="toc-level-3" href="#modulerestartresultv1">module_restart.result.v1</a>
+<a class="toc-level-3" href="#modulereloadresultv1">module_reload.result.v1</a>
+<a class="toc-level-3" href="#storagemigrationresultv1">storage_migration.result.v1</a>
+<a class="toc-level-3" href="#jobsscimsyncpayloadv1">jobs.scim_sync.payload.v1</a>
+<a class="toc-level-3" href="#jobsscimsyncresultv1">jobs.scim_sync.result.v1</a>
+<a class="toc-level-2" href="#project-scan-result-payload">Project scan result payload</a>
+<a class="toc-level-2" href="#security-finding-fingerprint">Security finding fingerprint</a>
+<a class="toc-level-2" href="#status-schemas">Status schemas</a>
+<a class="toc-level-3" href="#jobeventspayloadv1">job_events.payload.v1</a>
+<a class="toc-level-3" href="#workflowstatussummaryv1">workflow_status.summary.v1</a>
+<a class="toc-level-2" href="#module-state-details">Module state details</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="payload-schemas">Payload schemas</h1>
+<p>Документ фиксирует минимальные JSON payload/result contracts для <code>jobs.payload</code>, <code>jobs.result_payload</code>, <code>project_scans.result_payload</code>, <code>module_states.details</code> и audit/config-related structured fields.</p>
+<h2 id="общие-правила">Общие правила</h2>
+<ul>
+<li>Каждый structured payload должен содержать <code>schema_version</code>.</li>
+<li><code>schema_version</code> именуется как <code>&lt;domain&gt;.&lt;operation&gt;.v&lt;major&gt;</code>, например <code>jobs.global_scan.payload.v1</code>.</li>
+<li>Backward-compatible additions допускаются в рамках того же major version.</li>
+<li>Breaking changes требуют нового major version и миграции reader'ов.</li>
+<li>Payload не должен содержать секреты, tokens, приватные ключи или raw Terraform source.</li>
+<li>Payload не должен содержать raw passwords, password hashes, password reset tokens или reset token hashes.</li>
+<li>Поля <code>actor</code>, <code>correlation_id</code>, <code>idempotency_key</code> хранятся на уровне <code>jobs</code>, но могут дублироваться в payload только если это нужно для межмодульного сообщения.</li>
+<li>Worker execution metadata хранится на уровне <code>jobs</code> (<code>leased_by</code>, <code>attempt_count</code>, <code>lease_expires_at</code>, <code>heartbeat_at</code>, <code>run_after</code>) и может дублироваться в <code>result_payload</code> только для диагностики без секретов.</li>
+<li>Result payload для failed jobs должен использовать <code>jobs.failure.result.v1</code>, если job-specific failed result schema явно не описана.</li>
+<li>Jobs должны публиковать status events/metrics в <code>job_events</code>; aggregate workflow status хранится в <code>workflow_statuses</code>. Runtime heartbeat freshness is stored on <code>jobs.heartbeat_at</code>; heartbeat events are bounded diagnostics and are not required for every heartbeat tick.</li>
+</ul>
+<h2 id="jobs-payloads">Jobs payloads</h2>
+<h3 id="jobsglobalscanpayloadv1"><code>jobs.global_scan.payload.v1</code></h3>
+<p>MVP supports only <code>follow_symlinks = false</code>. <code>true</code> is reserved for a future hardening stage and must not be accepted unless that capability is explicitly implemented.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.global_scan.payload.v1&quot;,
+  &quot;root_path_ids&quot;: [&quot;root_path_opaque_id&quot;],
+  &quot;reason&quot;: &quot;manual&quot;,
+  &quot;follow_symlinks&quot;: false,
+  &quot;ignore_rules_snapshot_id&quot;: &quot;ignore_snapshot_opaque_id&quot;
+}</code></pre>
+<h3 id="jobsglobalscanresultv1"><code>jobs.global_scan.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.global_scan.result.v1&quot;,
+  &quot;root_path_ids&quot;: [&quot;root_path_opaque_id&quot;],
+  &quot;projects_created&quot;: 0,
+  &quot;projects_updated&quot;: 0,
+  &quot;projects_marked_missing&quot;: 0,
+  &quot;project_discovery_jobs_enqueued&quot;: 0,
+  &quot;directories_skipped&quot;: 0,
+  &quot;symlinks_skipped&quot;: 0,
+  &quot;errors_count&quot;: 0
+}</code></pre>
+<h3 id="jobsprojectdiscoverypayloadv1"><code>jobs.project_discovery.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.project_discovery.payload.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;root_path_id&quot;: &quot;root_path_opaque_id&quot;,
+  &quot;relative_path&quot;: &quot;team/service&quot;,
+  &quot;reason&quot;: &quot;global_scan&quot;
+}</code></pre>
+<h3 id="jobsprojectdiscoveryresultv1"><code>jobs.project_discovery.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.project_discovery.result.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;git_repository_detected&quot;: true,
+  &quot;repository_id&quot;: &quot;repository_opaque_id&quot;,
+  &quot;repository_created&quot;: false,
+  &quot;repository_updated&quot;: true,
+  &quot;linked_project_ids&quot;: [&quot;project_other_opaque_id&quot;],
+  &quot;links_created&quot;: 1,
+  &quot;git_marker_type&quot;: &quot;.git_directory&quot;
+}</code></pre>
+<h3 id="jobsprojectscanpayloadv1"><code>jobs.project_scan.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.project_scan.payload.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;project_scan_id&quot;: &quot;project_scan_opaque_id&quot;,
+  &quot;scan_type&quot;: &quot;terraform_full&quot;,
+  &quot;rule_set_id&quot;: &quot;rule_set_opaque_id&quot;,
+  &quot;reason&quot;: &quot;manual&quot;,
+  &quot;security_validation_requested&quot;: true
+}</code></pre>
+<h3 id="jobsprojectscanresultv1"><code>jobs.project_scan.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.project_scan.result.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;project_scan_id&quot;: &quot;project_scan_opaque_id&quot;,
+  &quot;tools&quot;: [
+    {
+      &quot;tool&quot;: &quot;terraform&quot;,
+      &quot;tool_version&quot;: &quot;1.8.5&quot;,
+      &quot;profile_id&quot;: &quot;terraform-validate-json-v1&quot;,
+      &quot;profile_version&quot;: &quot;1.0.0&quot;,
+      &quot;compatibility_status&quot;: &quot;certified&quot;,
+      &quot;certification_status&quot;: &quot;certified&quot;
+    }
+  ],
+  &quot;providers_count&quot;: 0,
+  &quot;findings_created&quot;: 0,
+  &quot;findings_updated&quot;: 0,
+  &quot;checks_succeeded&quot;: 0,
+  &quot;checks_failed&quot;: 0
+}</code></pre>
+<h3 id="jobssecurityvalidationscanpayloadv1"><code>jobs.security_validation_scan.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.security_validation_scan.payload.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;project_scan_id&quot;: &quot;project_scan_opaque_id&quot;,
+  &quot;enabled_modules&quot;: [&quot;trivy&quot;, &quot;gitleaks&quot;, &quot;checkov&quot;, &quot;opa&quot;, &quot;conftest&quot;],
+  &quot;validate_code&quot;: true,
+  &quot;rule_set_id&quot;: &quot;rule_set_opaque_id&quot;,
+  &quot;reason&quot;: &quot;manual&quot;,
+  &quot;parent_job_id&quot;: &quot;job_parent_opaque_id&quot;
+}</code></pre>
+<h3 id="jobssecurityvalidationscanresultv1"><code>jobs.security_validation_scan.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.security_validation_scan.result.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;project_scan_id&quot;: &quot;project_scan_opaque_id&quot;,
+  &quot;tools&quot;: [
+    {
+      &quot;tool&quot;: &quot;trivy&quot;,
+      &quot;tool_version&quot;: &quot;0.60.0&quot;,
+      &quot;profile_id&quot;: &quot;trivy-terraform-misconfig-json-v1&quot;,
+      &quot;profile_version&quot;: &quot;1.0.0&quot;,
+      &quot;compatibility_status&quot;: &quot;certified&quot;,
+      &quot;certification_status&quot;: &quot;certified&quot;
+    }
+  ],
+  &quot;modules_succeeded&quot;: 0,
+  &quot;modules_failed&quot;: 0,
+  &quot;findings_created&quot;: 0,
+  &quot;findings_updated&quot;: 0
+}</code></pre>
+<p>Tool result metadata records the discovered tool version and selected profile without storing raw tool output. <code>compatibility_status</code> accepts <code>certified</code>, <code>compatible</code>, <code>unsupported</code> or <code>unknown</code>. <code>certification_status</code> accepts <code>certified</code> or <code>uncertified</code>.</p>
+<h3 id="jobsrepoclonepayloadv1"><code>jobs.repo_clone.payload.v1</code></h3>
+<p><code>clone_url</code> is optional transport metadata. It must be safe-normalized and must not contain credentials, tokens, passwords or other userinfo. Repository identity is resolved from <code>provider</code>, <code>provider_host</code> and <code>full_path</code>; provider URL parsing follows ADR 0016.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.repo_clone.payload.v1&quot;,
+  &quot;repository_id&quot;: &quot;repository_opaque_id&quot;,
+  &quot;provider_instance_id&quot;: &quot;provider_instance_opaque_id&quot;,
+  &quot;credential_id&quot;: &quot;credential_opaque_id&quot;,
+  &quot;provider&quot;: &quot;gitlab&quot;,
+  &quot;provider_host&quot;: &quot;git.example.local&quot;,
+  &quot;protocol&quot;: &quot;ssh&quot;,
+  &quot;clone_scope&quot;: &quot;single_repository&quot;,
+  &quot;clone_url&quot;: &quot;ssh://git.example.local/group/repo.git&quot;,
+  &quot;group_path&quot;: null,
+  &quot;full_path&quot;: &quot;group/repo&quot;,
+  &quot;root_path_id&quot;: &quot;root_path_opaque_id&quot;,
+  &quot;new_root_path&quot;: null,
+  &quot;target_directory&quot;: &quot;team-a/services&quot;,
+  &quot;new_target_directory&quot;: null,
+  &quot;reason&quot;: &quot;manual&quot;
+}</code></pre>
+<h3 id="jobsrepooperationresultv1"><code>jobs.repo_operation.result.v1</code></h3>
+<p>Used by <code>repo_clone</code>, <code>repo_pull</code> and <code>repo_sync</code>.</p>
+<p><code>local_path</code> is persisted result metadata. Result payloads must not include credential-bearing clone URLs.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.repo_operation.result.v1&quot;,
+  &quot;repository_id&quot;: &quot;repository_opaque_id&quot;,
+  &quot;provider_instance_id&quot;: &quot;provider_instance_opaque_id&quot;,
+  &quot;credential_id&quot;: &quot;credential_opaque_id&quot;,
+  &quot;operation&quot;: &quot;repo_clone&quot;,
+  &quot;root_path_id&quot;: &quot;root_path_opaque_id&quot;,
+  &quot;provider&quot;: &quot;gitlab&quot;,
+  &quot;provider_host&quot;: &quot;git.example.local&quot;,
+  &quot;protocol&quot;: &quot;ssh&quot;,
+  &quot;local_path&quot;: &quot;/srv/git-roots/team-a/group/repo&quot;,
+  &quot;repositories_created&quot;: 1,
+  &quot;before_revision&quot;: null,
+  &quot;after_revision&quot;: &quot;git_revision&quot;,
+  &quot;changed&quot;: true
+}</code></pre>
+<h3 id="jobsrepopullpayloadv1"><code>jobs.repo_pull.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.repo_pull.payload.v1&quot;,
+  &quot;repository_id&quot;: &quot;repository_opaque_id&quot;,
+  &quot;credential_id&quot;: &quot;credential_opaque_id&quot;,
+  &quot;reason&quot;: &quot;manual&quot;
+}</code></pre>
+<h3 id="jobsreposyncpayloadv1"><code>jobs.repo_sync.payload.v1</code></h3>
+<p>Stage 05 MVP handles <code>repo_sync</code> as a pull-only repository operation. It does not orchestrate project discovery, project scans or security validation scans; those workflows are owned by later stages.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.repo_sync.payload.v1&quot;,
+  &quot;repository_id&quot;: &quot;repository_opaque_id&quot;,
+  &quot;credential_id&quot;: &quot;credential_opaque_id&quot;,
+  &quot;reason&quot;: &quot;webhook&quot;
+}</code></pre>
+<h3 id="jobsconfigreloadpayloadv1"><code>jobs.config_reload.payload.v1</code></h3>
+<p>Stage 03 job-backed config reload payload. Stage 02 uses the synchronous <code>config_reload.result.v1</code> response shape below without creating a <code>jobs</code> row.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.config_reload.payload.v1&quot;,
+  &quot;keys&quot;: [&quot;scanning.global_scan&quot;, &quot;logging.level&quot;],
+  &quot;reason&quot;: &quot;manual&quot;
+}</code></pre>
+<h3 id="jobsconfigreloadresultv1"><code>jobs.config_reload.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.config_reload.result.v1&quot;,
+  &quot;accepted_keys&quot;: [&quot;logging.level&quot;],
+  &quot;applied_keys&quot;: [],
+  &quot;restart_required_keys&quot;: [&quot;api.listen_address&quot;],
+  &quot;failed_keys&quot;: []
+}</code></pre>
+<h3 id="jobsfailureresultv1"><code>jobs.failure.result.v1</code></h3>
+<p>Default failed job result payload. It is used unless a job-specific failed result schema is explicitly documented.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.failure.result.v1&quot;,
+  &quot;job_type&quot;: &quot;module_restart&quot;,
+  &quot;worker_id&quot;: &quot;host:12345:worker_uuid&quot;,
+  &quot;attempt&quot;: 1,
+  &quot;error_code&quot;: &quot;validation_error&quot;,
+  &quot;message&quot;: &quot;module_name is required&quot;,
+  &quot;retryable&quot;: false
+}</code></pre>
+<p><code>error_code</code> is machine-readable. Stage 03 baseline values are <code>validation_error</code>, <code>unknown_job_type</code>, <code>lock_contention</code>, <code>transient_error</code>, <code>handler_failed</code> and <code>cancelled</code>.</p>
+<h3 id="configimportresultv1"><code>config_import.result.v1</code></h3>
+<p>Stage 02 synchronous config import result.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;config_import.result.v1&quot;,
+  &quot;applied_keys&quot;: [&quot;logging.level&quot;, &quot;modules.enabled&quot;],
+  &quot;restart_required_keys&quot;: [&quot;api.listen_address&quot;],
+  &quot;ignore_rules&quot;: [
+    {
+      &quot;scope_type&quot;: &quot;system&quot;,
+      &quot;pattern&quot;: &quot;.terraform/&quot;,
+      &quot;origin&quot;: &quot;config_import&quot;
+    }
+  ]
+}</code></pre>
+<h3 id="configreloadresultv1"><code>config_reload.result.v1</code></h3>
+<p>Stage 02 synchronous config reload result.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;config_reload.result.v1&quot;,
+  &quot;accepted_keys&quot;: [&quot;logging.level&quot;, &quot;modules.enabled&quot;],
+  &quot;applied_keys&quot;: [&quot;modules.enabled&quot;],
+  &quot;restart_required_keys&quot;: [&quot;api.listen_address&quot;],
+  &quot;failed_keys&quot;: []
+}</code></pre>
+<p>For an explicit request with unknown keys:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;config_reload.result.v1&quot;,
+  &quot;accepted_keys&quot;: [],
+  &quot;applied_keys&quot;: [],
+  &quot;restart_required_keys&quot;: [],
+  &quot;failed_keys&quot;: [&quot;logging.levl&quot;]
+}</code></pre>
+<h3 id="jobsmodulerestartpayloadv1"><code>jobs.module_restart.payload.v1</code></h3>
+<p>Stage 03 job-backed module restart payload. Stage 02 uses synchronous <code>module_restart.result.v1</code> and <code>module_reload.result.v1</code> response shapes without creating a <code>jobs</code> row.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.module_restart.payload.v1&quot;,
+  &quot;module_name&quot;: &quot;global-scanner&quot;,
+  &quot;reason&quot;: &quot;manual&quot;
+}</code></pre>
+<h3 id="jobsmodulerestartresultv1"><code>jobs.module_restart.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.module_restart.result.v1&quot;,
+  &quot;module_name&quot;: &quot;global-scanner&quot;,
+  &quot;previous_state&quot;: &quot;running&quot;,
+  &quot;new_state&quot;: &quot;running&quot;
+}</code></pre>
+<h3 id="modulerestartresultv1"><code>module_restart.result.v1</code></h3>
+<p>Stage 02 synchronous module restart result.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;module_restart.result.v1&quot;,
+  &quot;module_name&quot;: &quot;config-manager&quot;,
+  &quot;previous_state&quot;: &quot;running&quot;,
+  &quot;new_state&quot;: &quot;running&quot;
+}</code></pre>
+<h3 id="modulereloadresultv1"><code>module_reload.result.v1</code></h3>
+<p>Stage 02 synchronous module reload result.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;module_reload.result.v1&quot;,
+  &quot;module_name&quot;: &quot;core&quot;,
+  &quot;previous_state&quot;: &quot;running&quot;,
+  &quot;new_state&quot;: &quot;running&quot;
+}</code></pre>
+<h3 id="storagemigrationresultv1"><code>storage_migration.result.v1</code></h3>
+<p>Stage 02 synchronous controlled storage migration result.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;storage_migration.result.v1&quot;,
+  &quot;status&quot;: &quot;migration_succeeded&quot;,
+  &quot;previous_current_profile_id&quot;: &quot;storage_profile_opaque_id&quot;,
+  &quot;new_current_profile_id&quot;: &quot;storage_profile_opaque_id&quot;,
+  &quot;current_profile_unchanged&quot;: false
+}</code></pre>
+<h3 id="jobsscimsyncpayloadv1"><code>jobs.scim_sync.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.scim_sync.payload.v1&quot;,
+  &quot;provider&quot;: &quot;local&quot;,
+  &quot;reason&quot;: &quot;scheduled&quot;
+}</code></pre>
+<h3 id="jobsscimsyncresultv1"><code>jobs.scim_sync.result.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;jobs.scim_sync.result.v1&quot;,
+  &quot;provider&quot;: &quot;local&quot;,
+  &quot;users_created&quot;: 0,
+  &quot;users_updated&quot;: 0,
+  &quot;groups_created&quot;: 0,
+  &quot;groups_updated&quot;: 0,
+  &quot;errors_count&quot;: 0
+}</code></pre>
+<h2 id="project-scan-result-payload">Project scan result payload</h2>
+<p><code>project_scans.result_payload</code> stores scan-specific summary. Detailed findings are stored in <code>security_findings</code>.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;project_scans.result.v1&quot;,
+  &quot;job_group_id&quot;: &quot;project_scan:project_scan_opaque_id&quot;,
+  &quot;parent_job_id&quot;: &quot;job_parent_opaque_id&quot;,
+  &quot;child_job_ids&quot;: [&quot;job_child_opaque_id&quot;],
+  &quot;tools&quot;: [],
+  &quot;providers&quot;: [],
+  &quot;required_auth&quot;: [],
+  &quot;check_results&quot;: [],
+  &quot;findings_summary&quot;: {
+    &quot;info&quot;: 0,
+    &quot;low&quot;: 0,
+    &quot;medium&quot;: 0,
+    &quot;high&quot;: 0,
+    &quot;critical&quot;: 0
+  }
+}</code></pre>
+<h2 id="security-finding-fingerprint">Security finding fingerprint</h2>
+<p><code>security_findings.fingerprint_components</code> stores the canonical JSON input for ADR 0017 fingerprint generation. The stored <code>fingerprint</code> is <code>fp:v1:&lt;sha256 canonical_json&gt;</code>.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;security_finding.fingerprint.v1&quot;,
+  &quot;project_id&quot;: &quot;project_opaque_id&quot;,
+  &quot;workspace_id&quot;: null,
+  &quot;rule_set_id&quot;: &quot;rule_set_opaque_id&quot;,
+  &quot;rule_namespace&quot;: &quot;trivy&quot;,
+  &quot;tool&quot;: &quot;trivy&quot;,
+  &quot;check_type&quot;: &quot;terraform.security.misconfig&quot;,
+  &quot;rule_id&quot;: &quot;AVD-AWS-0088&quot;,
+  &quot;normalized_file_path&quot;: &quot;modules/s3/main.tf&quot;,
+  &quot;resource_ref&quot;: &quot;aws_s3_bucket.example&quot;,
+  &quot;finding_key&quot;: &quot;aws_s3_bucket.example:public-read&quot;
+}</code></pre>
+<h2 id="status-schemas">Status schemas</h2>
+<p>HTTP response DTOs for <code>runtime_status.v1</code>, <code>job_status.v1</code> and <code>worker_status.v1</code> are defined in <a href="api.html"><code>api.md</code></a>. This section defines the structured payloads embedded in status storage/read models.</p>
+<h3 id="jobeventspayloadv1"><code>job_events.payload.v1</code></h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;job_events.payload.v1&quot;,
+  &quot;message&quot;: &quot;trivy module completed&quot;,
+  &quot;details&quot;: {}
+}</code></pre>
+<h3 id="workflowstatussummaryv1"><code>workflow_status.summary.v1</code></h3>
+<p>Generic workflow summary payload owned by <code>status-monitor</code>. Domain-specific components may be added under <code>components</code>, but the baseline <code>counts</code> and <code>latest_event</code> fields remain stable for all workflow types.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;workflow_status.summary.v1&quot;,
+  &quot;workflow_type&quot;: &quot;module_operation&quot;,
+  &quot;workflow_id&quot;: &quot;job_opaque_id&quot;,
+  &quot;job_group_id&quot;: &quot;module_operation:job_opaque_id&quot;,
+  &quot;aggregate_status&quot;: &quot;running&quot;,
+  &quot;counts&quot;: {
+    &quot;queued&quot;: 0,
+    &quot;running&quot;: 1,
+    &quot;succeeded&quot;: 0,
+    &quot;failed&quot;: 0,
+    &quot;cancelled&quot;: 0
+  },
+  &quot;latest_event&quot;: {
+    &quot;job_id&quot;: &quot;job_opaque_id&quot;,
+    &quot;event_type&quot;: &quot;progress&quot;,
+    &quot;status&quot;: &quot;running&quot;,
+    &quot;worker_id&quot;: &quot;host:12345:worker_uuid&quot;,
+    &quot;created_at&quot;: &quot;2026-04-08T00:00:00Z&quot;
+  },
+  &quot;components&quot;: {
+    &quot;module_operation&quot;: {
+      &quot;module_name&quot;: &quot;config-manager&quot;,
+      &quot;operation&quot;: &quot;module_restart&quot;
+    }
+  }
+}</code></pre>
+<p>If no <code>job_events</code> exist for the workflow, <code>latest_event</code> is <code>null</code>. Heartbeat freshness is read from <code>jobs.heartbeat_at</code>; <code>latest_event</code> may be a lifecycle, progress or diagnostic heartbeat event.</p>
+<h2 id="module-state-details">Module state details</h2>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;module_states.details.v1&quot;,
+  &quot;message&quot;: &quot;running&quot;,
+  &quot;last_error&quot;: null,
+  &quot;last_transition_at&quot;: &quot;2026-04-08T00:00:00Z&quot;
+}</code></pre>
+        </article>
+
+        <section class="doc-relations" aria-label="Перекрёстные ссылки">
+          <section>
+          <h2>Связанные документы</h2>
+          <div class="doc-relation-links">
+            <a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+          </div>
+        </section>
+<section>
+          <h2>Ссылаются сюда</h2>
+          <div class="doc-relation-links">
+            <a href="api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+<a href="test-plan.html"><span>Core Docs</span>Test plan</a>
+<a href="traceability.html"><span>Core Docs</span>Трассировка требований</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html"><span>Implementation Specs</span>Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html"><span>Implementation Specs</span>Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html"><span>Implementation Specs</span>Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html"><span>Implementation Specs</span>Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html"><span>Implementation Specs</span>Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html"><span>Implementation Specs</span>Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html"><span>Implementation Specs</span>Stage 09: Runtime and Observability Hardening</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Каталог документации">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>Все страницы документации</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="access-control.html">Auth, SCIM и RBAC</a>
+<a href="api.html">Backend API Contracts</a>
+<a href="architecture.html">Архитектура T-Helper</a>
+<a href="code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="configuration.html">Конфигурация</a>
+<a href="data-model.html">Модель данных</a>
+<a href="development.html">Development setup</a>
+<a href="frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="github-pages.html">GitHub Pages</a>
+<a href="interfaces.html">CLI, API и конфигурация</a>
+<a href="local-dev-environment.html">Local Developer Environment</a>
+<a href="payload-schemas.html" aria-current="page">Payload schemas</a>
+<a href="requirements.html">Требования</a>
+<a href="roadmap.html">Roadmap и приёмка</a>
+<a href="stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="technology-stack.html">Технологический стек</a>
+<a href="test-plan.html">Test plan</a>
+<a href="traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="implementation-specs/README.html">Пакет ТЗ по stage внедрения</a>
+<a href="implementation-specs/stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="implementation-specs/stage-01-backend-storage-foundation.html">Stage 01: Backend Storage Foundation</a>
+<a href="implementation-specs/stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="implementation-specs/stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="implementation-specs/stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="implementation-specs/stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="implementation-specs/stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="implementation-specs/stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="implementation-specs/stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="implementation-specs/stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="implementation-specs/stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="implementation-specs/stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="implementation-specs/stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="implementation-specs/stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="implementation-specs/stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="implementation-specs/stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="implementation-specs/stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="payload-schemas.html">Русская страница</a>
+      <a href="en/payload-schemas.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/ru/payload-schemas.md">Исходный Markdown</a>
+    </footer>
+
+    <script src="pages.js"></script>
+  </body>
+</html>

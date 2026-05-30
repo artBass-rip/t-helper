@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stage 01: Backend Storage Foundation - T-Helper documentation.">
+    <title>Stage 01: Backend Storage Foundation - T-Helper Docs</title>
+    <link rel="alternate" hreflang="ru" href="../../implementation-specs/stage-01-backend-storage-foundation.html">
+    <link rel="alternate" hreflang="en" href="stage-01-backend-storage-foundation.html">
+    <link rel="icon" href="../../assets/t-helper-app-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/t-helper-app-icon.svg">
+    <link rel="stylesheet" href="../../pages.css">
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header doc-header" aria-label="Documentation navigation">
+      <a class="brand" href="../../en.html" aria-label="T-Helper">
+        <img class="brand-mark" src="../../assets/t-helper-mark.svg" alt="" aria-hidden="true">
+        <span>t-helper</span>
+      </a>
+      <nav class="nav-links" aria-label="Documentation sections">
+        <a href="../../en.html#docs">Docs</a>
+        <a href="../requirements.html">Requirements</a>
+        <a href="../architecture.html">Architecture</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../api.html">API</a>
+      </nav>
+      <div class="lang-switch doc-source">
+        <a class="" href="../../implementation-specs/stage-01-backend-storage-foundation.html">RU</a>
+        <a class="is-active" href="stage-01-backend-storage-foundation.html" aria-current="page">EN</a>
+        <a class="source-link" href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/implementation-specs/stage-01-backend-storage-foundation.md">.md</a>
+      </div>
+    </header>
+
+    <main class="doc-shell" id="main">
+      <aside class="doc-aside" aria-label="Document navigation">
+        <a class="doc-home" href="../../en.html">T-Helper Docs</a>
+        <span>implementation-specs/stage-01-backend-storage-foundation.md</span>
+        <nav class="doc-global-links" aria-label="Key documents">
+          <a href="../requirements.html">Requirements</a>
+          <a href="../architecture.html">Architecture</a>
+          <a href="../api.html">API</a>
+          <a href="../data-model.html">Data model</a>
+          <a href="../roadmap.html">Roadmap</a>
+          <a href="../traceability.html">Traceability</a>
+        </nav>
+        <nav class="doc-toc">
+          <a class="toc-level-1" href="#stage-01-backend-storage-foundation">Stage 01: Backend Storage Foundation</a>
+<a class="toc-level-2" href="#status">Status</a>
+<a class="toc-level-2" href="#goal">Goal</a>
+<a class="toc-level-2" href="#inputs">Inputs</a>
+<a class="toc-level-2" href="#scope">Scope</a>
+<a class="toc-level-2" href="#non-goals">Non-goals</a>
+<a class="toc-level-2" href="#deliverables">Deliverables</a>
+<a class="toc-level-2" href="#definition-of-done">Definition of Done</a>
+<a class="toc-level-2" href="#verification">Verification</a>
+<a class="toc-level-2" href="#remaining-mvp-blockers">Remaining MVP blockers</a>
+<a class="toc-level-2" href="#traceability">Traceability</a>
+<a class="toc-level-2" href="#risks">Risks</a>
+<a class="toc-level-2" href="#notes-for-stage-02">Notes for Stage 02</a>
+        </nav>
+      </aside>
+
+      <div class="doc-content">
+        <article class="markdown-body">
+          <h1 id="stage-01-backend-storage-foundation">Stage 01: Backend Storage Foundation</h1>
+<h2 id="status">Status</h2>
+<p>Completed.</p>
+<p>Implementation commits:</p>
+<ul>
+<li><code>8dc572e</code> - initial scaffold: server, worker, storage.</li>
+<li><code>e0f8f70</code> - CLI/server refactor, storage fixes and tests.</li>
+</ul>
+<p>GitHub Actions checks passed for <code>ci / go</code> on both <code>push</code> and <code>pull_request</code>.</p>
+<h2 id="goal">Goal</h2>
+<p>Create a minimal backend/runtime skeleton and storage foundation that config, jobs and domain modules can rely on.</p>
+<h2 id="inputs">Inputs</h2>
+<ul>
+<li><a href="../adr/0001-go-backend-http-stack.html"><code>docs/en/adr/0001-go-backend-http-stack.md</code></a></li>
+<li><a href="../adr/0002-storage-and-migrations.html"><code>docs/en/adr/0002-storage-and-migrations.md</code></a></li>
+<li><a href="../adr/0007-implementation-repository-layout-and-migrations.html"><code>docs/en/adr/0007-implementation-repository-layout-and-migrations.md</code></a></li>
+<li><a href="../development.html"><code>docs/en/development.md</code></a></li>
+<li><a href="../api.html"><code>docs/en/api.md</code></a></li>
+<li><a href="../data-model.html"><code>docs/en/data-model.md</code></a></li>
+<li><a href="../technology-stack.html"><code>docs/en/technology-stack.md</code></a></li>
+<li><a href="../configuration.html"><code>docs/en/configuration.md</code></a></li>
+</ul>
+<h2 id="scope">Scope</h2>
+<ul>
+<li>Go module and base package structure;</li>
+<li>executable entrypoints <code>thelper</code>, <code>thelper-worker</code>, <code>thelper-ctl</code>;</li>
+<li>HTTP skeleton on <code>net/http</code>/<code>chi</code>;</li>
+<li>storage abstraction;</li>
+<li>migrations framework;</li>
+<li>adapters for <code>SQLite</code> and <code>PostgreSQL</code>;</li>
+<li>pluggable storage provider registry for database adapters;</li>
+<li>stage-owned minimal system tables for the backend skeleton;</li>
+<li>basic logging, correlation IDs and health endpoint.</li>
+</ul>
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+<li>config import/reload;</li>
+<li>module lifecycle;</li>
+<li>worker job execution;</li>
+<li>singleton runtime lock enforcement; Stage 01 returns the final safe health DTO shape, while Stage 02 adds lock/probe semantics;</li>
+<li>scanner/repository/security/auth domain logic;</li>
+<li>frontend.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>buildable Go skeleton - delivered;</li>
+<li><code>cmd/thelper</code>, <code>cmd/thelper-worker</code>, <code>cmd/thelper-ctl</code> - delivered;</li>
+<li>storage interfaces - delivered;</li>
+<li>SQLite/PostgreSQL connection and migration bootstrap - delivered;</li>
+<li>storage provider registry with SQLite/PostgreSQL adapters - delivered;</li>
+<li>basic HTTP server and <code>GET /api/health</code> endpoint returning final <code>health_status.v1</code> DTO - delivered;</li>
+<li>storage compatibility test skeleton - delivered and exercised for SQLite/PostgreSQL.</li>
+</ul>
+<h2 id="definition-of-done">Definition of Done</h2>
+<ul>
+<li><code>thelper</code>, <code>thelper-worker</code> and <code>thelper-ctl</code> build - verified by <code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
+<li>migrations apply to SQLite and PostgreSQL - verified by storage contract tests and Docker test runner;</li>
+<li>Stage 01 migrations do not pre-create target tables owned by later stages - verified by storage contract tests;</li>
+<li>storage abstraction does not leak into HTTP handlers - implemented via app wiring and storage provider registry;</li>
+<li>SQLite/PostgreSQL are implemented as pluggable storage adapter libraries behind a shared interface - delivered;</li>
+<li>unknown storage provider is rejected with a controlled validation error - covered by tests;</li>
+<li><code>GET /api/health</code> is available and returns the final <code>health_status.v1</code> DTO from <a href="../api.html"><code>docs/en/api.md</code></a> and ADR 0010, even though singleton lock enforcement is completed in Stage 02 - covered by handler and runtime smoke tests;</li>
+<li>Stage 01 health response includes <code>instance_id</code>, <code>mode</code>, <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code> - covered by tests;</li>
+<li>Stage 01 health endpoint is unauthenticated and safe: it must not expose config values, filesystem paths, DSNs, users, secrets or object-scoped details - implemented with safe <code>database_fingerprint</code>;</li>
+<li>storage tests pass on both MVP adapters - verified by local tests and Docker <code>offline</code> profile with PostgreSQL.</li>
+</ul>
+<h2 id="verification">Verification</h2>
+<p>Stage 01 baseline commands:</p>
+<pre><code class="language-text">go test ./...
+go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl
+docker compose --profile offline -f docker-compose.test.yml run --rm test-runner</code></pre>
+<p>GitHub Actions:</p>
+<ul>
+<li><code>ci / go (push)</code> - passed.</li>
+<li><code>ci / go (pull_request)</code> - passed.</li>
+</ul>
+<p>Covered Stage 01 checks:</p>
+<ul>
+<li>runtime smoke test for <code>GET /api/health</code>;</li>
+<li>handler-level <code>health_status.v1</code> shape test;</li>
+<li>CLI smoke test for <code>thelper-ctl providers</code>;</li>
+<li>controlled unknown provider and unknown CLI command errors;</li>
+<li><code>postgresql</code> provider alias normalization to internal <code>postgres</code>;</li>
+<li>synchronized migration version test for <code>sqlite</code> and <code>postgres</code>;</li>
+<li>idempotent migration runner test;</li>
+<li>SQLite storage contract test in every local run;</li>
+<li>PostgreSQL storage contract test when <code>THELPER_POSTGRES_DSN</code> is set;</li>
+<li>destructive PostgreSQL storage test guard requiring a test database name or explicit override.</li>
+</ul>
+<h2 id="remaining-mvp-blockers">Remaining MVP blockers</h2>
+<ul>
+<li>no Stage 01 blockers remain after ADR 0007 and <a href="../development.html"><code>docs/en/development.md</code></a>;</li>
+<li>the specific migration framework remains the recommendation from ADR 0002 (<code>goose</code>) and can be replaced only by a separate ADR.</li>
+</ul>
+<h2 id="traceability">Traceability</h2>
+<ul>
+<li>Roadmap: Stage 01.</li>
+<li>Acceptance: <code>ACC-MVP-013</code>.</li>
+<li>Data model: basic migration framework for persistent entities.</li>
+<li>ADR: <code>0001</code>, <code>0002</code>, <code>0003</code>, <code>0007</code>, <code>0012</code>.</li>
+</ul>
+<h2 id="risks">Risks</h2>
+<ul>
+<li>early binding of domain logic to a specific SQL dialect - mitigated by storage registry and adapter packages;</li>
+<li>divergence between SQLite/PostgreSQL constraints - mitigated by shared contract tests;</li>
+<li>excessive framework layer around <code>net/http</code> - avoided by lightweight <code>chi</code> router and isolated HTTP adapter.</li>
+</ul>
+<h2 id="notes-for-stage-02">Notes for Stage 02</h2>
+<ul>
+<li><code>thelper-worker</code> is intentionally a scaffold; persisted jobs and worker execution start in Stage 03.</li>
+<li><code>thelper-ctl -reconfigure</code>, <code>-reload</code>, <code>-restart &lt;module&gt;</code> and <code>-migrate-db</code> remain Stage 02 deliverables.</li>
+<li>Singleton runtime lock enforcement remains Stage 02; Stage 01 already provides the stable safe <code>health_status.v1</code> response shape.</li>
+<li>Stage 01 migrations own only <code>system_metadata</code>; Stage 02 must add <code>config_entries</code>, <code>storage_profiles</code>, <code>storage_provider_settings</code> and <code>module_states</code> through new append-only migrations.</li>
+</ul>
+        </article>
+
+        <section class="doc-relations" aria-label="Cross references">
+          <section>
+          <h2>Related documents</h2>
+          <div class="doc-relation-links">
+            <a href="../adr/0001-go-backend-http-stack.html"><span>ADR</span>ADR 0001: Go backend HTTP stack</a>
+<a href="../adr/0002-storage-and-migrations.html"><span>ADR</span>ADR 0002: Storage and migrations</a>
+<a href="../adr/0007-implementation-repository-layout-and-migrations.html"><span>ADR</span>ADR 0007: Implementation repository layout and migrations</a>
+<a href="../api.html"><span>Core Docs</span>Backend API Contracts</a>
+<a href="../configuration.html"><span>Core Docs</span>Конфигурация</a>
+<a href="../data-model.html"><span>Core Docs</span>Модель данных</a>
+<a href="../development.html"><span>Core Docs</span>Development setup</a>
+<a href="../technology-stack.html"><span>Core Docs</span>Технологический стек</a>
+          </div>
+        </section>
+<section>
+          <h2>Referenced by</h2>
+          <div class="doc-relation-links">
+            <a href="README.html"><span>Implementation Specs</span>Пакет ТЗ по stage внедрения</a>
+          </div>
+        </section>
+        </section>
+
+        <section class="doc-directory" aria-label="Documentation catalog">
+          <div class="doc-directory-heading">
+            <p class="eyebrow">Docs map</p>
+            <h2>All documentation pages</h2>
+          </div>
+          <section class="doc-directory-group">
+          <h2>Core Docs</h2>
+          <div class="doc-directory-links">
+            <a href="../access-control.html">Auth, SCIM и RBAC</a>
+<a href="../api.html">Backend API Contracts</a>
+<a href="../architecture.html">Архитектура T-Helper</a>
+<a href="../code-optimization.html">Code Optimization And Quality Baseline</a>
+<a href="../configuration.html">Конфигурация</a>
+<a href="../data-model.html">Модель данных</a>
+<a href="../development.html">Development setup</a>
+<a href="../frontend-ui-contract.html">Frontend UI Delivery Contract</a>
+<a href="../github-pages.html">GitHub Pages</a>
+<a href="../interfaces.html">CLI, API и конфигурация</a>
+<a href="../local-dev-environment.html">Local Developer Environment</a>
+<a href="../payload-schemas.html">Payload schemas</a>
+<a href="../requirements.html">Требования</a>
+<a href="../roadmap.html">Roadmap и приёмка</a>
+<a href="../stage-00-delivery-contract.html">Stage 00 Delivery Contract</a>
+<a href="../technology-stack.html">Технологический стек</a>
+<a href="../test-plan.html">Test plan</a>
+<a href="../traceability.html">Трассировка требований</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>Implementation Specs</h2>
+          <div class="doc-directory-links">
+            <a href="README.html">Пакет ТЗ по stage внедрения</a>
+<a href="stage-00-delivery-contract.html">Stage 00: Delivery Contract</a>
+<a href="stage-01-backend-storage-foundation.html" aria-current="page">Stage 01: Backend Storage Foundation</a>
+<a href="stage-02-config-modules-runtime.html">Stage 02: Config, Modules and Runtime Lifecycle</a>
+<a href="stage-03-jobs-workers-status.html">Stage 03: Jobs, Workers and Status Foundation</a>
+<a href="stage-04-scanner-mvp.html">Stage 04: Scanner and Registry MVP</a>
+<a href="stage-05-repository-manager-mvp.html">Stage 05: Repository Manager MVP</a>
+<a href="stage-06-project-scanner-security-validator-mvp.html">Stage 06B: Project Scanner and Security Validator MVP</a>
+<a href="stage-06a-toolchain-profiles-foundation.html">Stage 06A: Toolchain Profiles Foundation</a>
+<a href="stage-07-auth-scim-rbac.html">Stage 07: Auth, RBAC, SCIM and Audit</a>
+<a href="stage-08-frontend-mvp.html">Stage 08: Frontend MVP and Local GUI</a>
+<a href="stage-09-runtime-observability-hardening.html">Stage 09: Runtime and Observability Hardening</a>
+<a href="stage-10-storage-adapter-expansion.html">Stage 10: Storage Adapter Expansion</a>
+<a href="stage-11-security-tooling-policy-packs.html">Stage 11: Security Tooling and Policy Packs</a>
+<a href="stage-12-admin-ui-hardening.html">Stage 12: Admin UI Hardening</a>
+<a href="stage-13-scim-full-sync.html">Stage 13: SCIM Full Sync</a>
+<a href="stage-14-repository-webhook-sync.html">Stage 14: Repository Webhook Sync</a>
+<a href="stage-15-distributed-deployment.html">Stage 15: Distributed Deployment</a>
+          </div>
+        </section>
+<section class="doc-directory-group">
+          <h2>ADR</h2>
+          <div class="doc-directory-links">
+            <a href="../adr/0001-go-backend-http-stack.html">ADR 0001: Go backend HTTP stack</a>
+<a href="../adr/0002-storage-and-migrations.html">ADR 0002: Storage and migrations</a>
+<a href="../adr/0003-job-worker-processes.html">ADR 0003: Job worker processes</a>
+<a href="../adr/0004-frontend-and-tauri-runtime-policy.html">ADR 0004: Frontend, Tauri and singleton runtime policy</a>
+<a href="../adr/0005-job-leasing-and-worker-coordination.html">ADR 0005: Job leasing and worker coordination</a>
+<a href="../adr/0006-project-scan-workflow-and-status-aggregation.html">ADR 0006: Project scan workflow and status aggregation</a>
+<a href="../adr/0007-implementation-repository-layout-and-migrations.html">ADR 0007: Implementation repository layout and migrations</a>
+<a href="../adr/0008-configuration-key-compatibility.html">ADR 0008: Global scan configuration key</a>
+<a href="../adr/0009-secret-resolution.html">ADR 0009: Secret resolution</a>
+<a href="../adr/0010-singleton-runtime-lock-and-health.html">ADR 0010: Singleton runtime lock and health</a>
+<a href="../adr/0011-worker-defaults.html">ADR 0011: Worker defaults</a>
+<a href="../adr/0012-provider-adapter-modularity.html">ADR 0012: Provider adapter modularity</a>
+<a href="../adr/0013-repository-identity.html">ADR 0013: Repository identity</a>
+<a href="../adr/0014-local-password-hashing.html">ADR 0014: Local password hashing</a>
+<a href="../adr/0015-repository-provider-integration-profiles.html">ADR 0015: Repository provider integration profiles and credentials</a>
+<a href="../adr/0016-repository-provider-url-parsing.html">ADR 0016: Repository provider URL parsing</a>
+<a href="../adr/0017-security-finding-fingerprint.html">ADR 0017: Security finding fingerprint</a>
+<a href="../adr/0018-external-toolchain-profiles.html">ADR 0018: External toolchain profiles</a>
+<a href="../adr/0019-code-quality-and-route-registration.html">ADR 0019: Code Quality Baseline And Route Registration</a>
+          </div>
+        </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer doc-footer">
+      <span>T-Helper</span>
+      <a href="../../implementation-specs/stage-01-backend-storage-foundation.html">Русская страница</a>
+      <a href="stage-01-backend-storage-foundation.html">English page</a>
+      <a href="https://github.com/artBass-rip/t-helper/blob/master/docs/en/implementation-specs/stage-01-backend-storage-foundation.md">Source Markdown</a>
+    </footer>
+
+    <script src="../../pages.js"></script>
+  </body>
+</html>
