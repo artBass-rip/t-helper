@@ -79,10 +79,11 @@ Recommended profiles:
 | `offline` | Run tests with no external network assumptions. |
 | `os-matrix` | Run Linux OS-family compatibility test containers. |
 
-Stage 04 provides the current executable backend baseline and test runner.
+Stage 05 provides the current executable backend baseline and test runner.
 Compose commands may now be used directly for the `postgres` and `test-runner`
 services, including config/module/runtime, jobs/status and scanner/registry
-checks; later product containers are still introduced by their owning stages.
+checks plus repository manager clone/pull/sync checks. Later frontend, auth and
+security-tool product containers are still introduced by their owning stages.
 
 ## Product Containers
 
@@ -132,7 +133,7 @@ Required for MVP development:
 | --- | --- | --- | --- |
 | `postgres` | PostgreSQL 16 or 17 | Stage 01 | PostgreSQL storage tests. |
 | `git-server` | local bare Git service or lightweight SSH/HTTP Git server | Stage 05 | Generic Git clone/pull/sync tests. |
-| `repo-provider-mock` | local HTTP mock | Stage 05 | GitLab/GitHub provider API fixtures without SaaS calls. |
+| `repo-provider-mock` | local HTTP mock | Stage 05 | GitHub provider API fixtures without SaaS calls; GitLab is reserved for Stage 05A if not selected in Stage 05. |
 | `scim-mock` | local HTTP mock | Stage 07/13 | SCIM contract and sync fixtures. |
 | `mail-mock` | local SMTP/web mock | Stage 07 | Password reset/manual auth flows. |
 | `browser-runner` | Playwright-capable image | Stage 08 | Web UI e2e tests. |

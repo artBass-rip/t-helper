@@ -51,7 +51,7 @@
 <a class="toc-level-2" href="#postgresql-test-environment">PostgreSQL test environment</a>
 <a class="toc-level-2" href="#test-policy">Test policy</a>
 <a class="toc-level-2" href="#migration-layout">Migration layout</a>
-<a class="toc-level-2" href="#stage-04-runtime-behavior">Stage 04 runtime behavior</a>
+<a class="toc-level-2" href="#stage-05-runtime-behavior">Stage 05 runtime behavior</a>
 <a class="toc-level-2" href="#project-pages">Project Pages</a>
 <a class="toc-level-2" href="#secret-references-in-development">Secret references in development</a>
 <a class="toc-level-2" href="#stage-01-implementation-checklist">Stage 01 implementation checklist</a>
@@ -62,9 +62,9 @@
         <article class="markdown-body">
           <h1 id="development-setup">Development setup</h1>
 <h2 id="purpose">Purpose</h2>
-<p>This document defines the local development contract for the current Stage 04 scanner/registry baseline and storage tests.</p>
+<p>This document defines the local development contract for the current Stage 05 repository manager baseline and storage tests.</p>
 <p>The Docker-based developer environment, product/dependency containers, manual testing profile and OS-family test matrix are defined in <a href="local-dev-environment.html"><code>local-dev-environment.md</code></a>.</p>
-<p>Stage 04 has delivered the executable backend scaffold, persisted runtime configuration, module lifecycle, singleton runtime policy, jobs/workers/status, global scanning, Terraform project discovery and scanner/registry HTTP APIs. The current local baseline is:</p>
+<p>Stage 05 has delivered the executable backend scaffold, persisted runtime configuration, module lifecycle, singleton runtime policy, jobs/workers/status, global scanning, Terraform project discovery, scanner/registry HTTP APIs and repository manager clone/pull/sync workflows. The current local baseline is:</p>
 <ul>
 <li><code>go test ./...</code>;</li>
 <li><code>go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl</code>;</li>
@@ -112,7 +112,9 @@
 <li><code>000002_stage02_config_modules_runtime.sql</code> for Stage 02 config, storage profiles, module state and imported system ignore rules;</li>
 <li><code>000003_stage03_jobs_workers_status.sql</code> for jobs, job locks, job events and workflow statuses;</li>
 <li><code>000004_stage04_scanner_registry.sql</code> for root paths, projects, project links, minimal repositories, environments and workspaces;</li>
-<li><code>000005_stage04_root_path_source.sql</code> for root path source tracking.</li>
+<li><code>000005_stage04_root_path_source.sql</code> for root path source tracking;</li>
+<li><code>000006_stage05_repository_manager.sql</code> for provider instances, repository credentials and repository operation state;</li>
+<li><code>000007_stage05_repository_manager_hardening.sql</code> for repository manager validation/index hardening.</li>
 </ul>
 <p>The <code>mysql</code> and <code>mssql</code> directories are reserved for Stage 10 adapter expansion and contain no current SQL migrations.</p>
 <p>Stage 01 migrations create only:</p>
@@ -144,10 +146,16 @@
 <li><code>environments</code>;</li>
 <li><code>workspaces</code>.</li>
 </ul>
-<p>Stage 01-04 migrations must not create later-stage tables such as <code>users</code>, <code>groups</code>, <code>security_findings</code>, <code>project_scans</code> or repository operation tables owned by Stage 05 and later.</p>
-<h2 id="stage-04-runtime-behavior">Stage 04 runtime behavior</h2>
+<p>Stage 05 migrations create and harden:</p>
 <ul>
-<li><code>cmd/thelper</code> applies Stage 01-04 migrations, starts the HTTP runtime and exposes <code>GET /api/health</code>, <code>GET/PUT /api/config</code>, <code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>, <code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>, <code>GET /api/status*</code> and Stage 04 scanner/registry endpoints.</li>
+<li>repository provider instances;</li>
+<li>repository credentials with masked secret references;</li>
+<li>repository operation reservations and indexes used to serialize clone, pull and sync operations.</li>
+</ul>
+<p>Stage 01-05 migrations must not create later-stage tables such as <code>users</code>, <code>groups</code>, <code>security_findings</code> or <code>project_scans</code>.</p>
+<h2 id="stage-05-runtime-behavior">Stage 05 runtime behavior</h2>
+<ul>
+<li><code>cmd/thelper</code> applies Stage 01-05 migrations, starts the HTTP runtime and exposes <code>GET /api/health</code>, <code>GET/PUT /api/config</code>, <code>GET /api/modules</code>, <code>POST /api/modules/reload</code>, <code>POST /api/modules/restart</code>, <code>GET /api/jobs</code>, <code>GET /api/jobs/{id}</code>, <code>GET /api/status*</code>, Stage 04 scanner/registry endpoints and Stage 05 repository manager endpoints.</li>
 <li><code>GET /api/health</code> returns <code>health_status.v1</code> with <code>instance_id</code>, <code>mode</code>, safe <code>database_fingerprint</code>, <code>started_at</code>, <code>readiness</code> and <code>schema_version</code>.</li>
 <li><code>database_fingerprint</code> is derived from safe storage locator components and must not expose DSNs, filesystem paths, usernames, passwords or userinfo.</li>
 <li>SQLite runs through a single open DB connection so connection local PRAGMA settings remain effective. Stage 01 sets foreign keys, busy timeout and WAL for file-backed SQLite databases.</li>
@@ -158,6 +166,10 @@
 <li><code>cmd/thelper-ctl -restart &lt;module&gt;</code> restarts one available module synchronously and returns a Stage 02 result DTO.</li>
 <li><code>cmd/thelper-ctl -migrate-db</code> promotes a prepared <code>migration</code> storage profile only after successful schema/data copy.</li>
 <li>Stage 04 scanner endpoints expose root paths, ignore rules, scans, projects, project links, repositories, environments and workspaces.</li>
+<li>Stage 05 repository endpoints expose provider instances, credentials and clone/pull/sync job enqueueing.</li>
+<li>Repository identity is normalized as <code>provider + provider_host + full_path</code>; <code>clone_url</code> is transport metadata and is not used as the stable identity.</li>
+<li>Clone requests are validated for path containment, unsupported protocol/path shapes, credential usage compatibility and concurrent target-path conflicts before enqueueing a worker job.</li>
+<li>Worker-side repository operations resolve <code>secretref://env/...</code> only at execution time, run Git non-interactively, redact operation errors and clean up operation reservations.</li>
 <li>Global scan detects Terraform projects by <code>*.tf</code> filenames and does not parse Terraform source contents during discovery.</li>
 <li>Global scan enqueues coalesced <code>project_discovery</code> jobs for Git repository association without blocking the global scan result.</li>
 <li>Symlinked directories and <code>.git/</code> directories are skipped in Stage 04.</li>

@@ -2,17 +2,17 @@
 
 ## Purpose
 
-This document defines the local development contract for the current Stage 04
-scanner/registry baseline and storage tests.
+This document defines the local development contract for the current Stage 05
+repository manager baseline and storage tests.
 
 The Docker-based developer environment, product/dependency containers, manual
 testing profile and OS-family test matrix are defined in
 [`local-dev-environment.md`](local-dev-environment.md).
 
-Stage 04 has delivered the executable backend scaffold, persisted runtime
+Stage 05 has delivered the executable backend scaffold, persisted runtime
 configuration, module lifecycle, singleton runtime policy, jobs/workers/status,
-global scanning, Terraform project discovery and scanner/registry HTTP APIs.
-The current local baseline is:
+global scanning, Terraform project discovery, scanner/registry HTTP APIs and
+repository manager clone/pull/sync workflows. The current local baseline is:
 
 - `go test ./...`;
 - `go build ./cmd/thelper ./cmd/thelper-worker ./cmd/thelper-ctl`;
@@ -83,7 +83,11 @@ migration versions:
   workflow statuses;
 - `000004_stage04_scanner_registry.sql` for root paths, projects, project
   links, minimal repositories, environments and workspaces;
-- `000005_stage04_root_path_source.sql` for root path source tracking.
+- `000005_stage04_root_path_source.sql` for root path source tracking;
+- `000006_stage05_repository_manager.sql` for provider instances,
+  repository credentials and repository operation state;
+- `000007_stage05_repository_manager_hardening.sql` for repository manager
+  validation/index hardening.
 
 The `mysql` and `mssql` directories are reserved for Stage 10 adapter expansion
 and contain no current SQL migrations.
@@ -117,17 +121,23 @@ Stage 04 migrations create:
 - `environments`;
 - `workspaces`.
 
-Stage 01-04 migrations must not create later-stage tables such as `users`,
-`groups`, `security_findings`, `project_scans` or repository operation tables
-owned by Stage 05 and later.
+Stage 05 migrations create and harden:
 
-## Stage 04 runtime behavior
+- repository provider instances;
+- repository credentials with masked secret references;
+- repository operation reservations and indexes used to serialize clone, pull
+  and sync operations.
 
-- `cmd/thelper` applies Stage 01-04 migrations, starts the HTTP runtime and
+Stage 01-05 migrations must not create later-stage tables such as `users`,
+`groups`, `security_findings` or `project_scans`.
+
+## Stage 05 runtime behavior
+
+- `cmd/thelper` applies Stage 01-05 migrations, starts the HTTP runtime and
   exposes `GET /api/health`, `GET/PUT /api/config`, `GET /api/modules`,
   `POST /api/modules/reload`, `POST /api/modules/restart`, `GET /api/jobs`,
-  `GET /api/jobs/{id}`, `GET /api/status*` and Stage 04 scanner/registry
-  endpoints.
+  `GET /api/jobs/{id}`, `GET /api/status*`, Stage 04 scanner/registry
+  endpoints and Stage 05 repository manager endpoints.
 - `GET /api/health` returns `health_status.v1` with `instance_id`, `mode`,
   safe `database_fingerprint`, `started_at`, `readiness` and `schema_version`.
 - `database_fingerprint` is derived from safe storage locator components and
@@ -148,6 +158,16 @@ owned by Stage 05 and later.
   only after successful schema/data copy.
 - Stage 04 scanner endpoints expose root paths, ignore rules, scans, projects,
   project links, repositories, environments and workspaces.
+- Stage 05 repository endpoints expose provider instances, credentials and
+  clone/pull/sync job enqueueing.
+- Repository identity is normalized as `provider + provider_host + full_path`;
+  `clone_url` is transport metadata and is not used as the stable identity.
+- Clone requests are validated for path containment, unsupported protocol/path
+  shapes, credential usage compatibility and concurrent target-path conflicts
+  before enqueueing a worker job.
+- Worker-side repository operations resolve `secretref://env/...` only at
+  execution time, run Git non-interactively, redact operation errors and clean
+  up operation reservations.
 - Global scan detects Terraform projects by `*.tf` filenames and does not
   parse Terraform source contents during discovery.
 - Global scan enqueues coalesced `project_discovery` jobs for Git repository

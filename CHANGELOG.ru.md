@@ -7,6 +7,12 @@
 
 ## Не выпущено
 
+- Проведен аудит документации репозитория относительно текущего code baseline;
+  исправлены development/local-environment документы, которые всё ещё
+  описывали Stage 04 как текущий этап.
+- Development docs обновлены описанием Stage 05 migration versions, repository
+  manager API behavior, path/credential validation и worker-side выполнения
+  clone/pull/sync.
 - Реализован Stage 05 repository manager MVP: выбран managed provider GitHub,
   добавлены generic Git, provider profiles, masked credentials, enqueue API для
   clone/pull/sync и worker handlers.

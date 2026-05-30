@@ -63,7 +63,7 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</h1>
-<p>Last updated: 2026-05-29.</p>
+<p>Last updated: 2026-05-31.</p>
 <p>This document records completed optimizations, the current quality gate and the remaining backlog, which should be implemented iteratively without broad mechanical refactoring.</p>
 <h2 id="current-status">Current Status</h2>
 <p>Completed:</p>
@@ -79,6 +79,7 @@
 <p>Verified baseline after optimization:</p>
 <pre><code class="language-text">make test</code></pre>
 <p>Note: some tests open a local listener on <code>127.0.0.1:0</code>, so sandboxed environments may require bind permission.</p>
+<p>Repository audit on 2026-05-31 found the executable baseline aligned with Stage 05. The main documentation drift was in development/local-environment docs that still described Stage 04 as current; those docs now reference the Stage 05 repository manager APIs, migrations and worker behavior.</p>
 <h2 id="accepted-design-decisions">Accepted Design Decisions</h2>
 <ul>
 <li>Canonical decision for HTTP route registration and the transactional helper: <a href="adr/0019-code-quality-and-route-registration.html"><code>adr/0019-code-quality-and-route-registration.md</code></a>.</li>

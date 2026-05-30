@@ -7,6 +7,12 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Audited the repository documentation against the current code baseline and
+  corrected development/local-environment docs that still described Stage 04 as
+  current.
+- Updated development docs with Stage 05 migration versions, repository
+  manager API behavior, path/credential validation and worker-side
+  clone/pull/sync execution notes.
 - Implemented Stage 05 repository manager MVP with GitHub as the selected
   managed provider, generic Git support, provider profiles, masked credentials,
   clone/pull/sync enqueue APIs and worker handlers.

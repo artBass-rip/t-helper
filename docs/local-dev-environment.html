@@ -118,7 +118,7 @@ docker-compose.os-matrix.yml</code></pre>
 <tr><td><code>offline</code></td><td>Run tests with no external network assumptions.</td></tr>
 <tr><td><code>os-matrix</code></td><td>Run Linux OS-family compatibility test containers.</td></tr>
 </tbody></table>
-<p>Stage 04 provides the current executable backend baseline and test runner. Compose commands may now be used directly for the <code>postgres</code> and <code>test-runner</code> services, including config/module/runtime, jobs/status and scanner/registry checks; later product containers are still introduced by their owning stages.</p>
+<p>Stage 05 provides the current executable backend baseline and test runner. Compose commands may now be used directly for the <code>postgres</code> and <code>test-runner</code> services, including config/module/runtime, jobs/status and scanner/registry checks plus repository manager clone/pull/sync checks. Later frontend, auth and security-tool product containers are still introduced by their owning stages.</p>
 <h2 id="product-containers">Product Containers</h2>
 <p>The environment must build and run product images from the current working tree.</p>
 <p>Required product services:</p>
@@ -155,7 +155,7 @@ mssql:1433</code></pre>
 <tbody>
 <tr><td><code>postgres</code></td><td>PostgreSQL 16 or 17</td><td>Stage 01</td><td>PostgreSQL storage tests.</td></tr>
 <tr><td><code>git-server</code></td><td>local bare Git service or lightweight SSH/HTTP Git server</td><td>Stage 05</td><td>Generic Git clone/pull/sync tests.</td></tr>
-<tr><td><code>repo-provider-mock</code></td><td>local HTTP mock</td><td>Stage 05</td><td>GitLab/GitHub provider API fixtures without SaaS calls.</td></tr>
+<tr><td><code>repo-provider-mock</code></td><td>local HTTP mock</td><td>Stage 05</td><td>GitHub provider API fixtures without SaaS calls; GitLab is reserved for Stage 05A if not selected in Stage 05.</td></tr>
 <tr><td><code>scim-mock</code></td><td>local HTTP mock</td><td>Stage 07/13</td><td>SCIM contract and sync fixtures.</td></tr>
 <tr><td><code>mail-mock</code></td><td>local SMTP/web mock</td><td>Stage 07</td><td>Password reset/manual auth flows.</td></tr>
 <tr><td><code>browser-runner</code></td><td>Playwright-capable image</td><td>Stage 08</td><td>Web UI e2e tests.</td></tr>

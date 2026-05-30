@@ -1,6 +1,6 @@
 # Code Optimization And Quality Baseline
 
-Last updated: 2026-05-29.
+Last updated: 2026-05-31.
 
 This document records completed optimizations, the current quality gate and the
 remaining backlog, which should be implemented iteratively without broad
@@ -33,6 +33,11 @@ make test
 
 Note: some tests open a local listener on `127.0.0.1:0`, so sandboxed
 environments may require bind permission.
+
+Repository audit on 2026-05-31 found the executable baseline aligned with
+Stage 05. The main documentation drift was in development/local-environment
+docs that still described Stage 04 as current; those docs now reference the
+Stage 05 repository manager APIs, migrations and worker behavior.
 
 ## Accepted Design Decisions
 
