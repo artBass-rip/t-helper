@@ -47,8 +47,10 @@ func (osScanFilesystem) Open(name string) (io.ReadCloser, error) {
 func JobHandlers(store *Store) map[string]jobs.Handler {
 	fs := osScanFilesystem{}
 	return map[string]jobs.Handler{
-		"global_scan":       globalScanHandler{store: store, fs: fs},
-		"project_discovery": projectDiscoveryHandler{store: store, fs: fs},
+		"global_scan":              globalScanHandler{store: store, fs: fs},
+		"project_discovery":        projectDiscoveryHandler{store: store, fs: fs},
+		"project_scan":             projectScanHandler{store: store},
+		"security_validation_scan": securityValidationHandler{store: store},
 	}
 }
 

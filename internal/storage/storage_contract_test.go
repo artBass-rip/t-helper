@@ -48,7 +48,7 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	assertStage02TablesPresent(t, handle.DB, handle.Provider)
 	assertStage03TablesPresent(t, handle.DB, handle.Provider)
 	assertStage04TablesPresent(t, handle.DB, handle.Provider)
-	assertPostStage04TablesAbsent(t, handle.DB, handle.Provider)
+	assertStage06TablesPresent(t, handle.DB, handle.Provider)
 	if handle.Fingerprint == "" {
 		t.Fatal("expected non-empty database fingerprint")
 	}
@@ -72,7 +72,14 @@ func requirePostgresTestDatabase(t *testing.T, dsn string) {
 
 func resetStage01Tables(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
-	stage04Drops := []string{
+	stageDomainDrops := []string{
+		"DROP TABLE IF EXISTS security_findings",
+		"DROP TABLE IF EXISTS project_scans",
+		"DROP TABLE IF EXISTS security_rule_sets",
+		"DROP TABLE IF EXISTS project_security_scan_settings",
+		"DROP TABLE IF EXISTS project_scan_settings",
+		"DROP TABLE IF EXISTS tool_profile_validation_results",
+		"DROP TABLE IF EXISTS tool_profiles",
 		"DROP TABLE IF EXISTS project_links",
 		"DROP TABLE IF EXISTS projects",
 		"DROP TABLE IF EXISTS workspaces",
@@ -81,7 +88,14 @@ func resetStage01Tables(t *testing.T, db *sql.DB, provider string) {
 		"DROP TABLE IF EXISTS root_paths",
 	}
 	if provider == "postgres" {
-		stage04Drops = []string{
+		stageDomainDrops = []string{
+			"DROP TABLE IF EXISTS security_findings CASCADE",
+			"DROP TABLE IF EXISTS project_scans CASCADE",
+			"DROP TABLE IF EXISTS security_rule_sets CASCADE",
+			"DROP TABLE IF EXISTS project_security_scan_settings CASCADE",
+			"DROP TABLE IF EXISTS project_scan_settings CASCADE",
+			"DROP TABLE IF EXISTS tool_profile_validation_results CASCADE",
+			"DROP TABLE IF EXISTS tool_profiles CASCADE",
 			"DROP TABLE IF EXISTS project_links CASCADE",
 			"DROP TABLE IF EXISTS projects CASCADE",
 			"DROP TABLE IF EXISTS workspaces CASCADE",
@@ -90,7 +104,7 @@ func resetStage01Tables(t *testing.T, db *sql.DB, provider string) {
 			"DROP TABLE IF EXISTS root_paths CASCADE",
 		}
 	}
-	for _, stmt := range append(stage04Drops, []string{
+	for _, stmt := range append(stageDomainDrops, []string{
 		"DROP TABLE IF EXISTS workflow_statuses",
 		"DROP TABLE IF EXISTS job_events",
 		"DROP TABLE IF EXISTS job_locks",
@@ -147,16 +161,11 @@ func assertStage04TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	}
 }
 
-func assertPostStage04TablesAbsent(t *testing.T, db *sql.DB, provider string) {
+func assertStage06TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
-	laterStageTables := []string{
-		"users",
-		"project_scans",
-		"security_findings",
-	}
-	for _, table := range laterStageTables {
-		if tableExists(t, db, provider, table) {
-			t.Fatalf("post-Stage 04 table %q must not be created by Stage 04 migrations", table)
+	for _, table := range []string{"tool_profiles", "tool_profile_validation_results", "project_scan_settings", "project_security_scan_settings", "project_scans", "security_rule_sets", "security_findings"} {
+		if !tableExists(t, db, provider, table) {
+			t.Fatalf("Stage 06 table %q was not created", table)
 		}
 	}
 }

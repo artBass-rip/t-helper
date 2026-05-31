@@ -30,7 +30,12 @@ func (h *ScannerHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/projects", h.ListProjects)
 	r.Get("/api/projects/{id}", h.GetProject)
 	r.Get("/api/projects/{id}/links", h.ListProjectLinks)
+	r.Get("/api/projects/{id}/scan-settings", h.GetProjectScanSettings)
+	r.Put("/api/projects/{id}/scan-settings", h.PutProjectScanSettings)
 	r.Post("/api/project-scans", h.CreateProjectScan)
+	r.Get("/api/project-scans", h.ListProjectScans)
+	r.Get("/api/project-scans/{project_scan_id}", h.GetProjectScan)
+	r.Get("/api/project-scans/{project_scan_id}/findings", h.ListProjectScanFindings)
 	r.Get("/api/repos", h.ListRepositories)
 	r.Get("/api/repos/{id}", h.GetRepository)
 	r.Get("/api/ignore-rules", h.ListIgnoreRules)
@@ -39,6 +44,11 @@ func (h *ScannerHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/environments/{id}", h.GetEnvironment)
 	r.Get("/api/workspaces", h.ListWorkspaces)
 	r.Get("/api/workspaces/{id}", h.GetWorkspace)
+	r.Get("/api/security/findings", h.ListSecurityFindings)
+	r.Get("/api/security/findings/{id}", h.GetSecurityFinding)
+	r.Get("/api/security/rule-sets", h.ListSecurityRuleSets)
+	r.Put("/api/security/rule-sets", h.PutSecurityRuleSet)
+	r.Get("/api/tool-profiles", h.ListToolProfiles)
 }
 
 func (h *ScannerHandler) ListRootPaths(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +213,29 @@ func (h *ScannerHandler) ListProjectLinks(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
 }
 
+func (h *ScannerHandler) GetProjectScanSettings(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetProjectSettings(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) PutProjectScanSettings(w http.ResponseWriter, r *http.Request) {
+	var req scanner.ProjectScanSettingsInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	item, err := h.store.UpsertProjectSettings(r.Context(), chi.URLParam(r, "id"), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ProjectID string `json:"project_id"`
@@ -231,7 +264,114 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, http.StatusBadRequest, "validation_error", "disabled projects cannot be scanned")
 		return
 	}
-	writeError(w, r, http.StatusNotImplemented, "project_scan_unavailable", "project scans are implemented in Stage 06")
+	if req.ScanType == "" {
+		settings, err := h.store.GetProjectSettings(r.Context(), project.ID)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		if !settings.ScanEnabled {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "project scan is disabled")
+			return
+		}
+		req.ScanType = settings.ScanType
+	}
+	if !validHTTPProjectScanType(req.ScanType) {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "unsupported scan_type")
+		return
+	}
+	projectScanID := scannerNewOpaqueID("project_scan")
+	jobID := jobs.NewJobID()
+	groupID := "project_scan:" + projectScanID
+	payload, err := json.Marshal(scanner.ProjectScanPayload{
+		SchemaVersion: scanner.ProjectScanPayloadSchema,
+		ProjectID:     project.ID,
+		ProjectScanID: projectScanID,
+		ScanType:      req.ScanType,
+		RuleSetID:     req.RuleSetID,
+		Reason:        req.Reason,
+	})
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "serialization_error", err.Error())
+		return
+	}
+	ref, err := h.jobStore.Enqueue(r.Context(), jobs.EnqueueRequest{
+		ID:             jobID,
+		JobType:        "project_scan",
+		Actor:          "api",
+		CorrelationID:  CorrelationIDFromContext(r.Context()),
+		IdempotencyKey: r.Header.Get(idempotencyKeyHeader),
+		JobGroupID:     groupID,
+		WorkflowID:     projectScanID,
+		LockKey:        "project_scan:" + project.ID,
+		Payload:        payload,
+	})
+	if err != nil {
+		if errors.Is(err, jobs.ErrIdempotencyConflict) {
+			writeError(w, r, http.StatusConflict, "idempotency_conflict", err.Error())
+			return
+		}
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	item, err := h.store.CreateProjectScan(r.Context(), project, projectScanID, req.ScanType, req.RuleSetID, ref.JobID)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, scanner.ProjectScanRef{
+		ProjectScanID: item.ID,
+		JobID:         ref.JobID,
+		JobGroupID:    "project_scan:" + item.ID,
+		Status:        ref.Status,
+		SchemaVersion: jobs.JobRefSchemaVersion,
+	})
+}
+
+func (h *ScannerHandler) ListProjectScans(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	page, err := h.store.ListProjectScans(r.Context(), scanner.ProjectScanListOptions{
+		ListOptions: scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		ProjectID:   r.URL.Query().Get("project_id"),
+		Status:      r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) GetProjectScan(w http.ResponseWriter, r *http.Request) {
+	if err := h.jobStore.ReconcileWorkflowStatuses(r.Context()); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	item, err := h.store.GetProjectScan(r.Context(), chi.URLParam(r, "project_scan_id"))
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	_ = h.store.ApplyWorkflowAggregateToProjectScan(r.Context(), "project_scan:"+item.ID)
+	if refreshed, err := h.store.GetProjectScan(r.Context(), item.ID); err == nil {
+		item = refreshed
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) ListProjectScanFindings(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	page, err := h.store.ListFindings(r.Context(), scanner.FindingListOptions{
+		ListOptions:   scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		ProjectScanID: chi.URLParam(r, "project_scan_id"),
+		Severity:      r.URL.Query().Get("severity"),
+		Status:        r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
 }
 
 func (h *ScannerHandler) ListRepositories(w http.ResponseWriter, r *http.Request) {
@@ -342,6 +482,88 @@ func (h *ScannerHandler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *ScannerHandler) ListSecurityFindings(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	page, err := h.store.ListFindings(r.Context(), scanner.FindingListOptions{
+		ListOptions:  scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		ProjectID:    r.URL.Query().Get("project_id"),
+		RepositoryID: r.URL.Query().Get("repository_id"),
+		Severity:     r.URL.Query().Get("severity"),
+		Status:       r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) GetSecurityFinding(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetFinding(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) ListSecurityRuleSets(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	var active *bool
+	if raw := r.URL.Query().Get("active"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "active must be boolean")
+			return
+		}
+		active = &parsed
+	}
+	page, err := h.store.ListRuleSets(r.Context(), scanner.RuleSetListOptions{ListOptions: scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")}, Active: active})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) PutSecurityRuleSet(w http.ResponseWriter, r *http.Request) {
+	var req scanner.SecurityRuleSetInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	item, err := h.store.UpsertRuleSet(r.Context(), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) ListToolProfiles(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	var active *bool
+	if raw := r.URL.Query().Get("active"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "validation_error", "active must be boolean")
+			return
+		}
+		active = &parsed
+	}
+	page, err := h.store.ListToolProfiles(r.Context(), scanner.ToolProfileListOptions{
+		ListOptions: scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
+		Tool:        r.URL.Query().Get("tool"),
+		SourceType:  r.URL.Query().Get("source_type"),
+		Active:      active,
+	})
+	if err != nil {
+		writeScannerReadError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
 func writeScannerReadError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, scanner.ErrNotFound):
@@ -357,4 +579,17 @@ func writeScannerReadError(w http.ResponseWriter, r *http.Request, err error) {
 
 func listResponse(items any, nextCursor string) map[string]any {
 	return map[string]any{"items": items, "next_cursor": nullString(nextCursor)}
+}
+
+func scannerNewOpaqueID(prefix string) string {
+	return prefix + "_" + jobs.NewJobID()
+}
+
+func validHTTPProjectScanType(value string) bool {
+	switch value {
+	case scanner.ScanTypeTerraformStatic, scanner.ScanTypeTerraformValidate, scanner.ScanTypeTerraformSecurity, scanner.ScanTypeTerraformFull, scanner.ScanTypeSecurityValidation:
+		return true
+	default:
+		return false
+	}
 }
