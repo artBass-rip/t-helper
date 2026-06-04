@@ -177,6 +177,11 @@ func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
 	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_version_uncertified" {
 		t.Fatalf("uncertified version job = %s/%s, want failed/tool_version_uncertified", job.Status, failureErrorCode(t, job))
 	}
+	unsupported := importAndActivateTerraformProfile(t, ctx, scannerStore, "terraform-unsupported-test", "certified_only", []string{"9"}, []string{"8"})
+	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, unsupported.ProfileID)
+	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_version_unsupported" {
+		t.Fatalf("unsupported version job = %s/%s, want failed/tool_version_unsupported", job.Status, failureErrorCode(t, job))
+	}
 
 	compatible := importAndActivateTerraformProfile(t, ctx, scannerStore, "terraform-compatible-test", "compatible_range", []string{"9"}, []string{"1"})
 	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, compatible.ProfileID)

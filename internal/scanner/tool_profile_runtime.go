@@ -293,6 +293,9 @@ func profileToolMetadata(tool string, profile ToolProfile, doc toolProfileDocume
 	}
 	if doc.VersionPolicy == "certified_only" {
 		meta.CompatibilityStatus = "unsupported"
+		if len(doc.CompatibleVersions) > 0 && !stringSlicePrefixMatch(doc.CompatibleVersions, version) {
+			return meta, toolRunError{code: "tool_version_unsupported", message: fmt.Sprintf("%s version %s is not compatible with the active profile", tool, version), retryable: false}
+		}
 		return meta, toolRunError{code: "tool_version_uncertified", message: fmt.Sprintf("%s version %s is not certified by the active profile", tool, version), retryable: false}
 	}
 	if stringSlicePrefixMatch(doc.CompatibleVersions, version) || doc.VersionPolicy == "latest_best_effort" {
