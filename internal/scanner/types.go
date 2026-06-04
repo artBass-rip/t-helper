@@ -286,6 +286,48 @@ type ToolProfile struct {
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
+type ToolProfileValidationResult struct {
+	ID               string          `json:"id"`
+	ToolProfileID    string          `json:"tool_profile_id,omitempty"`
+	Tool             string          `json:"tool"`
+	ToolVersion      string          `json:"tool_version,omitempty"`
+	FixtureSet       string          `json:"fixture_set,omitempty"`
+	ValidationStatus string          `json:"validation_status"`
+	Diagnostics      json.RawMessage `json:"diagnostics"`
+	CreatedAt        time.Time       `json:"created_at"`
+}
+
+type ToolProfileValidateInput struct {
+	ProfilePath    string          `json:"profile_path,omitempty"`
+	ProfilePayload json.RawMessage `json:"profile_payload,omitempty"`
+	FixtureSet     string          `json:"fixture_set,omitempty"`
+}
+
+type ToolProfileImportInput struct {
+	ProfilePath    string          `json:"profile_path,omitempty"`
+	ProfilePayload json.RawMessage `json:"profile_payload,omitempty"`
+}
+
+type ToolProfileActivateInput struct {
+	Tool           string `json:"tool"`
+	ProfileID      string `json:"profile_id"`
+	ProfileVersion string `json:"profile_version"`
+}
+
+type ToolProfileAnalyzeInput struct {
+	SamplesPath       string          `json:"samples_path,omitempty"`
+	SamplePayload     json.RawMessage `json:"sample_payload,omitempty"`
+	BaselineProfileID string          `json:"baseline_profile_id,omitempty"`
+}
+
+type ToolProfileCandidate struct {
+	SchemaVersion     string          `json:"schema_version"`
+	BaselineProfileID string          `json:"baseline_profile_id,omitempty"`
+	Confidence        string          `json:"confidence"`
+	Diagnostics       json.RawMessage `json:"diagnostics"`
+	ProfilePayload    json.RawMessage `json:"profile_payload,omitempty"`
+}
+
 type ToolMetadata struct {
 	Tool                string `json:"tool"`
 	ToolVersion         string `json:"tool_version"`

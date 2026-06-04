@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os/exec"
+	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/artBass-rip/t-helper/internal/jobs"
@@ -44,6 +45,9 @@ func (h projectScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job
 		RequiredAuth:  []string{},
 		CheckResults:  []any{},
 	}
+	providers, requiredAuth := detectTerraformProjectMetadata(project.Path)
+	result.Providers = providers
+	result.RequiredAuth = requiredAuth
 	if shouldRunTerraformValidate(payload.ScanType) {
 		tool, check, err := runTerraformValidate(ctx, h.store, project.Path)
 		if err != nil {
@@ -102,6 +106,43 @@ func (h projectScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job
 	}
 	_ = h.store.ApplyWorkflowAggregateToProjectScan(ctx, job.JobGroupID)
 	return raw, nil
+}
+
+var terraformProviderDeclRE = regexp.MustCompile(`(?m)^\s*provider\s+"([^"]+)"`)
+
+func detectTerraformProjectMetadata(projectDir string) ([]string, []string) {
+	seen := map[string]bool{}
+	_ = filepath.WalkDir(projectDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			if entry != nil && entry.IsDir() && entry.Name() == ".terraform" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".tf") {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		for _, match := range terraformProviderDeclRE.FindAllStringSubmatch(string(raw), -1) {
+			if len(match) == 2 && strings.TrimSpace(match[1]) != "" {
+				seen[strings.TrimSpace(match[1])] = true
+			}
+		}
+		return nil
+	})
+	providers := make([]string, 0, len(seen))
+	requiredAuth := make([]string, 0, len(seen))
+	for provider := range seen {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+	for _, provider := range providers {
+		requiredAuth = append(requiredAuth, "provider:"+provider)
+	}
+	return providers, requiredAuth
 }
 
 func (h securityValidationHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job jobs.Job) (json.RawMessage, error) {
@@ -194,186 +235,27 @@ func classifyToolError(err error) error {
 }
 
 func runTerraformValidate(ctx context.Context, store *Store, dir string) (ToolMetadata, map[string]any, error) {
-	meta, err := store.toolMetadata(ctx, "terraform")
+	result, err := runToolProfile(ctx, store, "terraform", dir)
 	if err != nil {
-		return meta, nil, err
+		return result.Tool, nil, err
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "validate", "-json", "-no-color")
-	cmd.Dir = dir
-	output, runErr := cmd.Output()
-	var parsed struct {
-		Valid        bool `json:"valid"`
-		ErrorCount   int  `json:"error_count"`
-		WarningCount int  `json:"warning_count"`
-		Diagnostics  []struct {
-			Severity string `json:"severity"`
-			Summary  string `json:"summary"`
-		} `json:"diagnostics"`
-	}
-	if len(output) > 0 {
-		_ = json.Unmarshal(output, &parsed)
-	}
-	check := map[string]any{
-		"tool":           "terraform",
-		"check_type":     "terraform.validate",
-		"valid":          parsed.Valid,
-		"errors_count":   parsed.ErrorCount,
-		"warnings_count": parsed.WarningCount,
-	}
-	if runErr != nil && len(output) == 0 {
-		return meta, check, toolRunError{code: "tool_failed", message: "terraform validate failed", retryable: false}
-	}
-	return meta, check, nil
+	return result.Tool, result.Check, nil
 }
 
 func runTFLint(ctx context.Context, store *Store, dir string) (ToolMetadata, map[string]any, error) {
-	meta, err := store.toolMetadata(ctx, "tflint")
+	result, err := runToolProfile(ctx, store, "tflint", dir)
 	if err != nil {
-		return meta, nil, err
+		return result.Tool, nil, err
 	}
-	cmd := exec.CommandContext(ctx, "tflint", "--format", "json")
-	cmd.Dir = dir
-	output, runErr := cmd.Output()
-	var parsed struct {
-		Issues []any `json:"issues"`
-	}
-	if len(output) > 0 {
-		_ = json.Unmarshal(output, &parsed)
-	}
-	check := map[string]any{
-		"tool":         "tflint",
-		"check_type":   "terraform.lint",
-		"issues_count": len(parsed.Issues),
-	}
-	if runErr != nil && len(output) == 0 {
-		return meta, check, toolRunError{code: "tool_failed", message: "tflint failed", retryable: false}
-	}
-	return meta, check, nil
+	return result.Tool, result.Check, nil
 }
 
 func runTrivy(ctx context.Context, store *Store, dir string) (ToolMetadata, []FindingUpsert, error) {
-	meta, err := store.toolMetadata(ctx, "trivy")
+	result, err := runToolProfile(ctx, store, "trivy", dir)
 	if err != nil {
-		return meta, nil, err
+		return result.Tool, nil, err
 	}
-	cmd := exec.CommandContext(ctx, "trivy", "config", "--format", "json", "--skip-db-update", "--skip-policy-update", dir)
-	output, runErr := cmd.Output()
-	if runErr != nil && len(output) == 0 {
-		return meta, nil, toolRunError{code: "tool_failed", message: "trivy config failed", retryable: false}
-	}
-	return meta, parseTrivyFindings(output, dir), nil
-}
-
-func (s *Store) toolMetadata(ctx context.Context, tool string) (ToolMetadata, error) {
-	profile, err := s.ActiveToolProfile(ctx, tool)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ToolMetadata{Tool: tool, CompatibilityStatus: "unsupported", CertificationStatus: "uncertified"}, toolRunError{code: "tool_profile_unavailable", message: "active tool profile not found for " + tool, retryable: false}
-		}
-		return ToolMetadata{}, err
-	}
-	version, err := discoverToolVersion(ctx, tool)
-	if err != nil {
-		return ToolMetadata{Tool: tool, ProfileID: profile.ProfileID, ProfileVersion: profile.ProfileVersion, CompatibilityStatus: "unknown", CertificationStatus: "uncertified"}, err
-	}
-	meta := ToolMetadata{
-		Tool:                tool,
-		ToolVersion:         version,
-		ProfileID:           profile.ProfileID,
-		ProfileVersion:      profile.ProfileVersion,
-		CompatibilityStatus: "compatible",
-		CertificationStatus: "uncertified",
-	}
-	if versionMatches(profile.CertifiedVersions, version) {
-		meta.CompatibilityStatus = "certified"
-		meta.CertificationStatus = "certified"
-		return meta, nil
-	}
-	if versionMatches(profile.CompatibleVersions, version) {
-		return meta, nil
-	}
-	meta.CompatibilityStatus = "unsupported"
-	return meta, toolRunError{code: "tool_version_unsupported", message: fmt.Sprintf("%s version %s is not certified by the active profile", tool, version), retryable: false}
-}
-
-func discoverToolVersion(ctx context.Context, tool string) (string, error) {
-	cmd := exec.CommandContext(ctx, tool, "--version")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", toolRunError{code: "tool_unavailable", message: tool + " binary is unavailable", retryable: false}
-	}
-	fields := strings.Fields(string(output))
-	for _, field := range fields {
-		field = strings.TrimPrefix(field, "v")
-		if len(field) > 0 && field[0] >= '0' && field[0] <= '9' {
-			return field, nil
-		}
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func versionMatches(raw json.RawMessage, version string) bool {
-	var prefixes []string
-	if err := json.Unmarshal(raw, &prefixes); err != nil {
-		return false
-	}
-	for _, prefix := range prefixes {
-		if prefix != "" && strings.HasPrefix(version, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func parseTrivyFindings(output []byte, projectDir string) []FindingUpsert {
-	var payload struct {
-		Results []struct {
-			Target            string `json:"Target"`
-			Misconfigurations []struct {
-				ID            string `json:"ID"`
-				Title         string `json:"Title"`
-				Description   string `json:"Description"`
-				Message       string `json:"Message"`
-				Resolution    string `json:"Resolution"`
-				Severity      string `json:"Severity"`
-				PrimaryURL    string `json:"PrimaryURL"`
-				CauseMetadata struct {
-					Resource  string `json:"Resource"`
-					Provider  string `json:"Provider"`
-					Service   string `json:"Service"`
-					StartLine int    `json:"StartLine"`
-				} `json:"CauseMetadata"`
-			} `json:"Misconfigurations"`
-		} `json:"Results"`
-	}
-	if len(output) == 0 || json.Unmarshal(output, &payload) != nil {
-		return nil
-	}
-	var out []FindingUpsert
-	for _, result := range payload.Results {
-		filePath := normalizeFindingPath(projectDir, result.Target)
-		for _, misconfig := range result.Misconfigurations {
-			resource := misconfig.CauseMetadata.Resource
-			if resource == "" {
-				resource = strings.Join([]string{misconfig.CauseMetadata.Provider, misconfig.CauseMetadata.Service}, ".")
-				resource = strings.Trim(resource, ".")
-			}
-			title := nonEmpty(misconfig.Title, misconfig.Message)
-			out = append(out, FindingUpsert{
-				CheckType:     "terraform.security.misconfig",
-				RuleID:        nonEmpty(misconfig.ID, "trivy.unknown"),
-				Severity:      strings.ToLower(nonEmpty(misconfig.Severity, "info")),
-				FilePath:      filePath,
-				ResourceRef:   resource,
-				Title:         nonEmpty(title, misconfig.ID),
-				Description:   misconfig.Description,
-				Remediation:   nonEmpty(misconfig.Resolution, misconfig.PrimaryURL),
-				FindingKey:    fmt.Sprintf("%s:%s:%d", filePath, resource, misconfig.CauseMetadata.StartLine),
-				RuleNamespace: "trivy",
-			})
-		}
-	}
-	return out
+	return result.Tool, result.Findings, nil
 }
 
 func normalizeFindingPath(projectDir, target string) string {

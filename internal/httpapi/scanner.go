@@ -49,6 +49,10 @@ func (h *ScannerHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/security/rule-sets", h.ListSecurityRuleSets)
 	r.Put("/api/security/rule-sets", h.PutSecurityRuleSet)
 	r.Get("/api/tool-profiles", h.ListToolProfiles)
+	r.Post("/api/tool-profiles/validate", h.ValidateToolProfile)
+	r.Post("/api/tool-profiles/import", h.ImportToolProfile)
+	r.Post("/api/tool-profiles/activate", h.ActivateToolProfile)
+	r.Post("/api/tool-profiles/analyze", h.AnalyzeToolProfile)
 }
 
 func (h *ScannerHandler) ListRootPaths(w http.ResponseWriter, r *http.Request) {
@@ -278,6 +282,14 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 	}
 	if !validHTTPProjectScanType(req.ScanType) {
 		writeError(w, r, http.StatusBadRequest, "validation_error", "unsupported scan_type")
+		return
+	}
+	if req.RuleSetID == "" {
+		if ruleSet, err := h.store.ActiveRuleSet(r.Context()); err == nil {
+			req.RuleSetID = ruleSet.ID
+		}
+	} else if _, err := h.store.GetRuleSet(r.Context(), req.RuleSetID); err != nil {
+		writeScannerReadError(w, r, err)
 		return
 	}
 	projectScanID := scannerNewOpaqueID("project_scan")
@@ -562,6 +574,62 @@ func (h *ScannerHandler) ListToolProfiles(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) ValidateToolProfile(w http.ResponseWriter, r *http.Request) {
+	var req scanner.ToolProfileValidateInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	result, err := h.store.ValidateToolProfile(r.Context(), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *ScannerHandler) ImportToolProfile(w http.ResponseWriter, r *http.Request) {
+	var req scanner.ToolProfileImportInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	item, err := h.store.ImportToolProfile(r.Context(), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) ActivateToolProfile(w http.ResponseWriter, r *http.Request) {
+	var req scanner.ToolProfileActivateInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	item, err := h.store.ActivateToolProfile(r.Context(), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ScannerHandler) AnalyzeToolProfile(w http.ResponseWriter, r *http.Request) {
+	var req scanner.ToolProfileAnalyzeInput
+	if err := decodeStrictJSON(r, &req, false); err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	result, err := h.store.AnalyzeToolProfile(r.Context(), req)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func writeScannerReadError(w http.ResponseWriter, r *http.Request, err error) {

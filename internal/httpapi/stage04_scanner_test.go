@@ -251,6 +251,42 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing project scan guard status = %d body = %s", rec.Code, rec.Body.String())
 	}
+	var jobsBeforeInvalidRuleSet int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsBeforeInvalidRuleSet); err != nil {
+		t.Fatalf("count jobs before invalid rule set: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","rule_set_id":"missing_rule_set"}`))))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("invalid rule set project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var jobsAfterInvalidRuleSet int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsAfterInvalidRuleSet); err != nil {
+		t.Fatalf("count jobs after invalid rule set: %v", err)
+	}
+	if jobsAfterInvalidRuleSet != jobsBeforeInvalidRuleSet {
+		t.Fatalf("invalid rule set should not enqueue a job: before=%d after=%d", jobsBeforeInvalidRuleSet, jobsAfterInvalidRuleSet)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("project scan default rule set status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var projectScanRef scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&projectScanRef); err != nil {
+		t.Fatalf("decode project scan ref: %v", err)
+	}
+	projectScanJob, err := jobStore.Get(ctx, projectScanRef.JobID)
+	if err != nil {
+		t.Fatalf("get project scan job: %v", err)
+	}
+	var scanPayload scanner.ProjectScanPayload
+	if err := json.Unmarshal(projectScanJob.Payload, &scanPayload); err != nil {
+		t.Fatalf("decode project scan payload: %v", err)
+	}
+	if scanPayload.RuleSetID != scanner.DefaultSecurityRuleSetID {
+		t.Fatalf("project scan payload rule_set_id = %q, want default %q", scanPayload.RuleSetID, scanner.DefaultSecurityRuleSetID)
+	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects?cursor=not-a-cursor", nil))

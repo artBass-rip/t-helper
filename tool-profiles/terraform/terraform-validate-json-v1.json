@@ -1,0 +1,29 @@
+{
+  "schema_version": "tool_profile.v1",
+  "tool": "terraform",
+  "profile_id": "terraform-validate-json-v1",
+  "profile_version": "1.0.0",
+  "certified_versions": ["1"],
+  "compatible_versions": ["1"],
+  "version_policy": "certified_only",
+  "version_discovery": {
+    "command": "terraform",
+    "args": ["--version"]
+  },
+  "scan_command": {
+    "command": "terraform",
+    "args": ["validate", "-json", "-no-color"]
+  },
+  "parser": {
+    "type": "json",
+    "result": "terraform_validate"
+  },
+  "mapping": {
+    "valid": {"path": "valid"},
+    "errors_count": {"path": "error_count"},
+    "warnings_count": {"path": "warning_count"}
+  },
+  "redaction": {
+    "max_output_bytes": 1048576
+  }
+}
