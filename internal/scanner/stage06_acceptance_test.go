@@ -152,6 +152,13 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	if validation.ValidationStatus != "failed" {
 		t.Fatalf("network command profile validation status = %q, want failed", validation.ValidationStatus)
 	}
+	var failedValidations int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM tool_profile_validation_results WHERE validation_status = 'failed'`).Scan(&failedValidations); err != nil {
+		t.Fatalf("count failed profile validations: %v", err)
+	}
+	if failedValidations == 0 {
+		t.Fatalf("failed profile validation was not persisted")
+	}
 }
 
 func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
@@ -200,6 +207,40 @@ func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
 	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, bestEffort.ProfileID)
 	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_not_found" {
 		t.Fatalf("missing binary job = %s/%s, want failed/tool_not_found", job.Status, failureErrorCode(t, job))
+	}
+}
+
+func TestStage06SecurityValidationRunsOnlyWhenEnabledInProjectSettings(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	installFakeToolchain(t)
+
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), WorkerID: "host:test:security-settings", Logger: slog.Default()})
+	project := stage06ProjectFixture(t, ctx, scannerStore)
+	securityEnabled := false
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{Security: &struct {
+		Enabled           *bool    `json:"enabled,omitempty"`
+		EnabledModules    []string `json:"enabled_modules,omitempty"`
+		ScheduleEnabled   *bool    `json:"schedule_enabled,omitempty"`
+		ScheduleFrequency string   `json:"schedule_frequency,omitempty"`
+		ValidateCode      *bool    `json:"validate_code,omitempty"`
+	}{Enabled: &securityEnabled}}); err != nil {
+		t.Fatalf("disable security settings: %v", err)
+	}
+
+	job := runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformFull, "security-disabled")
+	if job.Status != jobs.StatusSucceeded {
+		t.Fatalf("project scan with disabled security status = %s: %s", job.Status, job.ErrorMessage)
+	}
+	children, err := jobStore.List(ctx, jobs.ListFilters{JobGroupID: job.JobGroupID, ParentJobID: job.ID})
+	if err != nil {
+		t.Fatalf("list child jobs: %v", err)
+	}
+	if len(children) != 0 {
+		t.Fatalf("security disabled should not enqueue child jobs: %+v", children)
 	}
 }
 

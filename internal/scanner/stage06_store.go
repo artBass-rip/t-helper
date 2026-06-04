@@ -344,15 +344,7 @@ func (s *Store) ValidateToolProfile(ctx context.Context, input ToolProfileValida
 		diagnostics["profile_path"] = redactSensitiveText(sourcePath)
 	}
 	if doc.Tool == "" || !allowedTool(doc.Tool) {
-		rawDiagnostics, _ := json.Marshal(diagnostics)
-		return ToolProfileValidationResult{
-			ID:               newID("tool_profile_validation"),
-			Tool:             "unknown",
-			FixtureSet:       strings.TrimSpace(input.FixtureSet),
-			ValidationStatus: status,
-			Diagnostics:      json.RawMessage(rawDiagnostics),
-			CreatedAt:        time.Now().UTC(),
-		}, nil
+		doc.Tool = "unknown"
 	}
 	return s.insertToolProfileValidationResult(ctx, doc, "", strings.TrimSpace(input.FixtureSet), status, diagnostics)
 }
