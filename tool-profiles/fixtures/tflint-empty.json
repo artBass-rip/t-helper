@@ -1,0 +1,15 @@
+{
+  "schema_version": "tool_profile_fixture_set.v1",
+  "tool": "tflint",
+  "fixtures": [
+    {
+      "name": "tflint-empty",
+      "stdout": "{\"issues\":[]}",
+      "expected_check": {
+        "tool": "tflint",
+        "check_type": "terraform.lint",
+        "issues_count": 0
+      }
+    }
+  ]
+}

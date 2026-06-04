@@ -74,6 +74,21 @@ type toolProfileRunResult struct {
 	RawSummary map[string]any
 }
 
+type toolProfileFixtureSet struct {
+	SchemaVersion string               `json:"schema_version"`
+	Tool          string               `json:"tool"`
+	ProjectDir    string               `json:"project_dir,omitempty"`
+	Fixtures      []toolProfileFixture `json:"fixtures"`
+}
+
+type toolProfileFixture struct {
+	Name                  string            `json:"name"`
+	Stdout                string            `json:"stdout"`
+	ExpectedCheck         json.RawMessage   `json:"expected_check,omitempty"`
+	ExpectedFindingsCount *int              `json:"expected_findings_count,omitempty"`
+	ExpectedFirstFinding  map[string]string `json:"expected_first_finding,omitempty"`
+}
+
 func runToolProfile(ctx context.Context, store *Store, tool, projectDir string) (toolProfileRunResult, error) {
 	doc, profile, err := store.activeToolProfileDocument(ctx, tool)
 	if err != nil {
@@ -93,22 +108,28 @@ func runToolProfile(ctx context.Context, store *Store, tool, projectDir string) 
 	if len(output) > doc.redactionLimit() {
 		output = output[:doc.redactionLimit()]
 	}
+	if runErr != nil && len(output) == 0 {
+		return toolProfileRunResult{Tool: meta}, toolRunError{code: "tool_failed", message: tool + " scan failed", retryable: false}
+	}
+	result, err := evaluateToolProfileOutput(doc, output, projectDir)
+	result.Tool = meta
+	return result, err
+}
+
+func evaluateToolProfileOutput(doc toolProfileDocument, output []byte, projectDir string) (toolProfileRunResult, error) {
 	var parsed any
 	if len(output) > 0 {
 		decoder := json.NewDecoder(bytes.NewReader(output))
 		decoder.UseNumber()
 		if err := decoder.Decode(&parsed); err != nil {
-			return toolProfileRunResult{Tool: meta}, toolRunError{code: "tool_output_parse_failed", message: tool + " output could not be parsed by active profile", retryable: false}
+			return toolProfileRunResult{}, toolRunError{code: "tool_output_parse_failed", message: doc.Tool + " output could not be parsed by active profile", retryable: false}
 		}
 	}
-	if runErr != nil && len(output) == 0 {
-		return toolProfileRunResult{Tool: meta}, toolRunError{code: "tool_failed", message: tool + " scan failed", retryable: false}
-	}
-	result := toolProfileRunResult{Tool: meta}
+	result := toolProfileRunResult{}
 	switch doc.Parser.Result {
 	case "terraform_validate":
 		result.Check = map[string]any{
-			"tool":           tool,
+			"tool":           doc.Tool,
 			"check_type":     "terraform.validate",
 			"valid":          selectorBool(parsed, doc.Mapping["valid"]),
 			"errors_count":   selectorInt(parsed, doc.Mapping["errors_count"]),
@@ -116,7 +137,7 @@ func runToolProfile(ctx context.Context, store *Store, tool, projectDir string) 
 		}
 	case "tflint":
 		result.Check = map[string]any{
-			"tool":         tool,
+			"tool":         doc.Tool,
 			"check_type":   "terraform.lint",
 			"issues_count": len(selectorArray(parsed, doc.Mapping["issues"])),
 		}
@@ -201,6 +222,108 @@ func decodeToolProfile(raw []byte) (toolProfileDocument, error) {
 		return doc, err
 	}
 	return doc, nil
+}
+
+func validateToolProfileFixtureSet(doc toolProfileDocument, fixtureSet string) error {
+	fixtures, err := loadToolProfileFixtureSet(fixtureSet)
+	if err != nil {
+		return err
+	}
+	if fixtures.SchemaVersion != "tool_profile_fixture_set.v1" {
+		return toolRunError{code: "tool_profile_validation_failed", message: "unsupported fixture_set schema_version", retryable: false}
+	}
+	if fixtures.Tool != "" && fixtures.Tool != doc.Tool {
+		return toolRunError{code: "tool_profile_validation_failed", message: "fixture_set tool does not match profile tool", retryable: false}
+	}
+	if len(fixtures.Fixtures) == 0 {
+		return toolRunError{code: "tool_profile_validation_failed", message: "fixture_set must contain at least one fixture", retryable: false}
+	}
+	projectDir := nonEmpty(fixtures.ProjectDir, ".")
+	for _, fixture := range fixtures.Fixtures {
+		result, err := evaluateToolProfileOutput(doc, []byte(fixture.Stdout), projectDir)
+		if err != nil {
+			return err
+		}
+		if len(fixture.ExpectedCheck) > 0 {
+			if err := compareExpectedJSON(fixture.ExpectedCheck, result.Check); err != nil {
+				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected_check mismatch: " + err.Error(), retryable: false}
+			}
+		}
+		if fixture.ExpectedFindingsCount != nil && len(result.Findings) != *fixture.ExpectedFindingsCount {
+			return toolRunError{code: "tool_profile_validation_failed", message: fmt.Sprintf("fixture %s findings count = %d want %d", fixture.Name, len(result.Findings), *fixture.ExpectedFindingsCount), retryable: false}
+		}
+		if len(fixture.ExpectedFirstFinding) > 0 {
+			if len(result.Findings) == 0 {
+				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected a finding", retryable: false}
+			}
+			if err := compareExpectedFinding(fixture.ExpectedFirstFinding, result.Findings[0]); err != nil {
+				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected_first_finding mismatch: " + err.Error(), retryable: false}
+			}
+		}
+	}
+	return nil
+}
+
+func loadToolProfileFixtureSet(fixtureSet string) (toolProfileFixtureSet, error) {
+	path := strings.TrimSpace(fixtureSet)
+	if path == "" {
+		return toolProfileFixtureSet{}, nil
+	}
+	if !strings.HasSuffix(path, ".json") && !strings.Contains(path, string(os.PathSeparator)) && !strings.Contains(path, "/") {
+		path = filepath.Join("tool-profiles", "fixtures", path+".json")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil && !filepath.IsAbs(path) {
+		if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+			if candidate := findRelativeFileUpwards(cwd, path); candidate != "" {
+				raw, err = os.ReadFile(candidate)
+			}
+		}
+	}
+	if err != nil {
+		return toolProfileFixtureSet{}, toolRunError{code: "tool_profile_validation_failed", message: "fixture_set not found: " + fixtureSet, retryable: false}
+	}
+	var fixtures toolProfileFixtureSet
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&fixtures); err != nil {
+		return fixtures, toolRunError{code: "tool_profile_validation_failed", message: "fixture_set parse failed: " + err.Error(), retryable: false}
+	}
+	return fixtures, nil
+}
+
+func compareExpectedJSON(expectedRaw json.RawMessage, actual any) error {
+	var expected any
+	decoder := json.NewDecoder(bytes.NewReader(expectedRaw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&expected); err != nil {
+		return err
+	}
+	expectedJSON, _ := json.Marshal(expected)
+	actualJSON, _ := json.Marshal(actual)
+	if string(expectedJSON) != string(actualJSON) {
+		return fmt.Errorf("got %s want %s", actualJSON, expectedJSON)
+	}
+	return nil
+}
+
+func compareExpectedFinding(expected map[string]string, actual FindingUpsert) error {
+	actualValues := map[string]string{
+		"check_type":     actual.CheckType,
+		"rule_id":        actual.RuleID,
+		"severity":       actual.Severity,
+		"file_path":      actual.FilePath,
+		"resource_ref":   actual.ResourceRef,
+		"title":          actual.Title,
+		"finding_key":    actual.FindingKey,
+		"rule_namespace": actual.RuleNamespace,
+	}
+	for key, want := range expected {
+		if got := actualValues[key]; got != want {
+			return fmt.Errorf("%s got %q want %q", key, got, want)
+		}
+	}
+	return nil
 }
 
 func validateToolProfileDocument(doc toolProfileDocument) error {

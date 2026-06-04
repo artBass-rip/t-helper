@@ -122,12 +122,37 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	  "mapping":{"valid":{"path":"valid"},"errors_count":{"path":"error_count"},"warnings_count":{"path":"warning_count"}},
 	  "redaction":{"max_output_bytes":1024}
 	}`)
-	validation, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: payload, FixtureSet: "unit"})
+	validation, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: payload, FixtureSet: "terraform-validate-success"})
 	if err != nil {
 		t.Fatalf("validate profile: %v", err)
 	}
 	if validation.ValidationStatus != "passed" || validation.Tool != "terraform" {
 		t.Fatalf("unexpected validation result: %+v", validation)
+	}
+	for _, item := range []struct {
+		profilePath string
+		fixtureSet  string
+		tool        string
+	}{
+		{"tool-profiles/terraform/terraform-validate-json-v1.json", "terraform-validate-success", "terraform"},
+		{"tool-profiles/tflint/tflint-json-v1.json", "tflint-empty", "tflint"},
+		{"tool-profiles/trivy/trivy-terraform-misconfig-json-v1.json", "trivy-misconfig", "trivy"},
+	} {
+		bundled := readRepoFile(t, item.profilePath)
+		result, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: json.RawMessage(bundled), FixtureSet: item.fixtureSet})
+		if err != nil {
+			t.Fatalf("validate bundled profile %s: %v", item.profilePath, err)
+		}
+		if result.ValidationStatus != "passed" || result.Tool != item.tool {
+			t.Fatalf("bundled profile validation result for %s = %+v", item.profilePath, result)
+		}
+	}
+	validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: payload, FixtureSet: "trivy-misconfig"})
+	if err != nil {
+		t.Fatalf("validate profile with wrong fixture: %v", err)
+	}
+	if validation.ValidationStatus != "failed" {
+		t.Fatalf("profile validation with mismatched fixture status = %q, want failed", validation.ValidationStatus)
 	}
 	imported, err := scannerStore.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: payload})
 	if err != nil {
@@ -145,7 +170,7 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	}
 
 	badProfile := terraformProfilePayload("terraform-network-url-test", "1.0.0", "certified_only", []string{"1"}, []string{"1"}, []string{"validate", "https://example.invalid/schema"})
-	validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: badProfile, FixtureSet: "unit"})
+	validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: badProfile, FixtureSet: "terraform-validate-success"})
 	if err != nil {
 		t.Fatalf("validate bad profile: %v", err)
 	}
@@ -493,5 +518,25 @@ func fakeToolScript(tool string) string {
 		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'TFLint version 0.50.0'; exit 0; fi\necho '{\"issues\":[]}'\n"
 	default:
 		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'Version: 0.60.0'; exit 0; fi\nline=${T_HELPER_FAKE_TRIVY_LINE:-12}\nprintf '{\"Results\":[{\"Target\":\"main.tf\",\"Misconfigurations\":[{\"ID\":\"AVD-AWS-0088\",\"Title\":\"Public bucket\",\"Description\":\"desc\",\"Resolution\":\"fix\",\"Severity\":\"HIGH\",\"CauseMetadata\":{\"Resource\":\"aws_s3_bucket.example\",\"Provider\":\"aws\",\"Service\":\"s3\",\"StartLine\":%s}}]}]}' \"$line\"\n"
+	}
+}
+
+func readRepoFile(t *testing.T, relative string) []byte {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	for {
+		path := filepath.Join(dir, relative)
+		raw, err := os.ReadFile(path)
+		if err == nil {
+			return raw
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("repo file %s not found", relative)
+		}
+		dir = parent
 	}
 }

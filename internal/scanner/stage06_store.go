@@ -338,6 +338,13 @@ func (s *Store) ValidateToolProfile(ctx context.Context, input ToolProfileValida
 		if err != nil {
 			status = "failed"
 			diagnostics["error"] = redactSensitiveText(err.Error())
+		} else if strings.TrimSpace(input.FixtureSet) != "" {
+			if err := validateToolProfileFixtureSet(doc, input.FixtureSet); err != nil {
+				status = "failed"
+				diagnostics["error"] = redactSensitiveText(err.Error())
+			} else {
+				diagnostics["fixture_set"] = redactSensitiveText(strings.TrimSpace(input.FixtureSet))
+			}
 		}
 	}
 	if sourcePath != "" {
