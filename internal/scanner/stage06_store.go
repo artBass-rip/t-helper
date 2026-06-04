@@ -671,19 +671,7 @@ func (s *Store) UpsertFinding(ctx context.Context, input FindingUpsert) (Finding
 	if stableFindingKey == "" {
 		stableFindingKey = resourceRef
 	}
-	components := map[string]any{
-		"schema_version":       FindingFingerprintSchema,
-		"project_id":           nullStringValue(input.ProjectID),
-		"workspace_id":         nullStringValue(input.WorkspaceID),
-		"rule_set_id":          nullStringValue(input.RuleSetID),
-		"rule_namespace":       nonEmpty(input.RuleNamespace, input.Tool),
-		"tool":                 input.Tool,
-		"check_type":           redactSensitiveText(input.CheckType),
-		"rule_id":              input.RuleID,
-		"normalized_file_path": cleanRelativePath(input.FilePath),
-		"resource_ref":         nullStringValue(resourceRef),
-		"finding_key":          stableFindingKey,
-	}
+	components := findingFingerprintComponents(input)
 	rawComponents, _ := json.Marshal(components)
 	sum := sha256.Sum256(rawComponents)
 	fingerprint := "fp:v1:" + hex.EncodeToString(sum[:])

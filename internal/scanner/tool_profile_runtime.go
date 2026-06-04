@@ -82,11 +82,14 @@ type toolProfileFixtureSet struct {
 }
 
 type toolProfileFixture struct {
-	Name                  string            `json:"name"`
-	Stdout                string            `json:"stdout"`
-	ExpectedCheck         json.RawMessage   `json:"expected_check,omitempty"`
-	ExpectedFindingsCount *int              `json:"expected_findings_count,omitempty"`
-	ExpectedFirstFinding  map[string]string `json:"expected_first_finding,omitempty"`
+	Name                                      string            `json:"name"`
+	Stdout                                    string            `json:"stdout"`
+	Stderr                                    string            `json:"stderr,omitempty"`
+	ExpectedErrorCode                         string            `json:"expected_error_code,omitempty"`
+	ExpectedCheck                             json.RawMessage   `json:"expected_check,omitempty"`
+	ExpectedFindingsCount                     *int              `json:"expected_findings_count,omitempty"`
+	ExpectedFirstFinding                      map[string]string `json:"expected_first_finding,omitempty"`
+	ExpectedFirstFindingFingerprintComponents json.RawMessage   `json:"expected_first_finding_fingerprint_components,omitempty"`
 }
 
 func runToolProfile(ctx context.Context, store *Store, tool, projectDir string) (toolProfileRunResult, error) {
@@ -136,10 +139,14 @@ func evaluateToolProfileOutput(doc toolProfileDocument, output []byte, projectDi
 			"warnings_count": selectorInt(parsed, doc.Mapping["warnings_count"]),
 		}
 	case "tflint":
+		issues := selectorArray(parsed, doc.Mapping["issues"])
 		result.Check = map[string]any{
 			"tool":         doc.Tool,
 			"check_type":   "terraform.lint",
-			"issues_count": len(selectorArray(parsed, doc.Mapping["issues"])),
+			"issues_count": len(issues),
+		}
+		if len(doc.Parser.Findings.Mapping) > 0 {
+			result.Check["issues"] = profileCheckIssues(issues, doc, projectDir)
 		}
 	case "findings":
 		result.Findings = profileFindings(parsed, doc, projectDir)
@@ -240,9 +247,19 @@ func validateToolProfileFixtureSet(doc toolProfileDocument, fixtureSet string) e
 	}
 	projectDir := nonEmpty(fixtures.ProjectDir, ".")
 	for _, fixture := range fixtures.Fixtures {
-		result, err := evaluateToolProfileOutput(doc, []byte(fixture.Stdout), projectDir)
+		output := fixture.Stdout
+		if output == "" {
+			output = fixture.Stderr
+		}
+		result, err := evaluateToolProfileOutput(doc, []byte(output), projectDir)
 		if err != nil {
+			if fixture.ExpectedErrorCode != "" && toolErrorCode(err) == fixture.ExpectedErrorCode {
+				continue
+			}
 			return err
+		}
+		if fixture.ExpectedErrorCode != "" {
+			return toolRunError{code: "tool_profile_validation_failed", message: fmt.Sprintf("fixture %s expected error %s", fixture.Name, fixture.ExpectedErrorCode), retryable: false}
 		}
 		if len(fixture.ExpectedCheck) > 0 {
 			if err := compareExpectedJSON(fixture.ExpectedCheck, result.Check); err != nil {
@@ -260,8 +277,24 @@ func validateToolProfileFixtureSet(doc toolProfileDocument, fixtureSet string) e
 				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected_first_finding mismatch: " + err.Error(), retryable: false}
 			}
 		}
+		if len(fixture.ExpectedFirstFindingFingerprintComponents) > 0 {
+			if len(result.Findings) == 0 {
+				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected fingerprint components", retryable: false}
+			}
+			if err := compareExpectedJSON(fixture.ExpectedFirstFindingFingerprintComponents, findingFingerprintComponents(result.Findings[0])); err != nil {
+				return toolRunError{code: "tool_profile_validation_failed", message: "fixture " + fixture.Name + " expected_first_finding_fingerprint_components mismatch: " + err.Error(), retryable: false}
+			}
+		}
 	}
 	return nil
+}
+
+func toolErrorCode(err error) string {
+	var toolErr toolRunError
+	if errors.As(err, &toolErr) {
+		return toolErr.code
+	}
+	return ""
 }
 
 func loadToolProfileFixtureSet(fixtureSet string) (toolProfileFixtureSet, error) {
@@ -315,6 +348,8 @@ func compareExpectedFinding(expected map[string]string, actual FindingUpsert) er
 		"file_path":      actual.FilePath,
 		"resource_ref":   actual.ResourceRef,
 		"title":          actual.Title,
+		"description":    actual.Description,
+		"remediation":    actual.Remediation,
 		"finding_key":    actual.FindingKey,
 		"rule_namespace": actual.RuleNamespace,
 	}
@@ -568,6 +603,7 @@ func profileFindings(root any, doc toolProfileDocument, projectDir string) []Fin
 				findingKey = resource
 			}
 			out = append(out, FindingUpsert{
+				Tool:          doc.Tool,
 				CheckType:     nonEmpty(selectorString(merged, doc.Parser.Findings.Mapping["check_type"]), "terraform.security.misconfig"),
 				RuleID:        redactSensitiveText(nonEmpty(selectorString(merged, doc.Parser.Findings.Mapping["rule_id"]), doc.Tool+".unknown")),
 				Severity:      severity,
@@ -580,6 +616,49 @@ func profileFindings(root any, doc toolProfileDocument, projectDir string) []Fin
 				RuleNamespace: redactSensitiveText(nonEmpty(selectorString(merged, doc.Parser.Findings.Mapping["rule_namespace"]), doc.Tool)),
 			})
 		}
+	}
+	return out
+}
+
+func findingFingerprintComponents(input FindingUpsert) map[string]any {
+	ruleID := strings.TrimSpace(redactSensitiveText(input.RuleID))
+	if ruleID == "" {
+		ruleID = "unknown"
+	}
+	stableFindingKey := strings.TrimSpace(redactSensitiveText(input.FindingKey))
+	resourceRef := strings.TrimSpace(redactSensitiveText(input.ResourceRef))
+	if stableFindingKey == "" {
+		stableFindingKey = resourceRef
+	}
+	return map[string]any{
+		"schema_version":       FindingFingerprintSchema,
+		"project_id":           nullStringValue(input.ProjectID),
+		"workspace_id":         nullStringValue(input.WorkspaceID),
+		"rule_set_id":          nullStringValue(input.RuleSetID),
+		"rule_namespace":       nonEmpty(redactSensitiveText(input.RuleNamespace), redactSensitiveText(input.Tool)),
+		"tool":                 redactSensitiveText(input.Tool),
+		"check_type":           redactSensitiveText(input.CheckType),
+		"rule_id":              ruleID,
+		"normalized_file_path": cleanRelativePath(input.FilePath),
+		"resource_ref":         nullStringValue(resourceRef),
+		"finding_key":          stableFindingKey,
+	}
+}
+
+func profileCheckIssues(items []any, doc toolProfileDocument, projectDir string) []map[string]string {
+	out := make([]map[string]string, 0, len(items))
+	mapping := doc.Parser.Findings.Mapping
+	for _, item := range items {
+		severity := strings.ToLower(nonEmpty(selectorString(item, mapping["severity"]), "warning"))
+		if mapped := doc.Parser.Severities[strings.ToUpper(severity)]; mapped != "" {
+			severity = mapped
+		}
+		out = append(out, map[string]string{
+			"rule_id":   redactSensitiveText(selectorString(item, mapping["rule_id"])),
+			"severity":  severity,
+			"file_path": normalizeFindingPath(projectDir, selectorString(item, mapping["file_path"])),
+			"message":   redactSensitiveText(selectorString(item, mapping["message"])),
+		})
 	}
 	return out
 }

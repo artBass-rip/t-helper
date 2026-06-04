@@ -135,8 +135,12 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 		tool        string
 	}{
 		{"tool-profiles/terraform/terraform-validate-json-v1.json", "terraform-validate-success", "terraform"},
+		{"tool-profiles/terraform/terraform-validate-json-v1.json", "terraform-validate-errors", "terraform"},
 		{"tool-profiles/tflint/tflint-json-v1.json", "tflint-empty", "tflint"},
+		{"tool-profiles/tflint/tflint-json-v1.json", "tflint-warning", "tflint"},
 		{"tool-profiles/trivy/trivy-terraform-misconfig-json-v1.json", "trivy-misconfig", "trivy"},
+		{"tool-profiles/trivy/trivy-terraform-misconfig-json-v1.json", "trivy-secret-redaction", "trivy"},
+		{"tool-profiles/trivy/trivy-terraform-misconfig-json-v1.json", "trivy-malformed-output", "trivy"},
 	} {
 		bundled := readRepoFile(t, item.profilePath)
 		result, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: json.RawMessage(bundled), FixtureSet: item.fixtureSet})
@@ -153,6 +157,18 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	}
 	if validation.ValidationStatus != "failed" {
 		t.Fatalf("profile validation with mismatched fixture status = %q, want failed", validation.ValidationStatus)
+	}
+	for name, invalidPayload := range map[string]json.RawMessage{
+		"missing-required-fields": json.RawMessage(`{"schema_version":"tool_profile.v1","tool":"terraform"}`),
+		"unsupported-schema":      json.RawMessage(`{"schema_version":"tool_profile.v2","tool":"terraform","profile_id":"bad","profile_version":"1.0.0"}`),
+	} {
+		validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: invalidPayload})
+		if err != nil {
+			t.Fatalf("validate invalid profile %s: %v", name, err)
+		}
+		if validation.ValidationStatus != "failed" {
+			t.Fatalf("invalid profile %s validation status = %q, want failed", name, validation.ValidationStatus)
+		}
 	}
 	imported, err := scannerStore.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: payload})
 	if err != nil {

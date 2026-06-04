@@ -16,7 +16,20 @@
   },
   "parser": {
     "type": "json",
-    "result": "tflint"
+    "result": "tflint",
+    "severity_map": {
+      "ERROR": "high",
+      "WARNING": "medium",
+      "NOTICE": "low"
+    },
+    "findings": {
+      "mapping": {
+        "rule_id": {"path": "rule.name"},
+        "severity": {"path": "rule.severity"},
+        "file_path": {"path": "range.filename"},
+        "message": {"path": "message"}
+      }
+    }
   },
   "mapping": {
     "issues": {"path": "issues"}

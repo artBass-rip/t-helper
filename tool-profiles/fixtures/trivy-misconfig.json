@@ -15,6 +15,19 @@
         "title": "Public bucket",
         "finding_key": "aws_s3_bucket.example",
         "rule_namespace": "trivy"
+      },
+      "expected_first_finding_fingerprint_components": {
+        "schema_version": "security_finding.fingerprint.v1",
+        "project_id": null,
+        "workspace_id": null,
+        "rule_set_id": null,
+        "rule_namespace": "trivy",
+        "tool": "trivy",
+        "check_type": "terraform.security.misconfig",
+        "rule_id": "AVD-AWS-0088",
+        "normalized_file_path": "main.tf",
+        "resource_ref": "aws_s3_bucket.example",
+        "finding_key": "aws_s3_bucket.example"
       }
     }
   ]
