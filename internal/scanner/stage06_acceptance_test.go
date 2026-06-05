@@ -182,12 +182,28 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	if imported.Active {
 		t.Fatalf("imported profile must remain inactive: %+v", imported)
 	}
+	var linkedValidations int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM tool_profile_validation_results WHERE tool_profile_id = ? AND validation_status = 'passed'`, imported.ID).Scan(&linkedValidations); err != nil {
+		t.Fatalf("count linked profile validations: %v", err)
+	}
+	if linkedValidations == 0 {
+		t.Fatalf("imported profile was not linked to its passed pre-import validation")
+	}
 	activated, err := scannerStore.ActivateToolProfile(ctx, scanner.ToolProfileActivateInput{Tool: "terraform", ProfileID: imported.ProfileID, ProfileVersion: imported.ProfileVersion})
 	if err != nil {
 		t.Fatalf("activate profile: %v", err)
 	}
 	if !activated.Active {
 		t.Fatalf("activated profile is not active: %+v", activated)
+	}
+
+	unvalidatedProfile := terraformProfilePayload("terraform-unvalidated-test", "1.0.0", "certified_only", []string{"1"}, []string{"1"}, []string{"validate", "-json", "-no-color"})
+	unvalidated, err := scannerStore.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: unvalidatedProfile})
+	if err != nil {
+		t.Fatalf("import unvalidated profile: %v", err)
+	}
+	if _, err := scannerStore.ActivateToolProfile(ctx, scanner.ToolProfileActivateInput{Tool: "terraform", ProfileID: unvalidated.ProfileID, ProfileVersion: unvalidated.ProfileVersion}); err == nil {
+		t.Fatalf("unvalidated non-bundled profile activation succeeded")
 	}
 
 	badProfile := terraformProfilePayload("terraform-network-url-test", "1.0.0", "certified_only", []string{"1"}, []string{"1"}, []string{"validate", "https://example.invalid/schema"})
@@ -490,7 +506,15 @@ func stage06ProjectFixture(t *testing.T, ctx context.Context, scannerStore *scan
 
 func importAndActivateTerraformProfile(t *testing.T, ctx context.Context, store *scanner.Store, profileID, policy string, certified, compatible []string) scanner.ToolProfile {
 	t.Helper()
-	imported, err := store.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: terraformProfilePayload(profileID, "1.0.0", policy, certified, compatible, []string{"validate", "-json", "-no-color"})})
+	payload := terraformProfilePayload(profileID, "1.0.0", policy, certified, compatible, []string{"validate", "-json", "-no-color"})
+	validation, err := store.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: payload, FixtureSet: "terraform-validate-success"})
+	if err != nil {
+		t.Fatalf("validate %s: %v", profileID, err)
+	}
+	if validation.ValidationStatus != "passed" {
+		t.Fatalf("validate %s status = %q, want passed: %s", profileID, validation.ValidationStatus, validation.Diagnostics)
+	}
+	imported, err := store.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: payload})
 	if err != nil {
 		t.Fatalf("import %s: %v", profileID, err)
 	}

@@ -346,6 +346,11 @@ func (s *Store) ValidateToolProfile(ctx context.Context, input ToolProfileValida
 				diagnostics["fixture_set"] = redactSensitiveText(strings.TrimSpace(input.FixtureSet))
 			}
 		}
+		if doc.Tool != "" {
+			diagnostics["profile_id"] = redactSensitiveText(doc.ProfileID)
+			diagnostics["profile_version"] = redactSensitiveText(doc.ProfileVersion)
+			diagnostics["profile_checksum"] = profileChecksum(raw)
+		}
 	}
 	if sourcePath != "" {
 		diagnostics["profile_path"] = redactSensitiveText(sourcePath)
@@ -393,7 +398,14 @@ ON CONFLICT (tool, profile_id, profile_version) DO UPDATE SET schema_version = E
 	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
 		return ToolProfile{}, err
 	}
-	return s.toolProfileByIdentity(ctx, doc.Tool, doc.ProfileID, doc.ProfileVersion)
+	profile, err := s.toolProfileByIdentity(ctx, doc.Tool, doc.ProfileID, doc.ProfileVersion)
+	if err != nil {
+		return ToolProfile{}, err
+	}
+	if err := s.linkMatchingToolProfileValidations(ctx, profile); err != nil {
+		return ToolProfile{}, err
+	}
+	return profile, nil
 }
 
 func materializeUploadedToolProfile(raw []byte, doc toolProfileDocument) (string, error) {
@@ -451,13 +463,13 @@ func (s *Store) ActivateToolProfile(ctx context.Context, input ToolProfileActiva
 	if err != nil {
 		return ToolProfile{}, err
 	}
-	if item.SourceType == "generated_candidate" {
+	if item.SourceType != "bundled" {
 		passed, err := s.toolProfileHasPassedValidation(ctx, item)
 		if err != nil {
 			return ToolProfile{}, err
 		}
 		if !passed {
-			return ToolProfile{}, validationErrorf("generated_candidate profile requires passed validation before activation")
+			return ToolProfile{}, validationErrorf("non-bundled profile requires passed validation before activation")
 		}
 	}
 	now := time.Now().UTC()
@@ -523,6 +535,54 @@ func (s *Store) toolProfileHasPassedValidation(ctx context.Context, profile Tool
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (s *Store) linkMatchingToolProfileValidations(ctx context.Context, profile ToolProfile) error {
+	query := "SELECT id, diagnostics FROM tool_profile_validation_results WHERE tool_profile_id IS NULL AND tool = ? AND validation_status = 'passed'"
+	args := []any{profile.Tool}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT id, diagnostics FROM tool_profile_validation_results WHERE tool_profile_id IS NULL AND tool = $1 AND validation_status = 'passed'"
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var matched []string
+	for rows.Next() {
+		var id string
+		var raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			return err
+		}
+		var diagnostics struct {
+			ProfileID       string `json:"profile_id"`
+			ProfileVersion  string `json:"profile_version"`
+			ProfileChecksum string `json:"profile_checksum"`
+		}
+		if json.Unmarshal([]byte(raw), &diagnostics) != nil {
+			continue
+		}
+		if diagnostics.ProfileID == profile.ProfileID && diagnostics.ProfileVersion == profile.ProfileVersion && diagnostics.ProfileChecksum == profile.Checksum {
+			matched = append(matched, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(matched) == 0 {
+		return nil
+	}
+	updateQuery := "UPDATE tool_profile_validation_results SET tool_profile_id = ? WHERE id = ?"
+	if s.handle.Provider == "postgres" {
+		updateQuery = "UPDATE tool_profile_validation_results SET tool_profile_id = $1 WHERE id = $2"
+	}
+	for _, id := range matched {
+		if _, err := s.handle.DB.ExecContext(ctx, updateQuery, profile.ID, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) insertToolProfileValidationResult(ctx context.Context, doc toolProfileDocument, profileID, fixtureSet, status string, diagnostics map[string]any) (ToolProfileValidationResult, error) {
