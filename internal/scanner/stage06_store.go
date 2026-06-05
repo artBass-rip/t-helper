@@ -563,13 +563,17 @@ func (s *Store) AnalyzeToolProfile(ctx context.Context, input ToolProfileAnalyze
 }
 
 func candidateFixturePayload(doc toolProfileDocument, sample json.RawMessage) ([]byte, error) {
-	result, err := evaluateToolProfileOutput(doc, sample, ".")
+	redactedSample := []byte(redactSensitiveText(string(sample)))
+	if len(redactedSample) > doc.redactionLimit() {
+		return nil, toolRunError{code: "tool_profile_validation_failed", message: "sample_payload exceeds active profile redaction limit", retryable: false}
+	}
+	result, err := evaluateToolProfileOutput(doc, redactedSample, ".")
 	if err != nil {
 		return nil, err
 	}
 	fixture := map[string]any{
 		"name":   doc.ProfileID + "-sample",
-		"stdout": string(sample),
+		"stdout": string(redactedSample),
 	}
 	if result.Check != nil {
 		fixture["expected_check"] = result.Check

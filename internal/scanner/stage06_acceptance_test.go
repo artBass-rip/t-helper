@@ -247,6 +247,31 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 		t.Fatalf("validated generated candidate was not activated: %+v", activatedGenerated)
 	}
 
+	secretCandidate, err := scannerStore.AnalyzeToolProfile(ctx, scanner.ToolProfileAnalyzeInput{
+		BaselineProfileID: "trivy-terraform-misconfig-json-v1",
+		SamplePayload: json.RawMessage(
+			`{"Results":[{"Target":"main.tf","Misconfigurations":[{"ID":"AVD-AWS-9999","Title":"Secret finding","Description":"api_key=supersecret token:abcd1234","Resolution":"Rotate https://user:pass@example.invalid/path and use secretref://env/API_TOKEN","Severity":"CRITICAL","CauseMetadata":{"Resource":"aws_instance.secret","Provider":"aws","Service":"ec2","StartLine":1}}]}]}`,
+		),
+	})
+	if err != nil {
+		t.Fatalf("analyze secret-like trivy sample: %v", err)
+	}
+	secretFixtureText := string(secretCandidate.FixturePayload)
+	for _, leaked := range []string{"supersecret", "abcd1234", "user:pass", "secretref://env/API_TOKEN"} {
+		if strings.Contains(secretFixtureText, leaked) {
+			t.Fatalf("analyzer fixture payload leaked %q: %s", leaked, secretFixtureText)
+		}
+	}
+	secretCandidateFixturePath := filepath.Join(t.TempDir(), "secret-candidate-fixture.json")
+	mustWriteFile(t, secretCandidateFixturePath, secretFixtureText)
+	secretCandidateValidation, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: secretCandidate.ProfilePayload, FixtureSet: secretCandidateFixturePath})
+	if err != nil {
+		t.Fatalf("validate secret-like generated candidate: %v", err)
+	}
+	if secretCandidateValidation.ValidationStatus != "passed" {
+		t.Fatalf("secret-like generated candidate validation = %q: %s", secretCandidateValidation.ValidationStatus, secretCandidateValidation.Diagnostics)
+	}
+
 	badProfile := terraformProfilePayload("terraform-network-url-test", "1.0.0", "certified_only", []string{"1"}, []string{"1"}, []string{"validate", "https://example.invalid/schema"})
 	validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: badProfile, FixtureSet: "terraform-validate-success"})
 	if err != nil {
