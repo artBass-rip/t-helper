@@ -206,6 +206,47 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 		t.Fatalf("unvalidated non-bundled profile activation succeeded")
 	}
 
+	candidate, err := scannerStore.AnalyzeToolProfile(ctx, scanner.ToolProfileAnalyzeInput{
+		BaselineProfileID: "terraform-validate-json-v1",
+		SamplePayload:     json.RawMessage(`{"valid":true,"error_count":0,"warning_count":0,"diagnostics":[]}`),
+	})
+	if err != nil {
+		t.Fatalf("analyze tool profile: %v", err)
+	}
+	if candidate.SourceType != "generated_candidate" || candidate.Confidence == "" || len(candidate.ProfilePayload) == 0 || len(candidate.FixturePayload) == 0 {
+		t.Fatalf("unexpected analyzer candidate: %+v", candidate)
+	}
+	generated, err := scannerStore.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: candidate.ProfilePayload, SourceType: candidate.SourceType})
+	if err != nil {
+		t.Fatalf("import generated candidate: %v", err)
+	}
+	if generated.SourceType != "generated_candidate" || generated.Active {
+		t.Fatalf("generated candidate import state = %+v", generated)
+	}
+	if _, err := scannerStore.ActivateToolProfile(ctx, scanner.ToolProfileActivateInput{Tool: generated.Tool, ProfileID: generated.ProfileID, ProfileVersion: generated.ProfileVersion}); err == nil {
+		t.Fatalf("unvalidated generated candidate activation succeeded")
+	}
+	candidateFixturePath := filepath.Join(t.TempDir(), "candidate-fixture.json")
+	mustWriteFile(t, candidateFixturePath, string(candidate.FixturePayload))
+	candidateValidation, err := scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: candidate.ProfilePayload, FixtureSet: candidateFixturePath})
+	if err != nil {
+		t.Fatalf("validate generated candidate: %v", err)
+	}
+	if candidateValidation.ValidationStatus != "passed" {
+		t.Fatalf("generated candidate validation = %q: %s", candidateValidation.ValidationStatus, candidateValidation.Diagnostics)
+	}
+	generated, err = scannerStore.ImportToolProfile(ctx, scanner.ToolProfileImportInput{ProfilePayload: candidate.ProfilePayload, SourceType: candidate.SourceType})
+	if err != nil {
+		t.Fatalf("re-import validated generated candidate: %v", err)
+	}
+	activatedGenerated, err := scannerStore.ActivateToolProfile(ctx, scanner.ToolProfileActivateInput{Tool: generated.Tool, ProfileID: generated.ProfileID, ProfileVersion: generated.ProfileVersion})
+	if err != nil {
+		t.Fatalf("activate validated generated candidate: %v", err)
+	}
+	if !activatedGenerated.Active {
+		t.Fatalf("validated generated candidate was not activated: %+v", activatedGenerated)
+	}
+
 	badProfile := terraformProfilePayload("terraform-network-url-test", "1.0.0", "certified_only", []string{"1"}, []string{"1"}, []string{"validate", "https://example.invalid/schema"})
 	validation, err = scannerStore.ValidateToolProfile(ctx, scanner.ToolProfileValidateInput{ProfilePayload: badProfile, FixtureSet: "terraform-validate-success"})
 	if err != nil {

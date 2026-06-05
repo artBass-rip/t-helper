@@ -307,6 +307,7 @@ type ToolProfileValidateInput struct {
 type ToolProfileImportInput struct {
 	ProfilePath    string          `json:"profile_path,omitempty"`
 	ProfilePayload json.RawMessage `json:"profile_payload,omitempty"`
+	SourceType     string          `json:"source_type,omitempty"`
 }
 
 type ToolProfileActivateInput struct {
@@ -324,9 +325,11 @@ type ToolProfileAnalyzeInput struct {
 type ToolProfileCandidate struct {
 	SchemaVersion     string          `json:"schema_version"`
 	BaselineProfileID string          `json:"baseline_profile_id,omitempty"`
+	SourceType        string          `json:"source_type,omitempty"`
 	Confidence        string          `json:"confidence"`
 	Diagnostics       json.RawMessage `json:"diagnostics"`
 	ProfilePayload    json.RawMessage `json:"profile_payload,omitempty"`
+	FixturePayload    json.RawMessage `json:"fixture_payload,omitempty"`
 }
 
 type ToolMetadata struct {

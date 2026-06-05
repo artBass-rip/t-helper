@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -370,7 +371,13 @@ func (s *Store) ImportToolProfile(ctx context.Context, input ToolProfileImportIn
 	if err != nil {
 		return ToolProfile{}, err
 	}
-	sourceType := "local_upload"
+	sourceType := strings.TrimSpace(input.SourceType)
+	if sourceType == "" {
+		sourceType = "local_upload"
+	}
+	if sourceType != "local_upload" && sourceType != "generated_candidate" {
+		return ToolProfile{}, validationErrorf("unsupported import source_type %q", sourceType)
+	}
 	if sourcePath != "" {
 		sourceType = "local_path"
 		if strings.HasPrefix(filepath.ToSlash(sourcePath), "tool-profiles/") {
@@ -499,16 +506,100 @@ func (s *Store) ActivateToolProfile(ctx context.Context, input ToolProfileActiva
 }
 
 func (s *Store) AnalyzeToolProfile(ctx context.Context, input ToolProfileAnalyzeInput) (ToolProfileCandidate, error) {
-	diagnostics, _ := json.Marshal(map[string]any{
-		"message":      "automatic profile analyzer is not enabled in this MVP build",
-		"samples_path": redactSensitiveText(strings.TrimSpace(input.SamplesPath)),
-	})
+	baselineID := strings.TrimSpace(input.BaselineProfileID)
+	diagnostics := map[string]any{
+		"samples_path":                  redactSensitiveText(strings.TrimSpace(input.SamplesPath)),
+		"unresolved_fingerprint_fields": []string{"rule_id", "normalized_file_path", "resource_ref", "finding_key", "rule_namespace", "tool", "check_type"},
+	}
+	if len(input.SamplePayload) == 0 {
+		diagnostics["message"] = "sample_payload is required for MVP analyzer candidate generation"
+		rawDiagnostics, _ := json.Marshal(diagnostics)
+		return ToolProfileCandidate{
+			SchemaVersion:     toolProfileCandidateVersion,
+			BaselineProfileID: baselineID,
+			SourceType:        "generated_candidate",
+			Confidence:        "unsupported",
+			Diagnostics:       json.RawMessage(rawDiagnostics),
+		}, nil
+	}
+	var sample any
+	decoder := json.NewDecoder(bytes.NewReader(input.SamplePayload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&sample); err != nil {
+		return ToolProfileCandidate{}, toolRunError{code: "tool_output_parse_failed", message: "sample_payload could not be parsed as JSON", retryable: false}
+	}
+	profile, err := s.baselineToolProfileByProfileID(ctx, baselineID)
+	if err != nil {
+		return ToolProfileCandidate{}, err
+	}
+	doc, err := loadToolProfileDocument(profile)
+	if err != nil {
+		return ToolProfileCandidate{}, err
+	}
+	doc.ProfileID = safeToolProfileFileName(doc.ProfileID + "-candidate")
+	doc.ProfileVersion = nonEmpty(doc.ProfileVersion, "1.0.0")
+	fixturePayload, err := candidateFixturePayload(doc, input.SamplePayload)
+	if err != nil {
+		return ToolProfileCandidate{}, err
+	}
+	rawProfile, err := json.Marshal(doc)
+	if err != nil {
+		return ToolProfileCandidate{}, err
+	}
+	diagnostics["message"] = "candidate generated from baseline profile; fingerprint-affecting mappings require fixture validation before activation"
+	diagnostics["baseline_tool"] = redactSensitiveText(profile.Tool)
+	diagnostics["baseline_profile_version"] = redactSensitiveText(profile.ProfileVersion)
+	diagnostics["sample_payload_checksum"] = profileChecksum(input.SamplePayload)
+	rawDiagnostics, _ := json.Marshal(diagnostics)
 	return ToolProfileCandidate{
 		SchemaVersion:     toolProfileCandidateVersion,
-		BaselineProfileID: strings.TrimSpace(input.BaselineProfileID),
-		Confidence:        "unsupported",
-		Diagnostics:       json.RawMessage(diagnostics),
+		BaselineProfileID: baselineID,
+		SourceType:        "generated_candidate",
+		Confidence:        "low",
+		Diagnostics:       json.RawMessage(rawDiagnostics),
+		ProfilePayload:    json.RawMessage(rawProfile),
+		FixturePayload:    json.RawMessage(fixturePayload),
 	}, nil
+}
+
+func candidateFixturePayload(doc toolProfileDocument, sample json.RawMessage) ([]byte, error) {
+	result, err := evaluateToolProfileOutput(doc, sample, ".")
+	if err != nil {
+		return nil, err
+	}
+	fixture := map[string]any{
+		"name":   doc.ProfileID + "-sample",
+		"stdout": string(sample),
+	}
+	if result.Check != nil {
+		fixture["expected_check"] = result.Check
+	}
+	if result.Findings != nil {
+		count := len(result.Findings)
+		fixture["expected_findings_count"] = count
+		if count > 0 {
+			first := result.Findings[0]
+			fixture["expected_first_finding"] = map[string]string{
+				"check_type":     first.CheckType,
+				"rule_id":        first.RuleID,
+				"severity":       first.Severity,
+				"file_path":      first.FilePath,
+				"resource_ref":   first.ResourceRef,
+				"title":          first.Title,
+				"description":    first.Description,
+				"remediation":    first.Remediation,
+				"finding_key":    first.FindingKey,
+				"rule_namespace": first.RuleNamespace,
+			}
+			fixture["expected_first_finding_fingerprint_components"] = findingFingerprintComponents(first)
+		}
+	}
+	payload := map[string]any{
+		"schema_version": "tool_profile_fixture_set.v1",
+		"tool":           doc.Tool,
+		"fixtures":       []any{fixture},
+	}
+	return json.Marshal(payload)
 }
 
 func (s *Store) toolProfileByIdentity(ctx context.Context, tool, profileID, profileVersion string) (ToolProfile, error) {
@@ -516,6 +607,22 @@ func (s *Store) toolProfileByIdentity(ctx context.Context, tool, profileID, prof
 	args := []any{tool, profileID, profileVersion}
 	if s.handle.Provider == "postgres" {
 		query = "SELECT id, tool, profile_id, profile_version, schema_version, source_type, source_path, checksum, certified_versions, compatible_versions, active, created_at, updated_at FROM tool_profiles WHERE tool = $1 AND profile_id = $2 AND profile_version = $3"
+	}
+	item, err := scanToolProfile(s.handle.DB.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ToolProfile{}, ErrNotFound
+	}
+	return item, err
+}
+
+func (s *Store) baselineToolProfileByProfileID(ctx context.Context, profileID string) (ToolProfile, error) {
+	if strings.TrimSpace(profileID) == "" {
+		return ToolProfile{}, validationErrorf("baseline_profile_id is required")
+	}
+	query := "SELECT id, tool, profile_id, profile_version, schema_version, source_type, source_path, checksum, certified_versions, compatible_versions, active, created_at, updated_at FROM tool_profiles WHERE profile_id = ? ORDER BY active DESC, updated_at DESC, id DESC LIMIT 1"
+	args := []any{profileID}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT id, tool, profile_id, profile_version, schema_version, source_type, source_path, checksum, certified_versions, compatible_versions, active, created_at, updated_at FROM tool_profiles WHERE profile_id = $1 ORDER BY active DESC, updated_at DESC, id DESC LIMIT 1"
 	}
 	item, err := scanToolProfile(s.handle.DB.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
