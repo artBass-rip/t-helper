@@ -23,6 +23,13 @@ func (h *Handle) Close() error {
 	return h.DB.Close()
 }
 
+func (h *Handle) Dialect() Dialect {
+	if h == nil {
+		return NewDialect("")
+	}
+	return NewDialect(h.Provider)
+}
+
 type Provider interface {
 	Name() string
 	Open(ctx context.Context, cfg Config) (*Handle, error)

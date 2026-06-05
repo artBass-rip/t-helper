@@ -1151,17 +1151,11 @@ func scanWorkspace(row interface{ Scan(dest ...any) error }) (Workspace, error) 
 }
 
 func (s *Store) placeholder(idx int) string {
-	if s.handle.Provider == "postgres" {
-		return fmt.Sprintf("$%d", idx)
-	}
-	return "?"
+	return s.handle.Dialect().Placeholder(idx)
 }
 
 func (s *Store) timeExpr(column string) string {
-	if s.handle.Provider == "postgres" {
-		return column + "::text"
-	}
-	return column
+	return s.handle.Dialect().TimeExpr(column)
 }
 
 func (s *Store) boolSelect(column string) string {
@@ -1169,13 +1163,7 @@ func (s *Store) boolSelect(column string) string {
 }
 
 func (s *Store) boolArg(value bool) any {
-	if s.handle.Provider == "postgres" {
-		return value
-	}
-	if value {
-		return 1
-	}
-	return 0
+	return s.handle.Dialect().BoolArg(value)
 }
 
 func normalizeAbsPath(value string) (string, error) {

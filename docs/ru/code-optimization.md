@@ -1,6 +1,6 @@
 # Code Optimization And Quality Baseline
 
-Дата актуализации: 2026-05-31.
+Дата актуализации: 2026-06-05.
 
 Этот документ фиксирует уже выполненные оптимизации, текущий quality gate и
 оставшийся backlog, который должен внедряться итеративно без массовых
@@ -21,6 +21,13 @@
   `jobs.Store.Complete`, `jobs.Store.Requeue`.
 - Добавлены первые benchmarks для hot paths `jobs.Store.ClaimNext` и
   `jobs.Store.RefreshWorkflowStatus`.
+- Добавлены `storage.Dialect` и `Handle.Dialect()` для централизации common
+  SQLite/PostgreSQL placeholders, `IN (...)`, time cast и boolean argument
+  handling. Локальные helpers в `jobs`, `scanner` и `repository` теперь
+  делегируют ему.
+- Удалён один избыточный вызов `RefreshWorkflowStatus` из worker
+  startup-progress path; lifecycle transitions по-прежнему обновляют workflow
+  status.
 - Добавлен локальный quality gate `make test`, который выполняет:
   `gofmt` check, `go vet ./...`, `go test ./...`.
 - Добавлен `make race` для ручных/nightly проверок с race detector.
@@ -48,17 +55,17 @@ Stage 05. Основной drift был в development/local-environment док�
 
 ## Backlog
 
-### P1. SQL dialect helper
+### P1. SQL dialect helper follow-up
 
-Проблема: store-слой всё ещё содержит ветвления по `handle.Provider` для
-SQLite/PostgreSQL placeholders, casts и upsert shapes.
+Проблема: common placeholder, `IN (...)`, time cast и boolean argument handling
+теперь имеют общий helper, но store-файлы всё ещё содержат provider branches
+для JSON casts и upsert shapes.
 
 Следующий шаг:
 
-- добавить небольшой helper в `internal/storage` или `internal/storage/sqlutil`;
-- централизовать placeholders, `IN (...)`, boolean/time/JSON casts и common
-  upsert fragments;
-- переводить store-файлы по одному, начиная с `jobs` или `scanner`.
+- расширять `storage.Dialect` JSON cast и common upsert fragments там, где это
+  убирает значимое дублирование;
+- переводить store branches по одному при изменении соответствующей области.
 
 ### P1. Workflow status refresh load
 

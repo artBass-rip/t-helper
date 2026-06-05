@@ -846,20 +846,11 @@ func (s *Store) MarkRepositoryError(ctx context.Context, id, message string) err
 }
 
 func (s *Store) placeholder(idx int) string {
-	if s.handle.Provider == "postgres" {
-		return fmt.Sprintf("$%d", idx)
-	}
-	return "?"
+	return s.handle.Dialect().Placeholder(idx)
 }
 
 func (s *Store) boolArg(value bool) any {
-	if s.handle.Provider == "postgres" {
-		return value
-	}
-	if value {
-		return 1
-	}
-	return 0
+	return s.handle.Dialect().BoolArg(value)
 }
 
 func (s *Store) providerInstanceColumns() string {

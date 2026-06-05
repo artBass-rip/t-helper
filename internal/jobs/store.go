@@ -49,6 +49,10 @@ func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle}
 }
 
+func (s *Store) dialect() storage.Dialect {
+	return s.handle.Dialect()
+}
+
 func NewJobID() string {
 	return newID("job")
 }
@@ -773,17 +777,11 @@ func scanLock(row interface{ Scan(dest ...any) error }) (Lock, error) {
 }
 
 func (s *Store) placeholder(idx int) string {
-	if s.handle.Provider == "postgres" {
-		return fmt.Sprintf("$%d", idx)
-	}
-	return "?"
+	return s.dialect().Placeholder(idx)
 }
 
 func (s *Store) timeExpr(column string) string {
-	if s.handle.Provider == "postgres" {
-		return column + "::text"
-	}
-	return column
+	return s.dialect().TimeExpr(column)
 }
 
 func defaultJobGroupID(jobType, id string) string {
