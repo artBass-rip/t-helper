@@ -989,7 +989,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `project_scans.job_id` и `project_scans.project_id` обязательны; удаление связанных `jobs` и `projects` должно использовать `ON DELETE RESTRICT`;
 - `job_locks.job_id` обязателен; удаление связанных `jobs` должно использовать `ON DELETE RESTRICT`;
 - `security_findings.project_id`, `security_findings.repository_id`, `security_findings.workspace_id`, `security_findings.job_id`, `security_findings.rule_set_id` nullable, но finding должен ссылаться хотя бы на один из `project_id`, `repository_id`, `workspace_id` или `job_id`;
-- `tool_profile_validation_results.tool_profile_id` обязателен и использует `ON DELETE CASCADE`;
+- `tool_profile_validation_results.tool_profile_id` nullable for pre-import validation results and uses `ON DELETE SET NULL`;
 - `local_user_credentials.user_id` обязателен и использует `ON DELETE CASCADE`;
 - `password_reset_tokens.user_id` обязателен и использует `ON DELETE CASCADE`;
 - `user_sessions.user_id` обязателен и использует `ON DELETE CASCADE`;

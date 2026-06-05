@@ -49,6 +49,7 @@ func runStorageContract(t *testing.T, cfg storage.Config) {
 	assertStage03TablesPresent(t, handle.DB, handle.Provider)
 	assertStage04TablesPresent(t, handle.DB, handle.Provider)
 	assertStage06TablesPresent(t, handle.DB, handle.Provider)
+	assertStage06IndexesPresent(t, handle.DB, handle.Provider)
 	if handle.Fingerprint == "" {
 		t.Fatal("expected non-empty database fingerprint")
 	}
@@ -170,6 +171,25 @@ func assertStage06TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	}
 }
 
+func assertStage06IndexesPresent(t *testing.T, db *sql.DB, provider string) {
+	t.Helper()
+	for _, index := range []string{
+		"tool_profiles_tool_active_idx",
+		"tool_profile_validation_results_profile_version_idx",
+		"tool_profile_validation_results_status_idx",
+		"project_scans_project_status_idx",
+		"security_findings_rule_status_idx",
+		"security_findings_project_status_idx",
+		"security_findings_repository_status_idx",
+		"security_findings_job_idx",
+		"security_findings_severity_status_idx",
+	} {
+		if !indexExists(t, db, provider, index) {
+			t.Fatalf("Stage 06 index %q was not created", index)
+		}
+	}
+}
+
 func tableExists(t *testing.T, db *sql.DB, provider, table string) bool {
 	t.Helper()
 	var count int
@@ -182,6 +202,22 @@ func tableExists(t *testing.T, db *sql.DB, provider, table string) bool {
 	}
 	if err != nil {
 		t.Fatalf("check table %q: %v", table, err)
+	}
+	return count > 0
+}
+
+func indexExists(t *testing.T, db *sql.DB, provider, index string) bool {
+	t.Helper()
+	var count int
+	var err error
+	switch provider {
+	case "postgres":
+		err = db.QueryRow("SELECT count(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1", index).Scan(&count)
+	default:
+		err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = ?", index).Scan(&count)
+	}
+	if err != nil {
+		t.Fatalf("check index %q: %v", index, err)
 	}
 	return count > 0
 }

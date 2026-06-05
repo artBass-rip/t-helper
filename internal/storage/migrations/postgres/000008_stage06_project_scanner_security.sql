@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS tool_profile_validation_results (
   created_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS tool_profile_validation_results_profile_version_idx
+  ON tool_profile_validation_results (tool_profile_id, tool_version);
+CREATE INDEX IF NOT EXISTS tool_profile_validation_results_status_idx
+  ON tool_profile_validation_results (validation_status);
+
 CREATE TABLE IF NOT EXISTS project_scan_settings (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
@@ -158,6 +163,8 @@ DROP INDEX IF EXISTS security_rule_sets_active_idx;
 DROP TABLE IF EXISTS security_rule_sets;
 DROP TABLE IF EXISTS project_security_scan_settings;
 DROP TABLE IF EXISTS project_scan_settings;
+DROP INDEX IF EXISTS tool_profile_validation_results_status_idx;
+DROP INDEX IF EXISTS tool_profile_validation_results_profile_version_idx;
 DROP TABLE IF EXISTS tool_profile_validation_results;
 DROP INDEX IF EXISTS tool_profiles_tool_active_idx;
 DROP TABLE IF EXISTS tool_profiles;
