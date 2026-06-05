@@ -83,6 +83,8 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 		Providers     []string               `json:"providers"`
 		RequiredAuth  []string               `json:"required_auth"`
 		CheckResults  []map[string]any       `json:"check_results"`
+		JobGroupID    string                 `json:"job_group_id"`
+		ParentJobID   string                 `json:"parent_job_id"`
 		ChildJobIDs   []string               `json:"child_job_ids"`
 		SchemaVersion string                 `json:"schema_version"`
 	}
@@ -91,6 +93,9 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 	}
 	if aggregate.SchemaVersion != scanner.ProjectScanAggregateSchema || len(aggregate.Tools) != 3 || len(aggregate.ChildJobIDs) != 1 {
 		t.Fatalf("unexpected aggregate payload: %+v", aggregate)
+	}
+	if aggregate.JobGroupID != "project_scan:"+scan.ID || aggregate.ParentJobID != scan.JobID {
+		t.Fatalf("aggregate job identifiers do not match project scan: %+v scan=%+v", aggregate, scan)
 	}
 	if len(aggregate.Providers) != 1 || aggregate.Providers[0] != "aws" || len(aggregate.RequiredAuth) != 1 || aggregate.RequiredAuth[0] != "provider:aws" {
 		t.Fatalf("providers/required_auth were not detected: %+v", aggregate)

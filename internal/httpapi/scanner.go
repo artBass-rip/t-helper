@@ -336,7 +336,7 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 		JobID:         ref.JobID,
 		JobGroupID:    "project_scan:" + item.ID,
 		Status:        ref.Status,
-		SchemaVersion: jobs.JobRefSchemaVersion,
+		SchemaVersion: scanner.ProjectScanRefSchema,
 	})
 }
 

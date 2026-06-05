@@ -7,7 +7,7 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 
 ## Текущий executable baseline
 
-Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В
+Репозиторий сейчас находится на Stage 06 project scanner/security validator MVP baseline. В
 текущем runtime реализованы:
 
 - `GET /api/health`;
@@ -22,8 +22,16 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 - `POST /api/scans`, `GET /api/scans/{job_id}`;
 - `GET /api/projects`, `GET /api/projects/{id}`,
   `GET /api/projects/{id}/links`;
-- `POST /api/project-scans` only as the Stage 04 lifecycle guard for future
-  Stage 06 scans;
+- `GET /api/projects/{id}/scan-settings`,
+  `PUT /api/projects/{id}/scan-settings`;
+- `GET /api/project-scans`, `POST /api/project-scans`,
+  `GET /api/project-scans/{project_scan_id}`,
+  `GET /api/project-scans/{project_scan_id}/findings`;
+- `GET /api/security/findings`, `GET /api/security/findings/{id}`,
+  `GET /api/security/rule-sets`, `PUT /api/security/rule-sets`;
+- `GET /api/tool-profiles`, `POST /api/tool-profiles/validate`,
+  `POST /api/tool-profiles/import`, `POST /api/tool-profiles/activate`,
+  `POST /api/tool-profiles/analyze`;
 - `GET /api/repos`, `GET /api/repos/{id}`;
 - `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`;
 - `GET /api/repo-credentials`, `PUT /api/repo-credentials`;

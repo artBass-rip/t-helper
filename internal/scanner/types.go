@@ -14,6 +14,7 @@ const (
 	ProjectScanResultSchema       = "jobs.project_scan.result.v1"
 	SecurityScanPayloadSchema     = "jobs.security_validation_scan.payload.v1"
 	SecurityScanResultSchema      = "jobs.security_validation_scan.result.v1"
+	ProjectScanRefSchema          = "project_scan_ref.v1"
 	ProjectScanAggregateSchema    = "project_scans.result.v1"
 	FindingFingerprintSchema      = "security_finding.fingerprint.v1"
 

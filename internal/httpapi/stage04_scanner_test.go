@@ -276,6 +276,9 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&projectScanRef); err != nil {
 		t.Fatalf("decode project scan ref: %v", err)
 	}
+	if projectScanRef.SchemaVersion != scanner.ProjectScanRefSchema || projectScanRef.Status != jobs.StatusQueued {
+		t.Fatalf("unexpected project scan ref: %+v", projectScanRef)
+	}
 	projectScanJob, err := jobStore.Get(ctx, projectScanRef.JobID)
 	if err != nil {
 		t.Fatalf("get project scan job: %v", err)
