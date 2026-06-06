@@ -54,6 +54,17 @@ func JobHandlers(store *Store) map[string]jobs.Handler {
 	}
 }
 
+func JobCompletionHook(store *Store) func(context.Context, jobs.Job, string) error {
+	return func(ctx context.Context, job jobs.Job, status string) error {
+		switch job.JobType {
+		case "project_scan", "security_validation_scan":
+			return store.ApplyWorkflowAggregateToProjectScan(ctx, job.JobGroupID)
+		default:
+			return nil
+		}
+	}
+}
+
 func (h globalScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job jobs.Job) (json.RawMessage, error) {
 	var payload GlobalScanPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {

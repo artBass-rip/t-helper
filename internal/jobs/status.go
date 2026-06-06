@@ -576,6 +576,9 @@ func aggregateStatus(counts map[string]int, total int) string {
 		return StatusRunning
 	}
 	if counts[StatusQueued] > 0 {
+		if counts[StatusSucceeded]+counts[StatusFailed]+counts[StatusCancelled] > 0 {
+			return StatusRunning
+		}
 		return StatusQueued
 	}
 	if counts[StatusSucceeded] == total {

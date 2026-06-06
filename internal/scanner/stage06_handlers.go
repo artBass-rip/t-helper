@@ -104,7 +104,6 @@ func (h projectScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "serialization_error", Message: err.Error(), Retryable: false}
 	}
-	_ = h.store.ApplyWorkflowAggregateToProjectScan(ctx, job.JobGroupID)
 	return raw, nil
 }
 
@@ -195,7 +194,6 @@ func (h securityValidationHandler) Handle(ctx context.Context, env jobs.HandlerE
 	if err != nil {
 		return nil, jobs.HandlerError{Code: "serialization_error", Message: err.Error(), Retryable: false}
 	}
-	_ = h.store.ApplyWorkflowAggregateToProjectScan(ctx, job.JobGroupID)
 	_ = env.EmitProgress(ctx, job, "security validation completed", map[string]any{
 		"project_scan_id":  payload.ProjectScanID,
 		"findings_created": result.FindingsCreated,

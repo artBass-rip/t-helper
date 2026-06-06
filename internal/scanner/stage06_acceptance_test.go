@@ -25,10 +25,11 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 	scannerStore := scanner.NewStore(handle)
 	jobStore := jobs.NewStore(handle)
 	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
-		Store:    jobStore,
-		Handlers: scanner.JobHandlers(scannerStore),
-		WorkerID: "host:test:stage06",
-		Logger:   slog.Default(),
+		Store:         jobStore,
+		Handlers:      scanner.JobHandlers(scannerStore),
+		AfterComplete: scanner.JobCompletionHook(scannerStore),
+		WorkerID:      "host:test:stage06",
+		Logger:        slog.Default(),
 	})
 
 	rootDir := t.TempDir()
@@ -297,7 +298,7 @@ func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
 
 	scannerStore := scanner.NewStore(handle)
 	jobStore := jobs.NewStore(handle)
-	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), WorkerID: "host:test:version-policy", Logger: slog.Default()})
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), AfterComplete: scanner.JobCompletionHook(scannerStore), WorkerID: "host:test:version-policy", Logger: slog.Default()})
 	project := stage06ProjectFixture(t, ctx, scannerStore)
 
 	uncertified := importAndActivateTerraformProfile(t, ctx, scannerStore, "terraform-uncertified-test", "certified_only", []string{"9"}, []string{"1"})
@@ -351,7 +352,7 @@ func TestStage06SecurityValidationRunsOnlyWhenEnabledInProjectSettings(t *testin
 
 	scannerStore := scanner.NewStore(handle)
 	jobStore := jobs.NewStore(handle)
-	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), WorkerID: "host:test:security-settings", Logger: slog.Default()})
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), AfterComplete: scanner.JobCompletionHook(scannerStore), WorkerID: "host:test:security-settings", Logger: slog.Default()})
 	project := stage06ProjectFixture(t, ctx, scannerStore)
 	securityEnabled := false
 	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{Security: &struct {
@@ -515,13 +516,14 @@ func runStage06ProjectScan(t *testing.T, ctx context.Context, runtime *jobs.Runt
 	if len(children) != 1 || children[0].JobType != "security_validation_scan" {
 		t.Fatalf("expected one security child job, got %+v", children)
 	}
+	afterParent, err := scannerStore.GetProjectScan(ctx, projectScanID)
+	if err != nil {
+		t.Fatalf("get project scan after parent: %v", err)
+	}
+	if afterParent.Status != jobs.StatusRunning {
+		t.Fatalf("project scan status after parent completion = %q, want running until child completion", afterParent.Status)
+	}
 	runUntilComplete(t, ctx, runtime, jobStore, children[0].ID)
-	if err := jobStore.ReconcileWorkflowStatuses(ctx); err != nil {
-		t.Fatalf("reconcile workflows: %v", err)
-	}
-	if err := scannerStore.ApplyWorkflowAggregateToProjectScan(ctx, "project_scan:"+projectScanID); err != nil {
-		t.Fatalf("apply aggregate: %v", err)
-	}
 	return projectScanID
 }
 
