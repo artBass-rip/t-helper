@@ -435,6 +435,9 @@ func TestStage06FindingFingerprintVariantsAndRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert base finding: %v", err)
 	}
+	if !first.Finding.FirstSeenAt.Equal(first.Finding.DetectedAt) {
+		t.Fatalf("new finding detected_at = %s, want first_seen_at %s", first.Finding.DetectedAt, first.Finding.FirstSeenAt)
+	}
 	if !strings.HasPrefix(first.Finding.Fingerprint, "fp:v1:") {
 		t.Fatalf("fingerprint has unexpected format: %s", first.Finding.Fingerprint)
 	}
@@ -455,6 +458,30 @@ func TestStage06FindingFingerprintVariantsAndRedaction(t *testing.T) {
 		if _, ok := components[forbidden]; ok {
 			t.Fatalf("fingerprint components include forbidden field %s: %s", forbidden, first.Finding.FingerprintComponents)
 		}
+	}
+	time.Sleep(time.Millisecond)
+	repeated := base
+	repeatedJob, err := jobs.NewStore(handle).Enqueue(ctx, jobs.EnqueueRequest{JobType: "config_reload", Payload: json.RawMessage(`{"schema_version":"jobs.config_reload.payload.v1"}`)})
+	if err != nil {
+		t.Fatalf("enqueue repeated finding job: %v", err)
+	}
+	repeated.JobID = repeatedJob.JobID
+	repeated.Severity = "critical"
+	updated, err := scannerStore.UpsertFinding(ctx, repeated)
+	if err != nil {
+		t.Fatalf("upsert repeated finding: %v", err)
+	}
+	if updated.Created || updated.Finding.ID != first.Finding.ID {
+		t.Fatalf("repeated finding should update existing row: %+v first=%+v", updated, first.Finding)
+	}
+	if !updated.Finding.FirstSeenAt.Equal(first.Finding.FirstSeenAt) || !updated.Finding.DetectedAt.Equal(first.Finding.DetectedAt) {
+		t.Fatalf("repeated finding changed initial timestamps: first=%s/%s updated=%s/%s", first.Finding.FirstSeenAt, first.Finding.DetectedAt, updated.Finding.FirstSeenAt, updated.Finding.DetectedAt)
+	}
+	if !updated.Finding.LastSeenAt.After(first.Finding.LastSeenAt) {
+		t.Fatalf("repeated finding last_seen_at = %s, want after %s", updated.Finding.LastSeenAt, first.Finding.LastSeenAt)
+	}
+	if updated.Finding.Severity != "critical" || updated.Finding.JobID != repeated.JobID {
+		t.Fatalf("repeated finding did not update mutable fields: %+v", updated.Finding)
 	}
 
 	changedRuleSet := base
