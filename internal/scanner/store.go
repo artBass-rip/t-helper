@@ -1190,6 +1190,14 @@ func cleanRelativePath(value string) string {
 	return value
 }
 
+func cleanFindingPath(value string) string {
+	value = cleanRelativePath(value)
+	if value == ".." || strings.HasPrefix(value, "../") {
+		return filepath.Base(value)
+	}
+	return value
+}
+
 func safeRelativePath(value string) (string, error) {
 	raw := strings.TrimSpace(value)
 	if raw == "" {

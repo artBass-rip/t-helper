@@ -639,7 +639,7 @@ func findingFingerprintComponents(input FindingUpsert) map[string]any {
 		"tool":                 redactSensitiveText(input.Tool),
 		"check_type":           redactSensitiveText(input.CheckType),
 		"rule_id":              ruleID,
-		"normalized_file_path": cleanRelativePath(input.FilePath),
+		"normalized_file_path": cleanFindingPath(input.FilePath),
 		"resource_ref":         nullStringValue(resourceRef),
 		"finding_key":          stableFindingKey,
 	}

@@ -263,8 +263,8 @@ func normalizeFindingPath(projectDir, target string) string {
 	}
 	if filepath.IsAbs(target) {
 		if rel, err := filepath.Rel(projectDir, target); err == nil {
-			return cleanRelativePath(filepath.ToSlash(rel))
+			return cleanFindingPath(filepath.ToSlash(rel))
 		}
 	}
-	return cleanRelativePath(filepath.ToSlash(target))
+	return cleanFindingPath(filepath.ToSlash(target))
 }

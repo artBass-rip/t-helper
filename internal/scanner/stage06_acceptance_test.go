@@ -523,6 +523,23 @@ func TestStage06FindingFingerprintVariantsAndRedaction(t *testing.T) {
 	if fourth.Finding.Fingerprint == first.Finding.Fingerprint {
 		t.Fatalf("renamed file without documented stable move key must produce different fingerprint")
 	}
+	unsafePath := base
+	unsafePath.FilePath = filepath.Join(t.TempDir(), "..", "outside", "main.tf")
+	unsafePath.FindingKey = "unsafe-path"
+	unsafeFinding, err := scannerStore.UpsertFinding(ctx, unsafePath)
+	if err != nil {
+		t.Fatalf("upsert unsafe path finding: %v", err)
+	}
+	if strings.Contains(unsafeFinding.Finding.FilePath, "..") || filepath.IsAbs(unsafeFinding.Finding.FilePath) {
+		t.Fatalf("unsafe finding path was persisted: %q", unsafeFinding.Finding.FilePath)
+	}
+	var unsafeComponents map[string]any
+	if err := json.Unmarshal(unsafeFinding.Finding.FingerprintComponents, &unsafeComponents); err != nil {
+		t.Fatalf("decode unsafe fingerprint components: %v", err)
+	}
+	if normalized, _ := unsafeComponents["normalized_file_path"].(string); strings.Contains(normalized, "..") || strings.HasPrefix(normalized, "/") {
+		t.Fatalf("unsafe normalized fingerprint path = %q components=%s", normalized, unsafeFinding.Finding.FingerprintComponents)
+	}
 	keyOnly := base
 	keyOnly.ResourceRef = ""
 	keyOnly.FindingKey = "stable-key"
