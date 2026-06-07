@@ -290,6 +290,22 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if scanPayload.RuleSetID != scanner.DefaultSecurityRuleSetID {
 		t.Fatalf("project scan payload rule_set_id = %q, want default %q", scanPayload.RuleSetID, scanner.DefaultSecurityRuleSetID)
 	}
+	for _, item := range []struct {
+		path string
+		want string
+	}{
+		{"/api/project-scans?status=definitely_bad", "invalid project scan status"},
+		{"/api/security/findings?severity=urgent", "invalid global finding severity"},
+		{"/api/security/findings?status=triaged", "invalid global finding status"},
+		{"/api/project-scans/" + projectScanRef.ProjectScanID + "/findings?severity=urgent", "invalid scoped finding severity"},
+		{"/api/project-scans/" + projectScanRef.ProjectScanID + "/findings?status=triaged", "invalid scoped finding status"},
+	} {
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, item.path, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d body = %s", item.want, rec.Code, rec.Body.String())
+		}
+	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects?cursor=not-a-cursor", nil))

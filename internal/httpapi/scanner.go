@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/artBass-rip/t-helper/internal/jobs"
 	"github.com/artBass-rip/t-helper/internal/scanner"
@@ -368,10 +369,15 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 
 func (h *ScannerHandler) ListProjectScans(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status != "" && !validProjectScanStatusFilter(status) {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "unsupported project scan status")
+		return
+	}
 	page, err := h.store.ListProjectScans(r.Context(), scanner.ProjectScanListOptions{
 		ListOptions: scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
 		ProjectID:   r.URL.Query().Get("project_id"),
-		Status:      r.URL.Query().Get("status"),
+		Status:      status,
 	})
 	if err != nil {
 		writeScannerReadError(w, r, err)
@@ -399,11 +405,15 @@ func (h *ScannerHandler) GetProjectScan(w http.ResponseWriter, r *http.Request) 
 
 func (h *ScannerHandler) ListProjectScanFindings(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	severity, status, ok := h.validateFindingFilters(w, r)
+	if !ok {
+		return
+	}
 	page, err := h.store.ListFindings(r.Context(), scanner.FindingListOptions{
 		ListOptions:   scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
 		ProjectScanID: chi.URLParam(r, "project_scan_id"),
-		Severity:      r.URL.Query().Get("severity"),
-		Status:        r.URL.Query().Get("status"),
+		Severity:      severity,
+		Status:        status,
 	})
 	if err != nil {
 		writeScannerReadError(w, r, err)
@@ -522,18 +532,63 @@ func (h *ScannerHandler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 
 func (h *ScannerHandler) ListSecurityFindings(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	severity, status, ok := h.validateFindingFilters(w, r)
+	if !ok {
+		return
+	}
 	page, err := h.store.ListFindings(r.Context(), scanner.FindingListOptions{
 		ListOptions:  scanner.ListOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor")},
 		ProjectID:    r.URL.Query().Get("project_id"),
 		RepositoryID: r.URL.Query().Get("repository_id"),
-		Severity:     r.URL.Query().Get("severity"),
-		Status:       r.URL.Query().Get("status"),
+		Severity:     severity,
+		Status:       status,
 	})
 	if err != nil {
 		writeScannerReadError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, listResponse(page.Items, page.NextCursor))
+}
+
+func (h *ScannerHandler) validateFindingFilters(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	severity := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("severity")))
+	if severity != "" && !validFindingSeverityFilter(severity) {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "unsupported finding severity")
+		return "", "", false
+	}
+	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "" && !validFindingStatusFilter(status) {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "unsupported finding status")
+		return "", "", false
+	}
+	return severity, status, true
+}
+
+func validProjectScanStatusFilter(value string) bool {
+	switch value {
+	case scanner.ProjectScanStatusQueued, scanner.ProjectScanStatusRunning, scanner.ProjectScanStatusSucceeded, scanner.ProjectScanStatusFailed, scanner.ProjectScanStatusPartial, scanner.ProjectScanStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func validFindingSeverityFilter(value string) bool {
+	switch value {
+	case "info", "low", "medium", "high", "critical":
+		return true
+	default:
+		return false
+	}
+}
+
+func validFindingStatusFilter(value string) bool {
+	switch value {
+	case "open", "accepted", "false_positive", "fixed", "suppressed":
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *ScannerHandler) GetSecurityFinding(w http.ResponseWriter, r *http.Request) {
