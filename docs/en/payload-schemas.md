@@ -436,7 +436,17 @@ Stage 02 synchronous controlled storage migration result.
     "medium": 0,
     "high": 0,
     "critical": 0
-  }
+  },
+  "errors": [
+    {
+      "job_id": "job_failed_opaque_id",
+      "job_type": "project_scan",
+      "status": "failed",
+      "error_code": "tool_not_found",
+      "message": "terraform binary is unavailable",
+      "retryable": false
+    }
+  ]
 }
 ```
 

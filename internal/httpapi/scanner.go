@@ -292,6 +292,37 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 		writeScannerReadError(w, r, err)
 		return
 	}
+	if key := r.Header.Get(idempotencyKeyHeader); key != "" {
+		existing, err := h.jobStore.JobByIdempotency(r.Context(), "api", "project_scan", key)
+		if err == nil {
+			var payload scanner.ProjectScanPayload
+			if json.Unmarshal(existing.Payload, &payload) != nil ||
+				payload.ProjectID != project.ID ||
+				payload.ScanType != req.ScanType ||
+				payload.RuleSetID != req.RuleSetID ||
+				payload.Reason != req.Reason {
+				writeError(w, r, http.StatusConflict, "idempotency_conflict", "idempotency conflict for project_scan/"+key)
+				return
+			}
+			item, err := h.store.GetProjectScanByJobID(r.Context(), existing.ID)
+			if err != nil {
+				writeScannerReadError(w, r, err)
+				return
+			}
+			writeJSON(w, http.StatusAccepted, scanner.ProjectScanRef{
+				ProjectScanID: item.ID,
+				JobID:         existing.ID,
+				JobGroupID:    existing.JobGroupID,
+				Status:        existing.Status,
+				SchemaVersion: scanner.ProjectScanRefSchema,
+			})
+			return
+		}
+		if !errors.Is(err, jobs.ErrNotFound) {
+			writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+	}
 	projectScanID := scannerNewOpaqueID("project_scan")
 	jobID := jobs.NewJobID()
 	groupID := "project_scan:" + projectScanID
@@ -307,7 +338,7 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, http.StatusInternalServerError, "serialization_error", err.Error())
 		return
 	}
-	ref, err := h.jobStore.Enqueue(r.Context(), jobs.EnqueueRequest{
+	item, ref, err := h.store.CreateProjectScanWithJob(r.Context(), h.jobStore, project, projectScanID, req.ScanType, req.RuleSetID, jobs.EnqueueRequest{
 		ID:             jobID,
 		JobType:        "project_scan",
 		Actor:          "api",
@@ -323,11 +354,6 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 			writeError(w, r, http.StatusConflict, "idempotency_conflict", err.Error())
 			return
 		}
-		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
-		return
-	}
-	item, err := h.store.CreateProjectScan(r.Context(), project, projectScanID, req.ScanType, req.RuleSetID, ref.JobID)
-	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "validation_error", err.Error())
 		return
 	}

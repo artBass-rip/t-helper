@@ -53,9 +53,7 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 		t.Fatalf("first scan findings = %d, want 1: %+v", len(page.Items), page.Items)
 	}
 	firstFinding := page.Items[0]
-	if strings.Contains(string(firstFinding.FingerprintComponents), "12") {
-		t.Fatalf("fingerprint components must not include source line: %s", firstFinding.FingerprintComponents)
-	}
+	assertNoLocationFingerprintComponents(t, firstFinding.FingerprintComponents)
 
 	secondScanID := runStage06ProjectScan(t, ctx, runtime, scannerStore, jobStore, project, "99")
 	page, err = scannerStore.ListFindings(ctx, scanner.FindingListOptions{ProjectScanID: secondScanID})
@@ -68,9 +66,7 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 	if page.Items[0].ID != firstFinding.ID || page.Items[0].Fingerprint != firstFinding.Fingerprint {
 		t.Fatalf("repeated scan did not update existing finding: first=%+v second=%+v", firstFinding, page.Items[0])
 	}
-	if strings.Contains(string(page.Items[0].FingerprintComponents), "99") {
-		t.Fatalf("fingerprint components must not include shifted source line: %s", page.Items[0].FingerprintComponents)
-	}
+	assertNoLocationFingerprintComponents(t, page.Items[0].FingerprintComponents)
 
 	scan, err := scannerStore.GetProjectScan(ctx, secondScanID)
 	if err != nil {
@@ -104,6 +100,19 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 	for _, tool := range aggregate.Tools {
 		if tool.ProfileID == "" || tool.CertificationStatus != "certified" {
 			t.Fatalf("tool metadata does not come from certified active profile: %+v", tool)
+		}
+	}
+}
+
+func assertNoLocationFingerprintComponents(t *testing.T, raw json.RawMessage) {
+	t.Helper()
+	var components map[string]any
+	if err := json.Unmarshal(raw, &components); err != nil {
+		t.Fatalf("decode fingerprint components: %v", err)
+	}
+	for _, key := range []string{"line", "column", "start_line", "end_line", "start_column", "end_column"} {
+		if _, ok := components[key]; ok {
+			t.Fatalf("fingerprint components include location field %q: %s", key, raw)
 		}
 	}
 }
@@ -338,9 +347,32 @@ func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
 	}
 
 	t.Setenv("PATH", t.TempDir())
-	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, bestEffort.ProfileID)
+	job, failedScanID := runStage06ProjectScanJobWithID(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, bestEffort.ProfileID)
 	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_not_found" {
 		t.Fatalf("missing binary job = %s/%s, want failed/tool_not_found", job.Status, failureErrorCode(t, job))
+	}
+	failedScan, err := scannerStore.GetProjectScan(ctx, failedScanID)
+	if err != nil {
+		t.Fatalf("get failed project scan: %v", err)
+	}
+	if failedScan.Status != jobs.StatusFailed || !strings.Contains(failedScan.ErrorMessage, "binary is unavailable") {
+		t.Fatalf("failed project scan aggregate = status %q error %q", failedScan.Status, failedScan.ErrorMessage)
+	}
+	var aggregate struct {
+		Errors []struct {
+			JobID     string `json:"job_id"`
+			JobType   string `json:"job_type"`
+			Status    string `json:"status"`
+			ErrorCode string `json:"error_code"`
+			Message   string `json:"message"`
+			Retryable bool   `json:"retryable"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(failedScan.ResultPayload, &aggregate); err != nil {
+		t.Fatalf("decode failed scan aggregate: %v payload=%s", err, failedScan.ResultPayload)
+	}
+	if len(aggregate.Errors) != 1 || aggregate.Errors[0].ErrorCode != "tool_not_found" || aggregate.Errors[0].JobID != job.ID || aggregate.Errors[0].JobType != "project_scan" {
+		t.Fatalf("failed scan aggregate errors = %+v", aggregate.Errors)
 	}
 }
 
@@ -529,6 +561,12 @@ func runStage06ProjectScan(t *testing.T, ctx context.Context, runtime *jobs.Runt
 
 func runStage06ProjectScanJob(t *testing.T, ctx context.Context, runtime *jobs.Runtime, scannerStore *scanner.Store, jobStore *jobs.Store, project scanner.Project, scanType, profileID string) jobs.Job {
 	t.Helper()
+	job, _ := runStage06ProjectScanJobWithID(t, ctx, runtime, scannerStore, jobStore, project, scanType, profileID)
+	return job
+}
+
+func runStage06ProjectScanJobWithID(t *testing.T, ctx context.Context, runtime *jobs.Runtime, scannerStore *scanner.Store, jobStore *jobs.Store, project scanner.Project, scanType, profileID string) (jobs.Job, string) {
+	t.Helper()
 	projectScanID := "project_scan_" + jobs.NewJobID()
 	payload, err := json.Marshal(scanner.ProjectScanPayload{
 		SchemaVersion: scanner.ProjectScanPayloadSchema,
@@ -553,7 +591,7 @@ func runStage06ProjectScanJob(t *testing.T, ctx context.Context, runtime *jobs.R
 	if _, err := scannerStore.CreateProjectScan(ctx, project, projectScanID, scanType, "", ref.JobID); err != nil {
 		t.Fatalf("create project scan row: %v", err)
 	}
-	return runUntilTerminal(t, ctx, runtime, jobStore, ref.JobID)
+	return runUntilTerminal(t, ctx, runtime, jobStore, ref.JobID), projectScanID
 }
 
 func stage06ProjectFixture(t *testing.T, ctx context.Context, scannerStore *scanner.Store) scanner.Project {

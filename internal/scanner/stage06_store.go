@@ -17,6 +17,10 @@ import (
 	"github.com/artBass-rip/t-helper/internal/jobs"
 )
 
+type sqlExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
 func (s *Store) GetProjectSettings(ctx context.Context, projectID string) (ProjectSettingsResponse, error) {
 	if _, err := s.GetProject(ctx, projectID); err != nil {
 		return ProjectSettingsResponse{}, err
@@ -181,6 +185,35 @@ func (s *Store) updateProjectSecurityScanSettings(ctx context.Context, item Proj
 }
 
 func (s *Store) CreateProjectScan(ctx context.Context, project Project, projectScanID, scanType, ruleSetID, jobID string) (ProjectScan, error) {
+	return s.createProjectScan(ctx, s.handle.DB, project, projectScanID, scanType, ruleSetID, jobID, true)
+}
+
+func (s *Store) CreateProjectScanWithJob(ctx context.Context, jobStore *jobs.Store, project Project, projectScanID, scanType, ruleSetID string, req jobs.EnqueueRequest) (ProjectScan, jobs.JobRef, error) {
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return ProjectScan{}, jobs.JobRef{}, err
+	}
+	defer tx.Rollback()
+
+	ref, err := jobStore.EnqueueInTx(ctx, tx, req)
+	if err != nil {
+		return ProjectScan{}, jobs.JobRef{}, err
+	}
+	if ref.JobID != req.ID {
+		return ProjectScan{}, jobs.JobRef{}, jobs.ErrIdempotencyConflict
+	}
+	item, err := s.createProjectScan(ctx, tx, project, projectScanID, scanType, ruleSetID, req.ID, false)
+	if err != nil {
+		return ProjectScan{}, jobs.JobRef{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ProjectScan{}, jobs.JobRef{}, err
+	}
+	_ = jobStore.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID)
+	return item, ref, nil
+}
+
+func (s *Store) createProjectScan(ctx context.Context, exec sqlExecutor, project Project, projectScanID, scanType, ruleSetID, jobID string, replayOnConflict bool) (ProjectScan, error) {
 	if strings.TrimSpace(scanType) == "" {
 		settings, err := s.ensureProjectScanSettings(ctx, project.ID)
 		if err != nil {
@@ -209,8 +242,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 		query = `INSERT INTO project_scans (id, job_id, project_id, rule_set_id, scan_type, status, created_at, updated_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 	}
-	if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
-		if isUniqueConstraintError(err) {
+	if _, err := exec.ExecContext(ctx, query, args...); err != nil {
+		if replayOnConflict && isUniqueConstraintError(err) {
 			return s.GetProjectScanByJobID(ctx, jobID)
 		}
 		return ProjectScan{}, err
@@ -1002,6 +1035,10 @@ func (s *Store) ApplyWorkflowAggregateToProjectScan(ctx context.Context, jobGrou
 	if err != nil {
 		return err
 	}
+	failures, errorMessage, err := s.projectScanFailureSummaries(ctx, jobGroupID)
+	if err != nil {
+		return err
+	}
 	payload, _ := json.Marshal(map[string]any{
 		"schema_version":   ProjectScanAggregateSchema,
 		"job_group_id":     jobGroupID,
@@ -1012,8 +1049,57 @@ func (s *Store) ApplyWorkflowAggregateToProjectScan(ctx context.Context, jobGrou
 		"required_auth":    requiredAuth,
 		"check_results":    checkResults,
 		"findings_summary": findings,
+		"errors":           failures,
 	})
-	return s.UpdateProjectScanAggregate(ctx, projectScanID, workflow.AggregateStatus, payload, "")
+	return s.UpdateProjectScanAggregate(ctx, projectScanID, workflow.AggregateStatus, payload, errorMessage)
+}
+
+func (s *Store) projectScanFailureSummaries(ctx context.Context, jobGroupID string) ([]map[string]any, string, error) {
+	query := "SELECT id, job_type, status, COALESCE(error_message, ''), COALESCE(result_payload, '') FROM jobs WHERE job_group_id = ? AND status IN ('failed', 'cancelled') ORDER BY finished_at ASC, created_at ASC, id ASC"
+	args := []any{jobGroupID}
+	if s.handle.Provider == "postgres" {
+		query = "SELECT id, job_type, status, COALESCE(error_message, ''), COALESCE(result_payload::text, '') FROM jobs WHERE job_group_id = $1 AND status IN ('failed', 'cancelled') ORDER BY finished_at ASC, created_at ASC, id ASC"
+	}
+	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	var out []map[string]any
+	var firstMessage string
+	for rows.Next() {
+		var jobID, jobType, status, message, raw string
+		if err := rows.Scan(&jobID, &jobType, &status, &message, &raw); err != nil {
+			return nil, "", err
+		}
+		summary := map[string]any{
+			"job_id":   jobID,
+			"job_type": jobType,
+			"status":   status,
+		}
+		var failure jobs.FailureResult
+		if json.Unmarshal([]byte(raw), &failure) == nil && failure.SchemaVersion == jobs.ResultFailureSchemaVersion {
+			summary["error_code"] = failure.ErrorCode
+			summary["message"] = failure.Message
+			summary["retryable"] = failure.Retryable
+			if firstMessage == "" {
+				firstMessage = failure.Message
+			}
+		} else if message != "" {
+			summary["message"] = message
+			if firstMessage == "" {
+				firstMessage = message
+			}
+		}
+		out = append(out, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	if out == nil {
+		out = []map[string]any{}
+	}
+	return out, firstMessage, nil
 }
 
 func (s *Store) projectScanAggregateParts(ctx context.Context, jobGroupID string) ([]ToolMetadata, []string, []string, []any, error) {

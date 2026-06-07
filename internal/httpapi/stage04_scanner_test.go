@@ -297,3 +297,130 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 		t.Fatalf("invalid projects cursor status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestStage06ProjectScanCreateDoesNotLeaveOrphanJobWhenScanInsertFails(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	configStore := config.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+		httpapi.NewJobsHandler(jobStore),
+		httpapi.NewStatusHandler(jobStore),
+		httpapi.NewScannerHandler(scannerStore, jobStore),
+	)
+
+	rootPath := filepath.Join(t.TempDir(), "scan-root")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "local", Path: rootPath, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, roots[0], "svc", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `DROP TABLE project_scans`); err != nil {
+		t.Fatalf("drop project_scans: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code == http.StatusAccepted {
+		t.Fatalf("project scan create unexpectedly succeeded after project_scans was dropped: %s", rec.Body.String())
+	}
+	var jobCount int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs: %v", err)
+	}
+	if jobCount != 0 {
+		t.Fatalf("failed project scan create left orphan jobs: %d", jobCount)
+	}
+}
+
+func TestStage06ProjectScanCreateIdempotencyReplaysExistingScan(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	configStore := config.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+		httpapi.NewJobsHandler(jobStore),
+		httpapi.NewStatusHandler(jobStore),
+		httpapi.NewScannerHandler(scannerStore, jobStore),
+	)
+
+	rootPath := filepath.Join(t.TempDir(), "scan-root")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "local", Path: rootPath, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, roots[0], "svc", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	body := []byte(`{"project_id":"` + project.ID + `","scan_type":"terraform_validate"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var first scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&first); err != nil {
+		t.Fatalf("decode first ref: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("replay project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var replay scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&replay); err != nil {
+		t.Fatalf("decode replay ref: %v", err)
+	}
+	if replay.ProjectScanID != first.ProjectScanID || replay.JobID != first.JobID || replay.JobGroupID != first.JobGroupID {
+		t.Fatalf("replay ref = %+v, want %+v", replay, first)
+	}
+	var scanCount, jobCount int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM project_scans`).Scan(&scanCount); err != nil {
+		t.Fatalf("count project scans: %v", err)
+	}
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs: %v", err)
+	}
+	if scanCount != 1 || jobCount != 1 {
+		t.Fatalf("idempotency replay created duplicates: project_scans=%d jobs=%d", scanCount, jobCount)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_static"}`)))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("changed idempotency payload status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
