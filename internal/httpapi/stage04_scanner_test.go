@@ -251,6 +251,30 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing project scan guard status = %d body = %s", rec.Code, rec.Body.String())
 	}
+	scanEnabled := false
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{ScanEnabled: &scanEnabled}); err != nil {
+		t.Fatalf("disable project scan settings: %v", err)
+	}
+	var jobsBeforeDisabledScan int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsBeforeDisabledScan); err != nil {
+		t.Fatalf("count jobs before disabled project scan: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("disabled project scan guard status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var jobsAfterDisabledScan int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsAfterDisabledScan); err != nil {
+		t.Fatalf("count jobs after disabled project scan: %v", err)
+	}
+	if jobsAfterDisabledScan != jobsBeforeDisabledScan {
+		t.Fatalf("disabled project scan should not enqueue a job: before=%d after=%d", jobsBeforeDisabledScan, jobsAfterDisabledScan)
+	}
+	scanEnabled = true
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{ScanEnabled: &scanEnabled}); err != nil {
+		t.Fatalf("re-enable project scan settings: %v", err)
+	}
 	var jobsBeforeInvalidRuleSet int
 	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsBeforeInvalidRuleSet); err != nil {
 		t.Fatalf("count jobs before invalid rule set: %v", err)

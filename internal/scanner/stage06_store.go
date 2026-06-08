@@ -981,27 +981,60 @@ func (s *Store) validateSecurityModules(ctx context.Context, modules []string) (
 
 func (s *Store) ConfigSecurityModules(ctx context.Context) ([]string, error) {
 	query := "SELECT value FROM config_entries WHERE scope = ? AND key = ?"
-	args := []any{"system", "scanning.security_scan"}
+	args := []any{"system", "scanning.security_scan.modules"}
 	if s.handle.Provider == "postgres" {
 		query = "SELECT value FROM config_entries WHERE scope = $1 AND key = $2"
 	}
 	var raw string
 	if err := s.handle.DB.QueryRowContext(ctx, query, args...).Scan(&raw); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return []string{DefaultSecurityModuleTrivy}, nil
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
 		}
-		return nil, err
+		raw = ""
 	}
-	var cfg struct {
-		Modules []string `json:"modules"`
+	if strings.TrimSpace(raw) == "" {
+		args = []any{"system", "scanning.security_scan"}
+		if s.handle.Provider == "postgres" {
+			query = "SELECT value FROM config_entries WHERE scope = $1 AND key = $2"
+		}
+		if err := s.handle.DB.QueryRowContext(ctx, query, args...).Scan(&raw); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return []string{DefaultSecurityModuleTrivy}, nil
+			}
+			return nil, err
+		}
 	}
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, err
+	var modules []string
+	if err := json.Unmarshal([]byte(raw), &modules); err != nil {
+		var cfg struct {
+			Modules []string `json:"modules"`
+		}
+		if nestedErr := json.Unmarshal([]byte(raw), &cfg); nestedErr != nil {
+			return nil, err
+		}
+		modules = cfg.Modules
 	}
-	if len(cfg.Modules) == 0 {
+	modules = uniqueNonEmptyStrings(modules)
+	if len(modules) == 0 {
 		return []string{DefaultSecurityModuleTrivy}, nil
 	}
-	return cfg.Modules, nil
+	return modules, nil
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if !seen[value] {
+			seen[value] = true
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func (s *Store) ApplyWorkflowAggregateToProjectScan(ctx context.Context, jobGroupID string) error {

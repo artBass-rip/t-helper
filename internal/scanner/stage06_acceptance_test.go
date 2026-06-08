@@ -3,6 +3,7 @@ package scanner_test
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
@@ -410,6 +411,46 @@ func TestStage06SecurityValidationRunsOnlyWhenEnabledInProjectSettings(t *testin
 	}
 }
 
+func TestStage06ProjectSecurityModulesUseCanonicalConfigKey(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	scannerStore := scanner.NewStore(handle)
+	project := stage06ProjectFixture(t, ctx, scannerStore)
+	upsertSecurityModulesConfig(t, ctx, handle.DB, []string{"checkov", "checkov"})
+
+	modules, err := scannerStore.ConfigSecurityModules(ctx)
+	if err != nil {
+		t.Fatalf("config security modules: %v", err)
+	}
+	if len(modules) != 1 || modules[0] != "checkov" {
+		t.Fatalf("security modules = %+v, want [checkov]", modules)
+	}
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{Security: &struct {
+		Enabled           *bool    `json:"enabled,omitempty"`
+		EnabledModules    []string `json:"enabled_modules,omitempty"`
+		ScheduleEnabled   *bool    `json:"schedule_enabled,omitempty"`
+		ScheduleFrequency string   `json:"schedule_frequency,omitempty"`
+		ValidateCode      *bool    `json:"validate_code,omitempty"`
+	}{EnabledModules: []string{"trivy"}}}); err == nil {
+		t.Fatalf("trivy should be rejected when canonical security module config allows only checkov")
+	}
+	settings, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{Security: &struct {
+		Enabled           *bool    `json:"enabled,omitempty"`
+		EnabledModules    []string `json:"enabled_modules,omitempty"`
+		ScheduleEnabled   *bool    `json:"schedule_enabled,omitempty"`
+		ScheduleFrequency string   `json:"schedule_frequency,omitempty"`
+		ValidateCode      *bool    `json:"validate_code,omitempty"`
+	}{EnabledModules: []string{"checkov", "checkov"}}})
+	if err != nil {
+		t.Fatalf("checkov should be accepted from canonical security module config: %v", err)
+	}
+	if len(settings.Security.EnabledModules) != 1 || settings.Security.EnabledModules[0] != "checkov" {
+		t.Fatalf("project security modules = %+v, want [checkov]", settings.Security.EnabledModules)
+	}
+}
+
 func TestStage06FindingFingerprintVariantsAndRedaction(t *testing.T) {
 	ctx := context.Background()
 	handle := openMigratedSQLite(t)
@@ -691,6 +732,24 @@ func terraformProfilePayload(profileID, version, policy string, certified, compa
 		"redaction":           map[string]any{"max_output_bytes": 1024},
 	})
 	return json.RawMessage(payload)
+}
+
+func upsertSecurityModulesConfig(t *testing.T, ctx context.Context, handle interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, modules []string) {
+	t.Helper()
+	raw, err := json.Marshal(modules)
+	if err != nil {
+		t.Fatalf("marshal security modules config: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = handle.ExecContext(ctx, `INSERT INTO config_entries (id, key, value, value_type, scope, version, updated_at, updated_by)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(key, scope) DO UPDATE SET value = excluded.value, value_type = excluded.value_type, version = config_entries.version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+		"cfg_scanning_security_scan_modules", "scanning.security_scan.modules", string(raw), "json", "system", 1, now, "test")
+	if err != nil {
+		t.Fatalf("upsert security modules config: %v", err)
+	}
 }
 
 func installFakeToolchain(t *testing.T) {

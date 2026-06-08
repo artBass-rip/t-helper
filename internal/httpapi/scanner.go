@@ -269,16 +269,16 @@ func (h *ScannerHandler) CreateProjectScan(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, http.StatusBadRequest, "validation_error", "disabled projects cannot be scanned")
 		return
 	}
+	settings, err := h.store.GetProjectSettings(r.Context(), project.ID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	if !settings.ScanEnabled {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "project scan is disabled")
+		return
+	}
 	if req.ScanType == "" {
-		settings, err := h.store.GetProjectSettings(r.Context(), project.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, "storage_error", err.Error())
-			return
-		}
-		if !settings.ScanEnabled {
-			writeError(w, r, http.StatusBadRequest, "validation_error", "project scan is disabled")
-			return
-		}
 		req.ScanType = settings.ScanType
 	}
 	if !validHTTPProjectScanType(req.ScanType) {
