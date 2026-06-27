@@ -1,6 +1,6 @@
 # Code Optimization And Quality Baseline
 
-Last updated: 2026-05-31.
+Last updated: 2026-06-05.
 
 This document records completed optimizations, the current quality gate and the
 remaining backlog, which should be implemented iteratively without broad
@@ -21,6 +21,12 @@ Completed:
   `jobs.Store.Complete`, `jobs.Store.Requeue`.
 - Initial benchmarks were added for hot paths `jobs.Store.ClaimNext` and
   `jobs.Store.RefreshWorkflowStatus`.
+- `storage.Dialect` and `Handle.Dialect()` were added to centralize common
+  SQLite/PostgreSQL placeholder, `IN (...)`, time cast and boolean argument
+  handling. Existing local helpers in `jobs`, `scanner` and `repository` now
+  delegate to it.
+- One redundant `RefreshWorkflowStatus` call was removed from the worker
+  startup-progress path; lifecycle transitions still refresh workflow status.
 - A local quality gate `make test` was added; it runs:
   `gofmt` check, `go vet ./...`, `go test ./...`.
 - `make race` was added for manual/nightly checks with the race detector.
@@ -48,17 +54,17 @@ Stage 05 repository manager APIs, migrations and worker behavior.
 
 ## Backlog
 
-### P1. SQL dialect helper
+### P1. SQL dialect helper follow-up
 
-Problem: the store layer still contains branches by `handle.Provider` for
-SQLite/PostgreSQL placeholders, casts and upsert shapes.
+Problem: common placeholder, `IN (...)`, time cast and boolean argument handling
+now has a shared helper, but store files still contain provider branches for
+JSON casts and upsert shapes.
 
 Next step:
 
-- add a small helper in `internal/storage` or `internal/storage/sqlutil`;
-- centralize placeholders, `IN (...)`, boolean/time/JSON casts and common
-  upsert fragments;
-- migrate store files one by one, starting with `jobs` or `scanner`.
+- extend `storage.Dialect` with JSON cast and common upsert fragments where
+  they remove meaningful duplication;
+- migrate store branches one by one while changing the corresponding area.
 
 ### P1. Workflow status refresh load
 

@@ -67,6 +67,8 @@ Implement local Terraform project analysis and security/validation checks as an 
 - `security_findings.fingerprint` is unique and `first_seen_at`/`last_seen_at` are maintained;
 - payload/result does not contain raw Terraform source or secrets;
 - network-restricted scan does not make outbound calls.
+- the bundled Terraform profile supports Terraform `>=1.15.0`;
+- t-helper installation automatically downloads and verifies pinned TFLint and Trivy releases.
 
 ## Stage-local blockers
 

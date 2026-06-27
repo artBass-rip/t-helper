@@ -48,6 +48,7 @@
         <nav class="doc-toc">
           <a class="toc-level-1" href="#development-setup">Development setup</a>
 <a class="toc-level-2" href="#purpose">Purpose</a>
+<a class="toc-level-2" href="#установка-приложения-и-scanner-toolchain">Установка приложения и scanner toolchain</a>
 <a class="toc-level-2" href="#postgresql-test-environment">PostgreSQL test environment</a>
 <a class="toc-level-2" href="#test-policy">Test policy</a>
 <a class="toc-level-2" href="#migration-layout">Migration layout</a>
@@ -71,6 +72,9 @@
 <li><code>docker compose --profile offline -f docker-compose.test.yml run --rm test-runner</code>.</li>
 </ul>
 <p>The Docker <code>offline</code> test runner starts PostgreSQL and runs the same Go test suite with <code>THELPER_POSTGRES_DSN</code> set. DSN-backed tests run with <code>go test -p 1 ./...</code> so destructive contract tests in different packages do not reset the same test database concurrently.</p>
+<h2 id="установка-приложения-и-scanner-toolchain">Установка приложения и scanner toolchain</h2>
+<p><code>make install</code> устанавливает <code>thelper</code>, <code>thelper-worker</code> и <code>thelper-ctl</code> в <code>${PREFIX}/bin</code> (<code>~/.local/bin</code> по умолчанию). В рамках той же операции он загружает закреплённые архивы TFLint 0.63.1 и Trivy 0.71.2 из официальных GitHub releases, проверяет закреплённые digest checksum manifests и SHA-256 архивов и устанавливает оба инструмента в ту же директорию. Если инструмента нет в <code>PATH</code>, runtime также проверяет <code>THELPER_TOOLCHAIN_DIR</code> и директорию executable файла приложения.</p>
+<p>Terraform не загружается t-helper. Поддерживаются версии Terraform 1.15.0 и выше.</p>
 <h2 id="postgresql-test-environment">PostgreSQL test environment</h2>
 <p>PostgreSQL tests run when <code>THELPER_POSTGRES_DSN</code> is set. SQLite tests run by default.</p>
 <p>Recommended local PostgreSQL baseline:</p>

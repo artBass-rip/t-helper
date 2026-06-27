@@ -159,7 +159,7 @@
   &quot;tools&quot;: [
     {
       &quot;tool&quot;: &quot;terraform&quot;,
-      &quot;tool_version&quot;: &quot;1.8.5&quot;,
+      &quot;tool_version&quot;: &quot;1.15.3&quot;,
       &quot;profile_id&quot;: &quot;terraform-validate-json-v1&quot;,
       &quot;profile_version&quot;: &quot;1.0.0&quot;,
       &quot;compatibility_status&quot;: &quot;certified&quot;,
@@ -191,7 +191,7 @@
   &quot;tools&quot;: [
     {
       &quot;tool&quot;: &quot;trivy&quot;,
-      &quot;tool_version&quot;: &quot;0.60.0&quot;,
+      &quot;tool_version&quot;: &quot;0.71.2&quot;,
       &quot;profile_id&quot;: &quot;trivy-terraform-misconfig-json-v1&quot;,
       &quot;profile_version&quot;: &quot;1.0.0&quot;,
       &quot;compatibility_status&quot;: &quot;certified&quot;,
@@ -388,7 +388,17 @@
     &quot;medium&quot;: 0,
     &quot;high&quot;: 0,
     &quot;critical&quot;: 0
-  }
+  },
+  &quot;errors&quot;: [
+    {
+      &quot;job_id&quot;: &quot;job_failed_opaque_id&quot;,
+      &quot;job_type&quot;: &quot;project_scan&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;error_code&quot;: &quot;tool_not_found&quot;,
+      &quot;message&quot;: &quot;terraform binary is unavailable&quot;,
+      &quot;retryable&quot;: false
+    }
+  ]
 }</code></pre>
 <h2 id="security-finding-fingerprint">Security finding fingerprint</h2>
 <p><code>security_findings.fingerprint_components</code> stores the canonical JSON input for ADR 0017 fingerprint generation. The stored <code>fingerprint</code> is <code>fp:v1:&lt;sha256 canonical_json&gt;</code>.</p>

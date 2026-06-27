@@ -260,6 +260,8 @@
 </ul>
 <h3 id="toolchain-coverage">Toolchain coverage</h3>
 <ul>
+<li>Проверить <code>make install</code> на Linux/macOS: TFLint 0.63.1 и Trivy 0.71.2 загружаются, checksum manifests и SHA-256 архивов проверяются, binaries устанавливаются рядом с t-helper.</li>
+<li>Проверить admission boundary Terraform: <code>1.14.x</code> отклоняется, <code>1.15.0</code> и более новые версии принимаются bundled profile.</li>
 <li>Для <code>project-scanner</code> проверить, что runtime flow включает <code>terraform validate</code> и <code>TFLint</code>.</li>
 <li>Для <code>security-validator</code> проверить, что <code>Trivy</code> запускается только при наличии в <code>project_security_scan_settings.enabled_modules</code>.</li>
 <li>Проверить, что <code>terraform</code>, <code>TFLint</code> и <code>Trivy</code> запускаются через tool profile runtime из ADR 0018, а не через parser logic внутри scanner service.</li>
@@ -276,6 +278,7 @@
 <li>Проверить analyzer diagnostics for fingerprint-affecting fields: unresolved <code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code> or <code>check_type</code> blocks activation until fixtures validate them.</li>
 <li>Проверить bundled profile fixtures для <code>terraform validate</code> success/error, <code>TFLint</code> finding, <code>Trivy config</code> finding, secret-like redaction, unsupported version, missing binary and malformed output.</li>
 <li>Для extension adapters проверить, что <code>gitleaks</code>, <code>checkov</code>, <code>opa</code> и <code>conftest</code> могут быть зарегистрированы в <code>scanning.security_scan.modules</code> без изменения API contract, but are not mandatory MVP acceptance.</li>
+<li>Перед закрытием Stage 06B запустить <code>THELPER_STAGE06_REAL_TOOLCHAIN=1 go test -run TestStage06RealCertifiedToolchain ./internal/scanner</code> с сертифицированными версиями <code>terraform</code>, <code>tflint</code> и <code>trivy</code> внутри окружения без network access; skipped test не считается приёмкой.</li>
 </ul>
 <h3 id="storage-invariants">Storage invariants</h3>
 <ul>

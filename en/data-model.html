@@ -75,6 +75,7 @@
 <a class="toc-level-3" href="#toolprofiles">tool_profiles</a>
 <a class="toc-level-3" href="#toolprofilevalidationresults">tool_profile_validation_results</a>
 <a class="toc-level-3" href="#securityfindings">security_findings</a>
+<a class="toc-level-3" href="#projectscanfindings">project_scan_findings</a>
 <a class="toc-level-2" href="#auth-and-rbac-entities">Auth and RBAC Entities</a>
 <a class="toc-level-3" href="#users">users</a>
 <a class="toc-level-3" href="#localusercredentials">local_user_credentials</a>
@@ -835,6 +836,18 @@
 <li><code>first_seen_at</code> records the first fingerprint detection;</li>
 <li><code>last_seen_at</code> is updated on every scan where the finding is present;</li>
 <li><code>detected_at</code> is stored as a backward-compatible alias/initial detection timestamp and must match <code>first_seen_at</code> for new rows.</li>
+</ul>
+<h3 id="projectscanfindings"><code>project_scan_findings</code></h3>
+<ul>
+<li><code>project_scan_id</code></li>
+<li><code>finding_id</code></li>
+<li><code>detected_at</code></li>
+</ul>
+<p>Invariants:</p>
+<ul>
+<li>the <code>project_scan_id + finding_id</code> pair is unique;</li>
+<li>the table records which scan observed a deduplicated finding and backs the scoped findings API;</li>
+<li>deleting a project scan or finding cascades only to the association.</li>
 </ul>
 <h2 id="auth-and-rbac-entities">Auth and RBAC Entities</h2>
 <h3 id="users"><code>users</code></h3>
