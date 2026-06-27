@@ -1,0 +1,34 @@
+{
+  "schema_version": "tool_profile_fixture_set.v1",
+  "tool": "trivy",
+  "fixtures": [
+    {
+      "name": "trivy-misconfig",
+      "stdout": "{\"Results\":[{\"Target\":\"main.tf\",\"Misconfigurations\":[{\"ID\":\"AVD-AWS-0088\",\"Title\":\"Public bucket\",\"Description\":\"desc\",\"Resolution\":\"fix\",\"Severity\":\"HIGH\",\"CauseMetadata\":{\"Resource\":\"aws_s3_bucket.example\",\"Provider\":\"aws\",\"Service\":\"s3\",\"StartLine\":12}}]}]}",
+      "expected_findings_count": 1,
+      "expected_first_finding": {
+        "check_type": "terraform.security.misconfig",
+        "rule_id": "AVD-AWS-0088",
+        "severity": "high",
+        "file_path": "main.tf",
+        "resource_ref": "aws_s3_bucket.example",
+        "title": "Public bucket",
+        "finding_key": "aws_s3_bucket.example",
+        "rule_namespace": "trivy"
+      },
+      "expected_first_finding_fingerprint_components": {
+        "schema_version": "security_finding.fingerprint.v1",
+        "project_id": null,
+        "workspace_id": null,
+        "rule_set_id": null,
+        "rule_namespace": "trivy",
+        "tool": "trivy",
+        "check_type": "terraform.security.misconfig",
+        "rule_id": "AVD-AWS-0088",
+        "normalized_file_path": "main.tf",
+        "resource_ref": "aws_s3_bucket.example",
+        "finding_key": "aws_s3_bucket.example"
+      }
+    }
+  ]
+}

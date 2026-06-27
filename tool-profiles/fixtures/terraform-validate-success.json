@@ -1,0 +1,18 @@
+{
+  "schema_version": "tool_profile_fixture_set.v1",
+  "tool": "terraform",
+  "fixtures": [
+    {
+      "name": "validate-success",
+      "stdout": "{\"valid\":true,\"error_count\":0,\"warning_count\":0,\"diagnostics\":[]}",
+      "expected_check": {
+        "tool": "terraform",
+        "check_type": "terraform.validate",
+        "valid": true,
+        "errors_count": 0,
+        "warnings_count": 0,
+        "diagnostics": []
+      }
+    }
+  ]
+}

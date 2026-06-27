@@ -1,0 +1,40 @@
+{
+  "schema_version": "tool_profile.v1",
+  "tool": "tflint",
+  "profile_id": "tflint-json-v1",
+  "profile_version": "1.0.0",
+  "certified_versions": ["0.63.1"],
+  "compatible_versions": ["0"],
+  "version_policy": "certified_only",
+  "version_discovery": {
+    "command": "tflint",
+    "args": ["--version"]
+  },
+  "scan_command": {
+    "command": "tflint",
+    "args": ["--format", "json"]
+  },
+  "parser": {
+    "type": "json",
+    "result": "tflint",
+    "severity_map": {
+      "ERROR": "high",
+      "WARNING": "medium",
+      "NOTICE": "low"
+    },
+    "findings": {
+      "mapping": {
+        "rule_id": {"path": "rule.name"},
+        "severity": {"path": "rule.severity"},
+        "file_path": {"path": "range.filename"},
+        "message": {"path": "message"}
+      }
+    }
+  },
+  "mapping": {
+    "issues": {"path": "issues"}
+  },
+  "redaction": {
+    "max_output_bytes": 1048576
+  }
+}

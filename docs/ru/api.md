@@ -7,7 +7,7 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 
 ## Текущий executable baseline
 
-Репозиторий сейчас находится на Stage 05 repository manager MVP baseline. В
+Репозиторий сейчас находится на Stage 06 project scanner/security validator MVP baseline. В
 текущем runtime реализованы:
 
 - `GET /api/health`;
@@ -22,8 +22,16 @@ interfaces остаётся в [`interfaces.md`](interfaces.md), а правил
 - `POST /api/scans`, `GET /api/scans/{job_id}`;
 - `GET /api/projects`, `GET /api/projects/{id}`,
   `GET /api/projects/{id}/links`;
-- `POST /api/project-scans` only as the Stage 04 lifecycle guard for future
-  Stage 06 scans;
+- `GET /api/projects/{id}/scan-settings`,
+  `PUT /api/projects/{id}/scan-settings`;
+- `GET /api/project-scans`, `POST /api/project-scans`,
+  `GET /api/project-scans/{project_scan_id}`,
+  `GET /api/project-scans/{project_scan_id}/findings`;
+- `GET /api/security/findings`, `GET /api/security/findings/{id}`,
+  `GET /api/security/rule-sets`, `PUT /api/security/rule-sets`;
+- `GET /api/tool-profiles`, `POST /api/tool-profiles/validate`,
+  `POST /api/tool-profiles/import`, `POST /api/tool-profiles/activate`,
+  `POST /api/tool-profiles/analyze`;
 - `GET /api/repos`, `GET /api/repos/{id}`;
 - `GET /api/repo-provider-instances`, `PUT /api/repo-provider-instances`;
 - `GET /api/repo-credentials`, `PUT /api/repo-credentials`;
@@ -247,11 +255,12 @@ paths, usernames, passwords or userinfo.
 | `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model для registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |
 | `GET /api/projects/{id}` | n/a | `project` | Возвращает проект с базовыми связями. |
 | `GET /api/projects/{id}/links` | `limit`, `cursor`, `link_type?` | `list_response<project_link>` | Возвращает связи отдельного project record, например `same_repository`, без merge project rows. |
-| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
-| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. When implemented, `security.enabled_modules` must come from `scanning.security_scan.modules`. |
-| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Stage 06 contract. Stage 04 exposes only the lifecycle guard: missing/disabled projects return controlled validation errors; otherwise the endpoint returns `501 project_scan_unavailable`. |
-| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
-| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
+| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Возвращает project scanner settings и вложенные security scan settings. Missing settings materialized с MVP defaults. |
+| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Обновляет project scan settings. `security.enabled_modules` должен быть из `scanning.security_scan.modules`. |
+| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Создаёт `project_scans` и parent `jobs.job_type = project_scan`; missing/disabled projects возвращают controlled validation errors. |
+| `GET /api/project-scans` | `limit`, `cursor`, `project_id?`, `status?` | `list_response<project_scan>` | Возвращает список project scan aggregate records. |
+| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Читает project scan aggregate и reconciles workflow status перед ответом. |
+| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Возвращает findings, scoped к scan project. |
 | `GET /api/repos` | `limit`, `cursor`, `provider?`, `provider_host?`, `full_path?`, `status?`, `discovery_source?`, `auto_sync_enabled?` | `list_response<repository>` | Read model для repositories. Default `status` filter is `active`; `full_path` без provider/provider_host может вернуть несколько repositories. |
 | `GET /api/repos/{id}` | n/a | `repository` | Возвращает repository card. |
 | `GET /api/repo-provider-instances` | `limit`, `cursor`, `provider?`, `provider_host?`, `enabled?` | `list_response<repository_provider_instance>` | GitKraken-like integration profiles for cloud, on-premise and multi-domain provider hosts. |
@@ -278,9 +287,9 @@ paths, usernames, passwords or userinfo.
 | `PUT /api/security/rule-sets` | `security_rule_set` | `security_rule_set` | Идемпотентное обновление metadata/rule set registration by `id` or `name + version`. |
 | `GET /api/tool-profiles` | `limit`, `cursor`, `tool?`, `active?`, `source_type?` | `list_response<tool_profile>` | Список tool profiles from ADR 0018. |
 | `POST /api/tool-profiles/validate` | `profile_path?`, `profile_payload?`, `fixture_set?` | `tool_profile_validation_result` | Валидирует profile files or payloads without activation. Raw tool outputs in fixtures must be redacted/size-limited and are not persisted as primary scan data. |
-| `POST /api/tool-profiles/import` | `profile_path?`, `profile_payload?` | `tool_profile` | Imports bundled/local/generated profile metadata after validation; imported profiles are inactive unless separately activated. |
-| `POST /api/tool-profiles/activate` | `tool`, `profile_id`, `profile_version` | `tool_profile` | Explicitly activates a validated profile for runtime selection. Generated candidate profiles cannot be activated without successful validation results. |
-| `POST /api/tool-profiles/analyze` | `samples_path?`, `sample_payload?`, `baseline_profile_id?` | `tool_profile_candidate` | Optional analyzer endpoint that generates candidate profiles/fixtures; it never activates profiles automatically. |
+| `POST /api/tool-profiles/import` | `profile_path?`, `profile_payload?`, `source_type?` | `tool_profile` | Imports bundled/local/generated profile metadata after validation; imported profiles are inactive unless separately activated. Analyzer candidates pass `source_type = generated_candidate`. |
+| `POST /api/tool-profiles/activate` | `tool`, `profile_id`, `profile_version` | `tool_profile` | Explicitly activates a validated profile for runtime selection. Non-bundled profiles cannot be activated without successful validation results. |
+| `POST /api/tool-profiles/analyze` | `samples_path?`, `sample_payload?`, `baseline_profile_id?` | `tool_profile_candidate` | Optional analyzer endpoint that generates candidate profile and fixture payloads; it never activates profiles automatically. |
 | `GET /api/modules` | n/a | `list_response<module_state>` | Состояния runtime modules. |
 | `POST /api/modules/reload` | `keys?`, `module_name?`, `reason?` | `config_reload.result.v1` or `module_reload.result.v1` | Stage 02 synchronous operation and explicit Stage 03 jobs exception. Without `module_name`, accepts reloadable config keys and applies only keys with implemented Stage 02 runtime effects, currently `modules.enabled`; accepted-but-not-applied keys remain visible in `accepted_keys`, and unknown explicit keys are returned in `failed_keys`. With `module_name`, reloads one available module. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict: unknown fields, `null`, malformed JSON and trailing payload are rejected. Stage 03 implements job-backed `config_reload` handlers for framework validation/future workflow integration without changing this public sync contract. |
 | `POST /api/modules/restart` | `module_name`, `reason?` | `module_restart.result.v1` | Stage 02 synchronous restart for one available module and explicit Stage 03 jobs exception. Unknown modules return `validation_error`; unavailable modules return controlled `module_unavailable`; lifecycle hook failures return `module_lifecycle_failed`; unexpected persistence failures return `storage_error`. Request JSON is strict and `module_name` is required. Stage 03 implements job-backed `module_restart` handlers for framework validation/future workflow integration without changing this public sync contract. |

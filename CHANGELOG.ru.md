@@ -7,6 +7,14 @@
 
 ## Не выпущено
 
+- Усилен Stage 06B: scan-scoped findings теперь хранятся через отдельную связь
+  `project_scan_findings`, Terraform diagnostics сохраняются в normalized
+  result, а bundled profiles используют конкретные сертифицированные версии.
+- Добавлен opt-in acceptance test реальных Terraform/TFLint/Trivy для запуска
+  в network-restricted окружении и registry extension point security adapters.
+- Bundled Terraform profile теперь принимает Terraform 1.15.0 и выше;
+  `make install` автоматически загружает и проверяет закреплённые TFLint 0.63.1
+  и Trivy 0.71.2.
 - Stage 05 repository manager MVP закрыт как текущий завершенный backend
   baseline; активный roadmap focus перенесен на Stage 06A/06B.
 - Проведен аудит документации репозитория относительно текущего code baseline;

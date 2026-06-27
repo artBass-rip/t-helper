@@ -1,0 +1,11 @@
+{
+  "schema_version": "tool_profile_fixture_set.v1",
+  "tool": "trivy",
+  "fixtures": [
+    {
+      "name": "malformed-json",
+      "stdout": "{\"Results\":[",
+      "expected_error_code": "tool_output_parse_failed"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": "tool_profile.v1",
+  "tool": "terraform",
+  "profile_id": "terraform-validate-json-v1",
+  "profile_version": "1.0.0",
+  "certified_versions": [">=1.15.0"],
+  "compatible_versions": [">=1.15.0"],
+  "version_policy": "certified_only",
+  "version_discovery": {
+    "command": "terraform",
+    "args": ["--version"]
+  },
+  "scan_command": {
+    "command": "terraform",
+    "args": ["validate", "-json", "-no-color"]
+  },
+  "parser": {
+    "type": "json",
+    "result": "terraform_validate",
+    "diagnostics": {
+      "items_path": "diagnostics",
+      "mapping": {
+        "severity": {"path": "severity"},
+        "summary": {"path": "summary"},
+        "detail": {"path": "detail"},
+        "address": {"path": "address"},
+        "file_path": {"path": "range.filename"},
+        "line": {"path": "range.start.line"},
+        "column": {"path": "range.start.column"}
+      }
+    }
+  },
+  "mapping": {
+    "valid": {"path": "valid"},
+    "errors_count": {"path": "error_count"},
+    "warnings_count": {"path": "warning_count"}
+  },
+  "redaction": {
+    "max_output_bytes": 1048576
+  }
+}

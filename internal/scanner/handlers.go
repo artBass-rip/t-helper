@@ -47,8 +47,21 @@ func (osScanFilesystem) Open(name string) (io.ReadCloser, error) {
 func JobHandlers(store *Store) map[string]jobs.Handler {
 	fs := osScanFilesystem{}
 	return map[string]jobs.Handler{
-		"global_scan":       globalScanHandler{store: store, fs: fs},
-		"project_discovery": projectDiscoveryHandler{store: store, fs: fs},
+		"global_scan":              globalScanHandler{store: store, fs: fs},
+		"project_discovery":        projectDiscoveryHandler{store: store, fs: fs},
+		"project_scan":             projectScanHandler{store: store},
+		"security_validation_scan": securityValidationHandler{store: store},
+	}
+}
+
+func JobCompletionHook(store *Store) func(context.Context, jobs.Job, string) error {
+	return func(ctx context.Context, job jobs.Job, status string) error {
+		switch job.JobType {
+		case "project_scan", "security_validation_scan":
+			return store.ApplyWorkflowAggregateToProjectScan(ctx, job.JobGroupID)
+		default:
+			return nil
+		}
 	}
 }
 

@@ -1,0 +1,47 @@
+{
+  "schema_version": "tool_profile.v1",
+  "tool": "trivy",
+  "profile_id": "trivy-terraform-misconfig-json-v1",
+  "profile_version": "1.0.0",
+  "certified_versions": ["0.71.2"],
+  "compatible_versions": ["0"],
+  "version_policy": "certified_only",
+  "version_discovery": {
+    "command": "trivy",
+    "args": ["--version"]
+  },
+  "scan_command": {
+    "command": "trivy",
+    "args": ["config", "--format", "json", "--skip-check-update", "--disable-telemetry", "--skip-version-check", "{project_dir}"]
+  },
+  "parser": {
+    "type": "json",
+    "result": "findings",
+    "severity_map": {
+      "UNKNOWN": "info",
+      "LOW": "low",
+      "MEDIUM": "medium",
+      "HIGH": "high",
+      "CRITICAL": "critical"
+    },
+    "findings": {
+      "results_path": "Results",
+      "items_path": "Misconfigurations",
+      "mapping": {
+        "file_path": {"path": "Target"},
+        "check_type": {"value": "terraform.security.misconfig"},
+        "rule_id": {"path": "ID"},
+        "severity": {"path": "Severity"},
+        "resource_ref": {"path": "CauseMetadata.Resource"},
+        "finding_key": {"path": "CauseMetadata.Resource"},
+        "title": {"path": "Title"},
+        "description": {"path": "Description"},
+        "remediation": {"paths": ["Resolution", "PrimaryURL"], "join": " "}
+      }
+    }
+  },
+  "mapping": {},
+  "redaction": {
+    "max_output_bytes": 4194304
+  }
+}

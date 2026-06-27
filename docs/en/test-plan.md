@@ -163,6 +163,8 @@ API checks, storage state and runtime behavior.
 
 ### Toolchain Coverage
 
+- Verify `make install` on Linux/macOS: TFLint 0.63.1 and Trivy 0.71.2 are downloaded, checksum manifests and archive SHA-256 values are verified, and binaries are installed next to t-helper.
+- Verify the Terraform admission boundary: `1.14.x` is rejected while `1.15.0` and newer versions are accepted by the bundled profile.
 - For `project-scanner`, verify that runtime flow includes `terraform validate` and `TFLint`.
 - For `security-validator`, verify that `Trivy` runs only when present in `project_security_scan_settings.enabled_modules`.
 - Verify that `terraform`, `TFLint` and `Trivy` run through the tool profile runtime from ADR 0018, not through parser logic inside scanner service.
@@ -179,6 +181,7 @@ API checks, storage state and runtime behavior.
 - Verify analyzer diagnostics for fingerprint-affecting fields: unresolved `rule_id`, normalized file path, `resource_ref`, `finding_key`, `rule_namespace`, `tool` or `check_type` blocks activation until fixtures validate them.
 - Verify bundled profile fixtures for `terraform validate` success/error, `TFLint` finding, `Trivy config` finding, secret-like redaction, unsupported version, missing binary and malformed output.
 - For extension adapters, verify that `gitleaks`, `checkov`, `opa` and `conftest` can be registered in `scanning.security_scan.modules` without changing the API contract, but are not mandatory MVP acceptance.
+- Before closing Stage 06B, run `THELPER_STAGE06_REAL_TOOLCHAIN=1 go test -run TestStage06RealCertifiedToolchain ./internal/scanner` with the certified `terraform`, `tflint` and `trivy` versions inside a network-disabled environment; a skipped test does not count as acceptance.
 
 ### Storage Invariants
 

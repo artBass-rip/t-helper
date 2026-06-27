@@ -232,6 +232,8 @@
 </ul>
 <h3 id="toolchain-coverage">Toolchain Coverage</h3>
 <ul>
+<li>Verify <code>make install</code> on Linux/macOS: TFLint 0.63.1 and Trivy 0.71.2 are downloaded, checksum manifests and archive SHA-256 values are verified, and binaries are installed next to t-helper.</li>
+<li>Verify the Terraform admission boundary: <code>1.14.x</code> is rejected while <code>1.15.0</code> and newer versions are accepted by the bundled profile.</li>
 <li>For <code>project-scanner</code>, verify that runtime flow includes <code>terraform validate</code> and <code>TFLint</code>.</li>
 <li>For <code>security-validator</code>, verify that <code>Trivy</code> runs only when present in <code>project_security_scan_settings.enabled_modules</code>.</li>
 <li>Verify that <code>terraform</code>, <code>TFLint</code> and <code>Trivy</code> run through the tool profile runtime from ADR 0018, not through parser logic inside scanner service.</li>
@@ -248,6 +250,7 @@
 <li>Verify analyzer diagnostics for fingerprint-affecting fields: unresolved <code>rule_id</code>, normalized file path, <code>resource_ref</code>, <code>finding_key</code>, <code>rule_namespace</code>, <code>tool</code> or <code>check_type</code> blocks activation until fixtures validate them.</li>
 <li>Verify bundled profile fixtures for <code>terraform validate</code> success/error, <code>TFLint</code> finding, <code>Trivy config</code> finding, secret-like redaction, unsupported version, missing binary and malformed output.</li>
 <li>For extension adapters, verify that <code>gitleaks</code>, <code>checkov</code>, <code>opa</code> and <code>conftest</code> can be registered in <code>scanning.security_scan.modules</code> without changing the API contract, but are not mandatory MVP acceptance.</li>
+<li>Before closing Stage 06B, run <code>THELPER_STAGE06_REAL_TOOLCHAIN=1 go test -run TestStage06RealCertifiedToolchain ./internal/scanner</code> with the certified <code>terraform</code>, <code>tflint</code> and <code>trivy</code> versions inside a network-disabled environment; a skipped test does not count as acceptance.</li>
 </ul>
 <h3 id="storage-invariants">Storage Invariants</h3>
 <ul>

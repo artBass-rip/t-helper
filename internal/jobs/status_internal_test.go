@@ -112,7 +112,7 @@ func TestRefreshWorkflowStatusAggregatesMoreThanOneThousandJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("workflow status: %v", err)
 	}
-	if status.ProgressTotal != 1005 || status.ProgressCurrent != 1000 || status.AggregateStatus != StatusQueued {
+	if status.ProgressTotal != 1005 || status.ProgressCurrent != 1000 || status.AggregateStatus != StatusRunning {
 		t.Fatalf("unexpected aggregate: %+v", status)
 	}
 }

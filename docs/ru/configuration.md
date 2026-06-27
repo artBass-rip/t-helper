@@ -207,6 +207,11 @@ processes are replaced.
 - `scanning.toolchain.version_policy` - политика допуска внешних CLI tool versions: `certified_only`, `compatible_range` или `latest_best_effort`;
 - `scanning.toolchain.profile_paths` - optional локальные directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.
 
+Bundled Terraform profile принимает Terraform `>=1.15.0`. Установка приложения
+автоматически устанавливает закреплённые TFLint 0.63.1 и Trivy 0.71.2; runtime
+ищет их в `PATH`, `THELPER_TOOLCHAIN_DIR` и директории executable файла
+t-helper.
+
 `global_scan` является каноническим именем поля входной конфигурации. Внутри storage эти записи мапятся на сущность `root_paths`.
 
 Для scan и clone используется один и тот же materialized список `root_paths`.

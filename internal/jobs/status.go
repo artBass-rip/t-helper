@@ -258,13 +258,11 @@ LIMIT ?`
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	placeholders := make([]string, len(ids))
 	deleteArgs := make([]any, len(ids))
 	for i, id := range ids {
-		placeholders[i] = s.placeholder(i + 1)
 		deleteArgs[i] = id
 	}
-	deleteQuery := fmt.Sprintf("DELETE FROM %s WHERE id IN (%s)", table, strings.Join(placeholders, ", "))
+	deleteQuery := fmt.Sprintf("DELETE FROM %s WHERE id IN (%s)", table, s.dialect().InList(1, len(ids)))
 	res, err := s.handle.DB.ExecContext(ctx, deleteQuery, deleteArgs...)
 	if err != nil {
 		return 0, err
@@ -578,6 +576,9 @@ func aggregateStatus(counts map[string]int, total int) string {
 		return StatusRunning
 	}
 	if counts[StatusQueued] > 0 {
+		if counts[StatusSucceeded]+counts[StatusFailed]+counts[StatusCancelled] > 0 {
+			return StatusRunning
+		}
 		return StatusQueued
 	}
 	if counts[StatusSucceeded] == total {

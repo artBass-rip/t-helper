@@ -247,11 +247,12 @@ paths, usernames, passwords or userinfo.
 | `GET /api/projects` | `limit`, `cursor`, `root_path_id?`, `repository_id?`, `status?` | `list_response<project>` | Read model for the registry. Default `status` filter is `active`; use `status=missing`, `status=disabled` or `status=all` to include non-active projects. |
 | `GET /api/projects/{id}` | n/a | `project` | Returns the project with basic links. |
 | `GET /api/projects/{id}/links` | `limit`, `cursor`, `link_type?` | `list_response<project_link>` | Returns links for a single project record, for example `same_repository`, without merging project rows. |
-| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
-| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. When implemented, `security.enabled_modules` must come from `scanning.security_scan.modules`. |
-| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Stage 06 contract. Stage 04 exposes only the lifecycle guard: missing/disabled projects return controlled validation errors; otherwise the endpoint returns `501 project_scan_unavailable`. |
-| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
-| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Stage 06 contract. Not implemented by Stage 04 scanner MVP. |
+| `GET /api/projects/{id}/scan-settings` | n/a | `project_scan_settings` | Returns project scanner and nested security scan settings. Missing settings are materialized with MVP defaults. |
+| `PUT /api/projects/{id}/scan-settings` | `project_scan_settings` | `project_scan_settings` | Updates project scan settings. `security.enabled_modules` must come from `scanning.security_scan.modules`. |
+| `POST /api/project-scans` | `project_id`, `scan_type?`, `rule_set_id?`, `reason?` | `202 project_scan_ref` | Creates `project_scans` and parent `jobs.job_type = project_scan`; missing/disabled projects return controlled validation errors. |
+| `GET /api/project-scans` | `limit`, `cursor`, `project_id?`, `status?` | `list_response<project_scan>` | Lists project scan aggregate records. |
+| `GET /api/project-scans/{project_scan_id}` | n/a | `project_scan` | Reads the project scan aggregate and reconciles workflow status before returning. |
+| `GET /api/project-scans/{project_scan_id}/findings` | `limit`, `cursor`, `severity?`, `status?` | `list_response<security_finding>` | Lists findings scoped to the scan project. |
 | `GET /api/repos` | `limit`, `cursor`, `provider?`, `provider_host?`, `full_path?`, `status?`, `discovery_source?`, `auto_sync_enabled?` | `list_response<repository>` | Read model for repositories. Default `status` filter is `active`; `full_path` without provider/provider_host may return multiple repositories. |
 | `GET /api/repos/{id}` | n/a | `repository` | Returns the repository card. |
 | `GET /api/repo-provider-instances` | `limit`, `cursor`, `provider?`, `provider_host?`, `enabled?` | `list_response<repository_provider_instance>` | GitKraken-like integration profiles for cloud, on-premise and multi-domain provider hosts. |

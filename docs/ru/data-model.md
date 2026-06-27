@@ -791,6 +791,18 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `last_seen_at` обновляется при каждом scan, где finding присутствует;
 - `detected_at` сохраняется как backward-compatible alias/initial detection timestamp и должен совпадать с `first_seen_at` для новых rows.
 
+### `project_scan_findings`
+
+- `project_scan_id`
+- `finding_id`
+- `detected_at`
+
+Инварианты:
+
+- пара `project_scan_id + finding_id` уникальна;
+- таблица хранит принадлежность дедуплицированного finding конкретному запуску и используется scoped findings API;
+- удаление project scan или finding каскадно удаляет только связь.
+
 ## Auth и RBAC сущности
 
 ### `users`
@@ -989,7 +1001,7 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `project_scans.job_id` и `project_scans.project_id` обязательны; удаление связанных `jobs` и `projects` должно использовать `ON DELETE RESTRICT`;
 - `job_locks.job_id` обязателен; удаление связанных `jobs` должно использовать `ON DELETE RESTRICT`;
 - `security_findings.project_id`, `security_findings.repository_id`, `security_findings.workspace_id`, `security_findings.job_id`, `security_findings.rule_set_id` nullable, но finding должен ссылаться хотя бы на один из `project_id`, `repository_id`, `workspace_id` или `job_id`;
-- `tool_profile_validation_results.tool_profile_id` обязателен и использует `ON DELETE CASCADE`;
+- `tool_profile_validation_results.tool_profile_id` nullable for pre-import validation results and uses `ON DELETE SET NULL`;
 - `local_user_credentials.user_id` обязателен и использует `ON DELETE CASCADE`;
 - `password_reset_tokens.user_id` обязателен и использует `ON DELETE CASCADE`;
 - `user_sessions.user_id` обязателен и использует `ON DELETE CASCADE`;

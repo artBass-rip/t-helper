@@ -59,6 +59,7 @@ func (e HandlerEnv) emit(ctx context.Context, job Job, eventType, message string
 type Runtime struct {
 	store             *Store
 	handlers          map[string]Handler
+	afterComplete     func(ctx context.Context, job Job, status string) error
 	workerID          string
 	logger            *slog.Logger
 	pollInterval      time.Duration
@@ -73,6 +74,7 @@ type Runtime struct {
 type RuntimeOptions struct {
 	Store             *Store
 	Handlers          map[string]Handler
+	AfterComplete     func(ctx context.Context, job Job, status string) error
 	WorkerID          string
 	Logger            *slog.Logger
 	PollInterval      time.Duration
@@ -115,6 +117,7 @@ func NewRuntime(opts RuntimeOptions) *Runtime {
 	return &Runtime{
 		store:             opts.Store,
 		handlers:          opts.Handlers,
+		afterComplete:     opts.AfterComplete,
 		workerID:          opts.WorkerID,
 		logger:            opts.Logger,
 		pollInterval:      opts.PollInterval,
@@ -219,9 +222,6 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	if err := r.store.AddEvent(ctx, Event{JobID: job.ID, JobGroupID: job.JobGroupID, EventType: EventProgress, Status: StatusRunning, WorkerID: r.workerID, Payload: eventPayload("handler started")}); err != nil {
 		return true, r.runtimeRequeue(ctx, job, "transient_error", err)
 	}
-	if err := r.store.RefreshWorkflowStatus(ctx, job.JobGroupID, workflowIDForJob(job)); err != nil {
-		r.logger.Warn("refresh workflow status failed", "job_group_id", job.JobGroupID, "job_id", job.ID, "error", err)
-	}
 
 	heartbeatCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -234,7 +234,10 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 	defer cancelFinal()
 
 	if handleErr == nil {
-		return true, r.store.Complete(finalCtx, job, r.workerID, StatusSucceeded, result, "")
+		if err := r.store.Complete(finalCtx, job, r.workerID, StatusSucceeded, result, ""); err != nil {
+			return true, err
+		}
+		return true, r.runAfterComplete(finalCtx, job, StatusSucceeded)
 	}
 	classified := classifyError(handleErr)
 	if classified.Code == "cancelled" && ctx.Err() != nil {
@@ -253,7 +256,10 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 			Message:       safeMessage(classified.Message),
 			Retryable:     false,
 		})
-		return true, r.store.Complete(finalCtx, job, r.workerID, StatusCancelled, failure, classified.Message)
+		if err := r.store.Complete(finalCtx, job, r.workerID, StatusCancelled, failure, classified.Message); err != nil {
+			return true, err
+		}
+		return true, r.runAfterComplete(finalCtx, job, StatusCancelled)
 	}
 	failure, _ := json.Marshal(FailureResult{
 		SchemaVersion: ResultFailureSchemaVersion,
@@ -264,7 +270,17 @@ func (r *Runtime) RunOnce(ctx context.Context) (bool, error) {
 		Message:       safeMessage(classified.Message),
 		Retryable:     false,
 	})
-	return true, r.store.Complete(finalCtx, job, r.workerID, StatusFailed, failure, classified.Message)
+	if err := r.store.Complete(finalCtx, job, r.workerID, StatusFailed, failure, classified.Message); err != nil {
+		return true, err
+	}
+	return true, r.runAfterComplete(finalCtx, job, StatusFailed)
+}
+
+func (r *Runtime) runAfterComplete(ctx context.Context, job Job, status string) error {
+	if r.afterComplete == nil {
+		return nil
+	}
+	return r.afterComplete(ctx, job, status)
 }
 
 func (r *Runtime) runtimeRequeue(ctx context.Context, job Job, code string, err error) error {

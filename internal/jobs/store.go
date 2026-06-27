@@ -49,12 +49,59 @@ func NewStore(handle *storage.Handle) *Store {
 	return &Store{handle: handle}
 }
 
+func (s *Store) dialect() storage.Dialect {
+	return s.handle.Dialect()
+}
+
 func NewJobID() string {
 	return newID("job")
 }
 
 func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error) {
 	now := time.Now().UTC()
+	req, replay, err := s.prepareEnqueue(ctx, req, now, true)
+	if err != nil {
+		return JobRef{}, err
+	}
+	if replay != nil {
+		return *replay, nil
+	}
+
+	tx, err := s.handle.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return JobRef{}, err
+	}
+	defer tx.Rollback()
+	if err := s.enqueuePrepared(ctx, tx, req, now); err != nil {
+		if req.IdempotencyKey != "" && isUniqueConstraintError(err) {
+			_ = tx.Rollback()
+			return s.idempotentReplay(ctx, req)
+		}
+		return JobRef{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return JobRef{}, err
+	}
+	_ = s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID)
+	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+}
+
+func (s *Store) EnqueueInTx(ctx context.Context, tx *sql.Tx, req EnqueueRequest) (JobRef, error) {
+	now := time.Now().UTC()
+	req, replay, err := s.prepareEnqueue(ctx, req, now, false)
+	if err != nil {
+		return JobRef{}, err
+	}
+	if replay != nil {
+		return *replay, nil
+	}
+	if err := s.enqueuePrepared(ctx, tx, req, now); err != nil {
+		return JobRef{}, err
+	}
+	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+}
+
+func (s *Store) prepareEnqueue(ctx context.Context, req EnqueueRequest, now time.Time, checkIdempotency bool) (EnqueueRequest, *JobRef, error) {
 	if req.ID == "" {
 		req.ID = NewJobID()
 	}
@@ -71,13 +118,13 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 		req.Payload = json.RawMessage(`{}`)
 	}
 	if err := validatePayloadSchema(req.JobType, req.Payload); err != nil {
-		return JobRef{}, err
+		return EnqueueRequest{}, nil, err
 	}
 	if err := validatePayloadContract(req.JobType, req.Payload); err != nil {
-		return JobRef{}, err
+		return EnqueueRequest{}, nil, err
 	}
 	if err := validateSafeJobPayload(req.Payload); err != nil {
-		return JobRef{}, err
+		return EnqueueRequest{}, nil, err
 	}
 	if req.JobGroupID == "" {
 		req.JobGroupID = defaultJobGroupID(req.JobType, req.ID)
@@ -86,21 +133,25 @@ func (s *Store) Enqueue(ctx context.Context, req EnqueueRequest) (JobRef, error)
 		req.WorkflowID = workflowIDFromGroupID(req.JobGroupID, req.ID)
 	}
 
-	if req.IdempotencyKey != "" {
+	if checkIdempotency && req.IdempotencyKey != "" {
 		if existing, err := s.findByIdempotency(ctx, req.Actor, req.JobType, req.IdempotencyKey); err == nil {
 			samePayload, err := sameJSON(existing.Payload, req.Payload)
 			if err != nil {
-				return JobRef{}, err
+				return EnqueueRequest{}, nil, err
 			}
 			if !samePayload {
-				return JobRef{}, fmt.Errorf("%w for %s/%s", ErrIdempotencyConflict, req.JobType, req.IdempotencyKey)
+				return EnqueueRequest{}, nil, fmt.Errorf("%w for %s/%s", ErrIdempotencyConflict, req.JobType, req.IdempotencyKey)
 			}
-			return JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}, nil
+			ref := JobRef{JobID: existing.ID, Status: existing.Status, SchemaVersion: JobRefSchemaVersion}
+			return req, &ref, nil
 		} else if !errors.Is(err, ErrNotFound) {
-			return JobRef{}, err
+			return EnqueueRequest{}, nil, err
 		}
 	}
+	return req, nil, nil
+}
 
+func (s *Store) enqueuePrepared(ctx context.Context, exec sqlExecutor, req EnqueueRequest, now time.Time) error {
 	query := `INSERT INTO jobs (id, job_type, status, actor, correlation_id, idempotency_key, parent_job_id, job_group_id, lock_key, attempt_count, max_attempts, run_after, priority, payload, created_at, updated_at)
 VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
 	args := []any{req.ID, req.JobType, nullEmpty(req.Actor), nullEmpty(req.CorrelationID), nullEmpty(req.IdempotencyKey), nullEmpty(req.ParentJobID), req.JobGroupID, nullEmpty(req.LockKey), req.MaxAttempts, formatTime(req.RunAfter), req.Priority, string(req.Payload), formatTime(now), formatTime(now)}
@@ -108,26 +159,13 @@ VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
 		query = `INSERT INTO jobs (id, job_type, status, actor, correlation_id, idempotency_key, parent_job_id, job_group_id, lock_key, attempt_count, max_attempts, run_after, priority, payload, created_at, updated_at)
 VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14)`
 	}
-	tx, err := s.handle.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return JobRef{}, err
+	if _, err := exec.ExecContext(ctx, query, args...); err != nil {
+		return err
 	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-		if req.IdempotencyKey != "" && isUniqueConstraintError(err) {
-			_ = tx.Rollback()
-			return s.idempotentReplay(ctx, req)
-		}
-		return JobRef{}, err
+	if err := s.addEvent(ctx, exec, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
+		return err
 	}
-	if err := s.addEvent(ctx, tx, Event{JobID: req.ID, JobGroupID: req.JobGroupID, EventType: EventQueued, Status: StatusQueued}); err != nil {
-		return JobRef{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return JobRef{}, err
-	}
-	_ = s.RefreshWorkflowStatus(ctx, req.JobGroupID, req.WorkflowID)
-	return JobRef{JobID: req.ID, Status: StatusQueued, SchemaVersion: JobRefSchemaVersion}, nil
+	return nil
 }
 
 func (s *Store) EnqueueRepositoryOperation(ctx context.Context, req EnqueueRequest) (JobRef, error) {
@@ -773,17 +811,11 @@ func scanLock(row interface{ Scan(dest ...any) error }) (Lock, error) {
 }
 
 func (s *Store) placeholder(idx int) string {
-	if s.handle.Provider == "postgres" {
-		return fmt.Sprintf("$%d", idx)
-	}
-	return "?"
+	return s.dialect().Placeholder(idx)
 }
 
 func (s *Store) timeExpr(column string) string {
-	if s.handle.Provider == "postgres" {
-		return column + "::text"
-	}
-	return column
+	return s.dialect().TimeExpr(column)
 }
 
 func defaultJobGroupID(jobType, id string) string {

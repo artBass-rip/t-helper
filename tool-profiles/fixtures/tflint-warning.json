@@ -1,0 +1,24 @@
+{
+  "schema_version": "tool_profile_fixture_set.v1",
+  "tool": "tflint",
+  "project_dir": "/workspace/project",
+  "fixtures": [
+    {
+      "name": "terraform-deprecated-interpolation",
+      "stdout": "{\"issues\":[{\"rule\":{\"name\":\"terraform_deprecated_interpolation\",\"severity\":\"WARNING\"},\"message\":\"Interpolation-only expressions are deprecated\",\"range\":{\"filename\":\"/workspace/project/modules/app/main.tf\",\"start\":{\"line\":7,\"column\":12},\"end\":{\"line\":7,\"column\":30}}}]}",
+      "expected_check": {
+        "tool": "tflint",
+        "check_type": "terraform.lint",
+        "issues_count": 1,
+        "issues": [
+          {
+            "file_path": "modules/app/main.tf",
+            "message": "Interpolation-only expressions are deprecated",
+            "rule_id": "terraform_deprecated_interpolation",
+            "severity": "medium"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -130,6 +130,7 @@ func (a *App) runtimeOptions(ctx context.Context, handle *storage.Handle, config
 	return jobs.RuntimeOptions{
 		Store:             jobStore,
 		Handlers:          handlers,
+		AfterComplete:     scanner.JobCompletionHook(scannerStore),
 		WorkerID:          workerID,
 		Logger:            a.logger,
 		PollInterval:      cfg.PollInterval,

@@ -86,6 +86,18 @@ go run ./cmd/thelper-ctl -migrate-db
 
 When using built binaries, replace `go run ./cmd/<name>` with the binary name.
 
+Install the application and its pinned scanner toolchain into `~/.local/bin`:
+
+```text
+make install
+```
+
+`make install` downloads TFLint 0.63.1 and Trivy 0.71.2 from their official
+GitHub releases, verifies the pinned checksum manifests and archive SHA-256
+digests, and installs them next to the t-helper executables. Override the target
+with `PREFIX=/custom/prefix make install`. Terraform is supplied by the user and
+must be version 1.15.0 or newer.
+
 ## HTTP API
 
 Stage 05 exposes the following runtime API surface:

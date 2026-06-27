@@ -50,7 +50,7 @@
 <a class="toc-level-2" href="#current-status">Current Status</a>
 <a class="toc-level-2" href="#accepted-design-decisions">Accepted Design Decisions</a>
 <a class="toc-level-2" href="#backlog">Backlog</a>
-<a class="toc-level-3" href="#p1-sql-dialect-helper">P1. SQL dialect helper</a>
+<a class="toc-level-3" href="#p1-sql-dialect-helper-follow-up">P1. SQL dialect helper follow-up</a>
 <a class="toc-level-3" href="#p1-workflow-status-refresh-load">P1. Workflow status refresh load</a>
 <a class="toc-level-3" href="#p1-split-large-store-files">P1. Split Large Store Files</a>
 <a class="toc-level-3" href="#p2-filesystem-scan-backpressure">P2. Filesystem scan backpressure</a>
@@ -63,7 +63,7 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</h1>
-<p>Last updated: 2026-05-31.</p>
+<p>Last updated: 2026-06-05.</p>
 <p>This document records completed optimizations, the current quality gate and the remaining backlog, which should be implemented iteratively without broad mechanical refactoring.</p>
 <h2 id="current-status">Current Status</h2>
 <p>Completed:</p>
@@ -73,6 +73,8 @@
 <li>A smoke test was added for the full set of current HTTP routes: <code>internal/httpapi/router_test.go</code>.</li>
 <li>The transactional helper <code>storage.WithTx(ctx, db, opts, fn)</code> was added and applied in mutable lifecycle paths <code>jobs.Store.Start</code>, <code>jobs.Store.Complete</code>, <code>jobs.Store.Requeue</code>.</li>
 <li>Initial benchmarks were added for hot paths <code>jobs.Store.ClaimNext</code> and <code>jobs.Store.RefreshWorkflowStatus</code>.</li>
+<li><code>storage.Dialect</code> and <code>Handle.Dialect()</code> were added to centralize common SQLite/PostgreSQL placeholder, <code>IN (...)</code>, time cast and boolean argument handling. Existing local helpers in <code>jobs</code>, <code>scanner</code> and <code>repository</code> now delegate to it.</li>
+<li>One redundant <code>RefreshWorkflowStatus</code> call was removed from the worker startup-progress path; lifecycle transitions still refresh workflow status.</li>
 <li>A local quality gate <code>make test</code> was added; it runs: <code>gofmt</code> check, <code>go vet ./...</code>, <code>go test ./...</code>.</li>
 <li><code>make race</code> was added for manual/nightly checks with the race detector.</li>
 </ul>
@@ -86,13 +88,12 @@
 <li>Stage 09 remains the owner of runtime/scanner performance hardening: <a href="implementation-specs/stage-09-runtime-observability-hardening.html"><code>implementation-specs/stage-09-runtime-observability-hardening.md</code></a>.</li>
 </ul>
 <h2 id="backlog">Backlog</h2>
-<h3 id="p1-sql-dialect-helper">P1. SQL dialect helper</h3>
-<p>Problem: the store layer still contains branches by <code>handle.Provider</code> for SQLite/PostgreSQL placeholders, casts and upsert shapes.</p>
+<h3 id="p1-sql-dialect-helper-follow-up">P1. SQL dialect helper follow-up</h3>
+<p>Problem: common placeholder, <code>IN (...)</code>, time cast and boolean argument handling now has a shared helper, but store files still contain provider branches for JSON casts and upsert shapes.</p>
 <p>Next step:</p>
 <ul>
-<li>add a small helper in <code>internal/storage</code> or <code>internal/storage/sqlutil</code>;</li>
-<li>centralize placeholders, <code>IN (...)</code>, boolean/time/JSON casts and common upsert fragments;</li>
-<li>migrate store files one by one, starting with <code>jobs</code> or <code>scanner</code>.</li>
+<li>extend <code>storage.Dialect</code> with JSON cast and common upsert fragments where they remove meaningful duplication;</li>
+<li>migrate store branches one by one while changing the corresponding area.</li>
 </ul>
 <h3 id="p1-workflow-status-refresh-load">P1. Workflow status refresh load</h3>
 <p>Problem: <code>RefreshWorkflowStatus</code> is called after many job lifecycle events and recomputes the aggregate read model.</p>

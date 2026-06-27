@@ -251,10 +251,216 @@ func TestStage04ScannerRegistryEndpoints(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing project scan guard status = %d body = %s", rec.Code, rec.Body.String())
 	}
+	scanEnabled := false
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{ScanEnabled: &scanEnabled}); err != nil {
+		t.Fatalf("disable project scan settings: %v", err)
+	}
+	var jobsBeforeDisabledScan int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsBeforeDisabledScan); err != nil {
+		t.Fatalf("count jobs before disabled project scan: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("disabled project scan guard status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var jobsAfterDisabledScan int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsAfterDisabledScan); err != nil {
+		t.Fatalf("count jobs after disabled project scan: %v", err)
+	}
+	if jobsAfterDisabledScan != jobsBeforeDisabledScan {
+		t.Fatalf("disabled project scan should not enqueue a job: before=%d after=%d", jobsBeforeDisabledScan, jobsAfterDisabledScan)
+	}
+	scanEnabled = true
+	if _, err := scannerStore.UpsertProjectSettings(ctx, project.ID, scanner.ProjectScanSettingsInput{ScanEnabled: &scanEnabled}); err != nil {
+		t.Fatalf("re-enable project scan settings: %v", err)
+	}
+	var jobsBeforeInvalidRuleSet int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsBeforeInvalidRuleSet); err != nil {
+		t.Fatalf("count jobs before invalid rule set: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","rule_set_id":"missing_rule_set"}`))))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("invalid rule set project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var jobsAfterInvalidRuleSet int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobsAfterInvalidRuleSet); err != nil {
+		t.Fatalf("count jobs after invalid rule set: %v", err)
+	}
+	if jobsAfterInvalidRuleSet != jobsBeforeInvalidRuleSet {
+		t.Fatalf("invalid rule set should not enqueue a job: before=%d after=%d", jobsBeforeInvalidRuleSet, jobsAfterInvalidRuleSet)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("project scan default rule set status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var projectScanRef scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&projectScanRef); err != nil {
+		t.Fatalf("decode project scan ref: %v", err)
+	}
+	if projectScanRef.SchemaVersion != scanner.ProjectScanRefSchema || projectScanRef.Status != jobs.StatusQueued {
+		t.Fatalf("unexpected project scan ref: %+v", projectScanRef)
+	}
+	projectScanJob, err := jobStore.Get(ctx, projectScanRef.JobID)
+	if err != nil {
+		t.Fatalf("get project scan job: %v", err)
+	}
+	var scanPayload scanner.ProjectScanPayload
+	if err := json.Unmarshal(projectScanJob.Payload, &scanPayload); err != nil {
+		t.Fatalf("decode project scan payload: %v", err)
+	}
+	if scanPayload.RuleSetID != scanner.DefaultSecurityRuleSetID {
+		t.Fatalf("project scan payload rule_set_id = %q, want default %q", scanPayload.RuleSetID, scanner.DefaultSecurityRuleSetID)
+	}
+	for _, item := range []struct {
+		path string
+		want string
+	}{
+		{"/api/project-scans?status=definitely_bad", "invalid project scan status"},
+		{"/api/security/findings?severity=urgent", "invalid global finding severity"},
+		{"/api/security/findings?status=triaged", "invalid global finding status"},
+		{"/api/project-scans/" + projectScanRef.ProjectScanID + "/findings?severity=urgent", "invalid scoped finding severity"},
+		{"/api/project-scans/" + projectScanRef.ProjectScanID + "/findings?status=triaged", "invalid scoped finding status"},
+	} {
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, item.path, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d body = %s", item.want, rec.Code, rec.Body.String())
+		}
+	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/projects?cursor=not-a-cursor", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid projects cursor status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStage06ProjectScanCreateDoesNotLeaveOrphanJobWhenScanInsertFails(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	configStore := config.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+		httpapi.NewJobsHandler(jobStore),
+		httpapi.NewStatusHandler(jobStore),
+		httpapi.NewScannerHandler(scannerStore, jobStore),
+	)
+
+	rootPath := filepath.Join(t.TempDir(), "scan-root")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "local", Path: rootPath, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, roots[0], "svc", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	if _, err := handle.DB.ExecContext(ctx, `DROP TABLE project_scans`); err != nil {
+		t.Fatalf("drop project_scans: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_validate"}`))))
+	if rec.Code == http.StatusAccepted {
+		t.Fatalf("project scan create unexpectedly succeeded after project_scans was dropped: %s", rec.Body.String())
+	}
+	var jobCount int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs: %v", err)
+	}
+	if jobCount != 0 {
+		t.Fatalf("failed project scan create left orphan jobs: %d", jobCount)
+	}
+}
+
+func TestStage06ProjectScanCreateIdempotencyReplaysExistingScan(t *testing.T) {
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+
+	configStore := config.NewStore(handle)
+	moduleStore := modules.NewStore(handle)
+	if err := moduleStore.Seed(ctx); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+	jobStore := jobs.NewStore(handle)
+	scannerStore := scanner.NewStore(handle)
+	handler := httpapi.New(
+		httpapi.NewHealthHandler(runtime.NewHealthService("runtime_test", "local", testStartedAt(), runtime.NewStorageHealthSource(handle))),
+		httpapi.NewConfigHandler(configStore),
+		httpapi.NewModulesHandler(configStore, moduleStore),
+		httpapi.NewJobsHandler(jobStore),
+		httpapi.NewStatusHandler(jobStore),
+		httpapi.NewScannerHandler(scannerStore, jobStore),
+	)
+
+	rootPath := filepath.Join(t.TempDir(), "scan-root")
+	enabled := true
+	roots, err := scannerStore.UpsertRootPaths(ctx, []scanner.RootPathInput{{Name: "local", Path: rootPath, Enabled: &enabled}})
+	if err != nil {
+		t.Fatalf("upsert root path: %v", err)
+	}
+	project, _, err := scannerStore.UpsertProject(ctx, roots[0], "svc", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("upsert project: %v", err)
+	}
+	body := []byte(`{"project_id":"` + project.ID + `","scan_type":"terraform_validate"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var first scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&first); err != nil {
+		t.Fatalf("decode first ref: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("replay project scan status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var replay scanner.ProjectScanRef
+	if err := json.NewDecoder(rec.Body).Decode(&replay); err != nil {
+		t.Fatalf("decode replay ref: %v", err)
+	}
+	if replay.ProjectScanID != first.ProjectScanID || replay.JobID != first.JobID || replay.JobGroupID != first.JobGroupID {
+		t.Fatalf("replay ref = %+v, want %+v", replay, first)
+	}
+	var scanCount, jobCount int
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM project_scans`).Scan(&scanCount); err != nil {
+		t.Fatalf("count project scans: %v", err)
+	}
+	if err := handle.DB.QueryRowContext(ctx, `SELECT count(*) FROM jobs`).Scan(&jobCount); err != nil {
+		t.Fatalf("count jobs: %v", err)
+	}
+	if scanCount != 1 || jobCount != 1 {
+		t.Fatalf("idempotency replay created duplicates: project_scans=%d jobs=%d", scanCount, jobCount)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/project-scans", bytes.NewReader([]byte(`{"project_id":"`+project.ID+`","scan_type":"terraform_static"}`)))
+	req.Header.Set("Idempotency-Key", "project-scan-replay")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("changed idempotency payload status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }

@@ -791,6 +791,18 @@ Invariants:
 - `last_seen_at` is updated on every scan where the finding is present;
 - `detected_at` is stored as a backward-compatible alias/initial detection timestamp and must match `first_seen_at` for new rows.
 
+### `project_scan_findings`
+
+- `project_scan_id`
+- `finding_id`
+- `detected_at`
+
+Invariants:
+
+- the `project_scan_id + finding_id` pair is unique;
+- the table records which scan observed a deduplicated finding and backs the scoped findings API;
+- deleting a project scan or finding cascades only to the association.
+
 ## Auth and RBAC Entities
 
 ### `users`
