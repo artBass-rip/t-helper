@@ -164,7 +164,7 @@ func assertStage04TablesPresent(t *testing.T, db *sql.DB, provider string) {
 
 func assertStage06TablesPresent(t *testing.T, db *sql.DB, provider string) {
 	t.Helper()
-	for _, table := range []string{"tool_profiles", "tool_profile_validation_results", "project_scan_settings", "project_security_scan_settings", "project_scans", "security_rule_sets", "security_findings"} {
+	for _, table := range []string{"tool_profiles", "tool_profile_validation_results", "project_scan_settings", "project_security_scan_settings", "project_scans", "security_rule_sets", "security_findings", "project_scan_findings"} {
 		if !tableExists(t, db, provider, table) {
 			t.Fatalf("Stage 06 table %q was not created", table)
 		}
@@ -183,6 +183,7 @@ func assertStage06IndexesPresent(t *testing.T, db *sql.DB, provider string) {
 		"security_findings_repository_status_idx",
 		"security_findings_job_idx",
 		"security_findings_severity_status_idx",
+		"project_scan_findings_finding_idx",
 	} {
 		if !indexExists(t, db, provider, index) {
 			t.Fatalf("Stage 06 index %q was not created", index)

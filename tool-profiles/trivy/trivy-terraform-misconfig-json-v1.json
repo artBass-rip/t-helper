@@ -3,7 +3,7 @@
   "tool": "trivy",
   "profile_id": "trivy-terraform-misconfig-json-v1",
   "profile_version": "1.0.0",
-  "certified_versions": ["0"],
+  "certified_versions": ["0.71.2"],
   "compatible_versions": ["0"],
   "version_policy": "certified_only",
   "version_discovery": {
@@ -12,7 +12,7 @@
   },
   "scan_command": {
     "command": "trivy",
-    "args": ["config", "--format", "json", "--skip-db-update", "--skip-policy-update", "{project_dir}"]
+    "args": ["config", "--format", "json", "--skip-check-update", "--disable-telemetry", "--skip-version-check", "{project_dir}"]
   },
   "parser": {
     "type": "json",

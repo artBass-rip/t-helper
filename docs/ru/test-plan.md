@@ -194,6 +194,8 @@
 
 ### Toolchain coverage
 
+- Проверить `make install` на Linux/macOS: TFLint 0.63.1 и Trivy 0.71.2 загружаются, checksum manifests и SHA-256 архивов проверяются, binaries устанавливаются рядом с t-helper.
+- Проверить admission boundary Terraform: `1.14.x` отклоняется, `1.15.0` и более новые версии принимаются bundled profile.
 - Для `project-scanner` проверить, что runtime flow включает `terraform validate` и `TFLint`.
 - Для `security-validator` проверить, что `Trivy` запускается только при наличии в `project_security_scan_settings.enabled_modules`.
 - Проверить, что `terraform`, `TFLint` и `Trivy` запускаются через tool profile runtime из ADR 0018, а не через parser logic внутри scanner service.
@@ -210,6 +212,7 @@
 - Проверить analyzer diagnostics for fingerprint-affecting fields: unresolved `rule_id`, normalized file path, `resource_ref`, `finding_key`, `rule_namespace`, `tool` or `check_type` blocks activation until fixtures validate them.
 - Проверить bundled profile fixtures для `terraform validate` success/error, `TFLint` finding, `Trivy config` finding, secret-like redaction, unsupported version, missing binary and malformed output.
 - Для extension adapters проверить, что `gitleaks`, `checkov`, `opa` и `conftest` могут быть зарегистрированы в `scanning.security_scan.modules` без изменения API contract, but are not mandatory MVP acceptance.
+- Перед закрытием Stage 06B запустить `THELPER_STAGE06_REAL_TOOLCHAIN=1 go test -run TestStage06RealCertifiedToolchain ./internal/scanner` с сертифицированными версиями `terraform`, `tflint` и `trivy` внутри окружения без network access; skipped test не считается приёмкой.
 
 ### Storage invariants
 

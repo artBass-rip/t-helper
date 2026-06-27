@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,6 +69,33 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 		t.Fatalf("repeated scan did not update existing finding: first=%+v second=%+v", firstFinding, page.Items[0])
 	}
 	assertNoLocationFingerprintComponents(t, page.Items[0].FingerprintComponents)
+	if _, err := scannerStore.UpsertFinding(ctx, scanner.FindingUpsert{
+		ProjectScanID: secondScanID,
+		ProjectID:     project.ID,
+		RuleSetID:     scanner.DefaultSecurityRuleSetID,
+		CheckType:     "terraform.security.misconfig",
+		RuleID:        "SECOND-SCAN-ONLY",
+		Severity:      "low",
+		FilePath:      "main.tf",
+		ResourceRef:   "aws_s3_bucket.second",
+		FindingKey:    "aws_s3_bucket.second",
+		Title:         "Second scan only",
+		RuleNamespace: "trivy",
+		Tool:          "trivy",
+	}); err != nil {
+		t.Fatalf("upsert second-scan-only finding: %v", err)
+	}
+	firstScoped, err := scannerStore.ListFindings(ctx, scanner.FindingListOptions{ProjectScanID: firstScanID})
+	if err != nil {
+		t.Fatalf("list first scan after second scan: %v", err)
+	}
+	secondScoped, err := scannerStore.ListFindings(ctx, scanner.FindingListOptions{ProjectScanID: secondScanID})
+	if err != nil {
+		t.Fatalf("list second scan after scan-specific finding: %v", err)
+	}
+	if len(firstScoped.Items) != 1 || len(secondScoped.Items) != 2 {
+		t.Fatalf("scan-scoped findings leaked across scans: first=%d second=%d", len(firstScoped.Items), len(secondScoped.Items))
+	}
 
 	scan, err := scannerStore.GetProjectScan(ctx, secondScanID)
 	if err != nil {
@@ -105,6 +133,83 @@ func TestStage06ProjectScanSecurityValidationUsesToolProfilesAndStableFindings(t
 	}
 }
 
+func TestStage06RealCertifiedToolchain(t *testing.T) {
+	if os.Getenv("THELPER_STAGE06_REAL_TOOLCHAIN") != "1" {
+		t.Skip("set THELPER_STAGE06_REAL_TOOLCHAIN=1 inside a network-restricted environment")
+	}
+	for _, tool := range []string{"terraform", "tflint", "trivy"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Fatalf("certified tool %s is unavailable: %v", tool, err)
+		}
+	}
+
+	ctx := context.Background()
+	handle := openMigratedSQLite(t)
+	defer handle.Close()
+	scannerStore := scanner.NewStore(handle)
+	jobStore := jobs.NewStore(handle)
+	runtime := jobs.NewRuntime(jobs.RuntimeOptions{
+		Store:         jobStore,
+		Handlers:      scanner.JobHandlers(scannerStore),
+		AfterComplete: scanner.JobCompletionHook(scannerStore),
+		WorkerID:      "host:test:stage06-real-toolchain",
+		Logger:        slog.Default(),
+	})
+	project := stage06ProjectFixture(t, ctx, scannerStore)
+	mustWriteFile(t, filepath.Join(project.Path, "main.tf"), "terraform {}\n")
+
+	projectScanID := "project_scan_real_toolchain"
+	payload, err := json.Marshal(scanner.ProjectScanPayload{
+		SchemaVersion: scanner.ProjectScanPayloadSchema,
+		ProjectID:     project.ID,
+		ProjectScanID: projectScanID,
+		ScanType:      scanner.ScanTypeTerraformFull,
+		RuleSetID:     scanner.DefaultSecurityRuleSetID,
+	})
+	if err != nil {
+		t.Fatalf("marshal real toolchain payload: %v", err)
+	}
+	ref, err := jobStore.Enqueue(ctx, jobs.EnqueueRequest{
+		JobType:    "project_scan",
+		JobGroupID: "project_scan:" + projectScanID,
+		WorkflowID: projectScanID,
+		Payload:    payload,
+	})
+	if err != nil {
+		t.Fatalf("enqueue real toolchain scan: %v", err)
+	}
+	if _, err := scannerStore.CreateProjectScan(ctx, project, projectScanID, scanner.ScanTypeTerraformFull, scanner.DefaultSecurityRuleSetID, ref.JobID); err != nil {
+		t.Fatalf("create real toolchain project scan: %v", err)
+	}
+	runUntilComplete(t, ctx, runtime, jobStore, ref.JobID)
+	children, err := jobStore.List(ctx, jobs.ListFilters{JobGroupID: "project_scan:" + projectScanID, ParentJobID: ref.JobID})
+	if err != nil || len(children) != 1 {
+		t.Fatalf("real toolchain security child: children=%+v err=%v", children, err)
+	}
+	runUntilComplete(t, ctx, runtime, jobStore, children[0].ID)
+	scan, err := scannerStore.GetProjectScan(ctx, projectScanID)
+	if err != nil {
+		t.Fatalf("get real toolchain scan: %v", err)
+	}
+	if scan.Status != jobs.StatusSucceeded {
+		t.Fatalf("real toolchain scan status=%s error=%s result=%s", scan.Status, scan.ErrorMessage, scan.ResultPayload)
+	}
+	var aggregate struct {
+		Tools []scanner.ToolMetadata `json:"tools"`
+	}
+	if err := json.Unmarshal(scan.ResultPayload, &aggregate); err != nil {
+		t.Fatalf("decode real toolchain aggregate: %v", err)
+	}
+	if len(aggregate.Tools) != 3 {
+		t.Fatalf("real toolchain metadata count=%d want 3: %+v", len(aggregate.Tools), aggregate.Tools)
+	}
+	for _, tool := range aggregate.Tools {
+		if tool.CertificationStatus != "certified" {
+			t.Fatalf("real toolchain used uncertified version: %+v", tool)
+		}
+	}
+}
+
 func assertNoLocationFingerprintComponents(t *testing.T, raw json.RawMessage) {
 	t.Helper()
 	var components map[string]any
@@ -134,7 +239,7 @@ func TestStage06ToolProfileValidateImportActivateAPIStore(t *testing.T) {
 	  "version_policy":"certified_only",
 	  "version_discovery":{"command":"terraform","args":["--version"]},
 	  "scan_command":{"command":"terraform","args":["validate","-json","-no-color"]},
-	  "parser":{"type":"json","result":"terraform_validate"},
+	  "parser":{"type":"json","result":"terraform_validate","diagnostics":{"items_path":"diagnostics","mapping":{"severity":{"path":"severity"},"summary":{"path":"summary"},"detail":{"path":"detail"}}}},
 	  "mapping":{"valid":{"path":"valid"},"errors_count":{"path":"error_count"},"warnings_count":{"path":"warning_count"}},
 	  "redaction":{"max_output_bytes":1024}
 	}`)
@@ -310,9 +415,19 @@ func TestStage06ToolVersionPoliciesAndMissingBinary(t *testing.T) {
 	jobStore := jobs.NewStore(handle)
 	runtime := jobs.NewRuntime(jobs.RuntimeOptions{Store: jobStore, Handlers: scanner.JobHandlers(scannerStore), AfterComplete: scanner.JobCompletionHook(scannerStore), WorkerID: "host:test:version-policy", Logger: slog.Default()})
 	project := stage06ProjectFixture(t, ctx, scannerStore)
+	t.Setenv("T_HELPER_FAKE_TERRAFORM_VERSION", "1.14.9")
+	job := runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, "terraform-below-minimum")
+	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_version_unsupported" {
+		t.Fatalf("Terraform 1.14 job = %s/%s, want failed/tool_version_unsupported", job.Status, failureErrorCode(t, job))
+	}
+	t.Setenv("T_HELPER_FAKE_TERRAFORM_VERSION", "1.15.3")
+	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, "terraform-supported-minimum")
+	if job.Status != jobs.StatusSucceeded {
+		t.Fatalf("Terraform 1.15+ job status = %s: %s", job.Status, job.ErrorMessage)
+	}
 
 	uncertified := importAndActivateTerraformProfile(t, ctx, scannerStore, "terraform-uncertified-test", "certified_only", []string{"9"}, []string{"1"})
-	job := runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, uncertified.ProfileID)
+	job = runStage06ProjectScanJob(t, ctx, runtime, scannerStore, jobStore, project, scanner.ScanTypeTerraformValidate, uncertified.ProfileID)
 	if job.Status != jobs.StatusFailed || failureErrorCode(t, job) != "tool_version_uncertified" {
 		t.Fatalf("uncertified version job = %s/%s, want failed/tool_version_uncertified", job.Status, failureErrorCode(t, job))
 	}
@@ -727,9 +842,20 @@ func terraformProfilePayload(profileID, version, policy string, certified, compa
 		"version_policy":      policy,
 		"version_discovery":   map[string]any{"command": "terraform", "args": []string{"--version"}},
 		"scan_command":        map[string]any{"command": "terraform", "args": scanArgs},
-		"parser":              map[string]any{"type": "json", "result": "terraform_validate"},
-		"mapping":             map[string]any{"valid": map[string]any{"path": "valid"}, "errors_count": map[string]any{"path": "error_count"}, "warnings_count": map[string]any{"path": "warning_count"}},
-		"redaction":           map[string]any{"max_output_bytes": 1024},
+		"parser": map[string]any{
+			"type":   "json",
+			"result": "terraform_validate",
+			"diagnostics": map[string]any{
+				"items_path": "diagnostics",
+				"mapping": map[string]any{
+					"severity": map[string]any{"path": "severity"},
+					"summary":  map[string]any{"path": "summary"},
+					"detail":   map[string]any{"path": "detail"},
+				},
+			},
+		},
+		"mapping":   map[string]any{"valid": map[string]any{"path": "valid"}, "errors_count": map[string]any{"path": "error_count"}, "warnings_count": map[string]any{"path": "warning_count"}},
+		"redaction": map[string]any{"max_output_bytes": 1024},
 	})
 	return json.RawMessage(payload)
 }
@@ -767,11 +893,11 @@ func installFakeToolchain(t *testing.T) {
 func fakeToolScript(tool string) string {
 	switch tool {
 	case "terraform":
-		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'Terraform v1.8.5'; exit 0; fi\necho '{\"valid\":true,\"error_count\":0,\"warning_count\":0,\"diagnostics\":[]}'\n"
+		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"Terraform v${T_HELPER_FAKE_TERRAFORM_VERSION:-1.15.3}\"; exit 0; fi\necho '{\"valid\":true,\"error_count\":0,\"warning_count\":0,\"diagnostics\":[]}'\n"
 	case "tflint":
-		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'TFLint version 0.50.0'; exit 0; fi\necho '{\"issues\":[]}'\n"
+		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'TFLint version 0.63.1'; exit 0; fi\necho '{\"issues\":[]}'\n"
 	default:
-		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'Version: 0.60.0'; exit 0; fi\nline=${T_HELPER_FAKE_TRIVY_LINE:-12}\nprintf '{\"Results\":[{\"Target\":\"main.tf\",\"Misconfigurations\":[{\"ID\":\"AVD-AWS-0088\",\"Title\":\"Public bucket\",\"Description\":\"desc\",\"Resolution\":\"fix\",\"Severity\":\"HIGH\",\"CauseMetadata\":{\"Resource\":\"aws_s3_bucket.example\",\"Provider\":\"aws\",\"Service\":\"s3\",\"StartLine\":%s}}]}]}' \"$line\"\n"
+		return "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'Version: 0.71.2'; exit 0; fi\nline=${T_HELPER_FAKE_TRIVY_LINE:-12}\nprintf '{\"Results\":[{\"Target\":\"main.tf\",\"Misconfigurations\":[{\"ID\":\"AVD-AWS-0088\",\"Title\":\"Public bucket\",\"Description\":\"desc\",\"Resolution\":\"fix\",\"Severity\":\"HIGH\",\"CauseMetadata\":{\"Resource\":\"aws_s3_bucket.example\",\"Provider\":\"aws\",\"Service\":\"s3\",\"StartLine\":%s}}]}]}' \"$line\"\n"
 	}
 }
 

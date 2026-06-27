@@ -897,6 +897,18 @@ ON CONFLICT (fingerprint) DO UPDATE SET job_id = EXCLUDED.job_id, severity = EXC
 	if err != nil {
 		return FindingUpsertResult{}, err
 	}
+	if input.ProjectScanID != "" {
+		query := `INSERT INTO project_scan_findings (project_scan_id, finding_id, detected_at) VALUES (?, ?, ?)
+ON CONFLICT (project_scan_id, finding_id) DO NOTHING`
+		args := []any{input.ProjectScanID, finding.ID, formatTime(now)}
+		if s.handle.Provider == "postgres" {
+			query = `INSERT INTO project_scan_findings (project_scan_id, finding_id, detected_at) VALUES ($1, $2, $3)
+ON CONFLICT (project_scan_id, finding_id) DO NOTHING`
+		}
+		if _, err := s.handle.DB.ExecContext(ctx, query, args...); err != nil {
+			return FindingUpsertResult{}, err
+		}
+	}
 	return FindingUpsertResult{Created: finding.ID == id, Finding: finding}, nil
 }
 
@@ -937,11 +949,11 @@ func (s *Store) ListFindings(ctx context.Context, opts FindingListOptions) (Page
 	add("severity = %s", opts.Severity)
 	add("status = %s", opts.Status)
 	if opts.ProjectScanID != "" {
-		scan, err := s.GetProjectScan(ctx, opts.ProjectScanID)
-		if err != nil {
+		if _, err := s.GetProjectScan(ctx, opts.ProjectScanID); err != nil {
 			return Page[SecurityFinding]{}, err
 		}
-		add("project_id = %s", scan.ProjectID)
+		args = append(args, opts.ProjectScanID)
+		where = append(where, "EXISTS (SELECT 1 FROM project_scan_findings psf WHERE psf.finding_id = security_findings.id AND psf.project_scan_id = "+s.placeholder(len(args))+")")
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -1056,7 +1068,7 @@ func (s *Store) ApplyWorkflowAggregateToProjectScan(ctx context.Context, jobGrou
 		}
 		return err
 	}
-	findings, err := s.findingSeveritySummary(ctx, projectScan.ProjectID)
+	findings, err := s.findingSeveritySummary(ctx, projectScan.ID)
 	if err != nil {
 		return err
 	}
@@ -1215,12 +1227,20 @@ func appendStringSet(existing []string, values ...string) []string {
 	return existing
 }
 
-func (s *Store) findingSeveritySummary(ctx context.Context, projectID string) (map[string]int, error) {
+func (s *Store) findingSeveritySummary(ctx context.Context, projectScanID string) (map[string]int, error) {
 	out := map[string]int{"info": 0, "low": 0, "medium": 0, "high": 0, "critical": 0}
-	query := "SELECT severity, count(*) FROM security_findings WHERE project_id = ? AND status = 'open' GROUP BY severity"
-	args := []any{projectID}
+	query := `SELECT sf.severity, count(*)
+FROM security_findings sf
+JOIN project_scan_findings psf ON psf.finding_id = sf.id
+WHERE psf.project_scan_id = ? AND sf.status = 'open'
+GROUP BY sf.severity`
+	args := []any{projectScanID}
 	if s.handle.Provider == "postgres" {
-		query = "SELECT severity, count(*) FROM security_findings WHERE project_id = $1 AND status = 'open' GROUP BY severity"
+		query = `SELECT sf.severity, count(*)
+FROM security_findings sf
+JOIN project_scan_findings psf ON psf.finding_id = sf.id
+WHERE psf.project_scan_id = $1 AND sf.status = 'open'
+GROUP BY sf.severity`
 	}
 	rows, err := s.handle.DB.QueryContext(ctx, query, args...)
 	if err != nil {

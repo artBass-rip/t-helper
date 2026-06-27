@@ -50,7 +50,7 @@
 <a class="toc-level-2" href="#текущий-статус">Текущий статус</a>
 <a class="toc-level-2" href="#принятые-проектные-решения">Принятые проектные решения</a>
 <a class="toc-level-2" href="#backlog">Backlog</a>
-<a class="toc-level-3" href="#p1-sql-dialect-helper">P1. SQL dialect helper</a>
+<a class="toc-level-3" href="#p1-sql-dialect-helper-follow-up">P1. SQL dialect helper follow-up</a>
 <a class="toc-level-3" href="#p1-workflow-status-refresh-load">P1. Workflow status refresh load</a>
 <a class="toc-level-3" href="#p1-разделение-крупных-store-файлов">P1. Разделение крупных store-файлов</a>
 <a class="toc-level-3" href="#p2-filesystem-scan-backpressure">P2. Filesystem scan backpressure</a>
@@ -63,7 +63,7 @@
       <div class="doc-content">
         <article class="markdown-body">
           <h1 id="code-optimization-and-quality-baseline">Code Optimization And Quality Baseline</h1>
-<p>Дата актуализации: 2026-05-31.</p>
+<p>Дата актуализации: 2026-06-05.</p>
 <p>Этот документ фиксирует уже выполненные оптимизации, текущий quality gate и оставшийся backlog, который должен внедряться итеративно без массовых механических рефакторингов.</p>
 <h2 id="текущий-статус">Текущий статус</h2>
 <p>Выполнено:</p>
@@ -73,6 +73,8 @@
 <li>Добавлен smoke-test полного набора текущих HTTP routes: <code>internal/httpapi/router_test.go</code>.</li>
 <li>Добавлен транзакционный helper <code>storage.WithTx(ctx, db, opts, fn)</code> и применён в изменяемых lifecycle paths <code>jobs.Store.Start</code>, <code>jobs.Store.Complete</code>, <code>jobs.Store.Requeue</code>.</li>
 <li>Добавлены первые benchmarks для hot paths <code>jobs.Store.ClaimNext</code> и <code>jobs.Store.RefreshWorkflowStatus</code>.</li>
+<li>Добавлены <code>storage.Dialect</code> и <code>Handle.Dialect()</code> для централизации common SQLite/PostgreSQL placeholders, <code>IN (...)</code>, time cast и boolean argument handling. Локальные helpers в <code>jobs</code>, <code>scanner</code> и <code>repository</code> теперь делегируют ему.</li>
+<li>Удалён один избыточный вызов <code>RefreshWorkflowStatus</code> из worker startup-progress path; lifecycle transitions по-прежнему обновляют workflow status.</li>
 <li>Добавлен локальный quality gate <code>make test</code>, который выполняет: <code>gofmt</code> check, <code>go vet ./...</code>, <code>go test ./...</code>.</li>
 <li>Добавлен <code>make race</code> для ручных/nightly проверок с race detector.</li>
 </ul>
@@ -86,13 +88,12 @@
 <li>Stage 09 остаётся владельцем runtime/scanner performance hardening: <a href="implementation-specs/stage-09-runtime-observability-hardening.html"><code>implementation-specs/stage-09-runtime-observability-hardening.md</code></a>.</li>
 </ul>
 <h2 id="backlog">Backlog</h2>
-<h3 id="p1-sql-dialect-helper">P1. SQL dialect helper</h3>
-<p>Проблема: store-слой всё ещё содержит ветвления по <code>handle.Provider</code> для SQLite/PostgreSQL placeholders, casts и upsert shapes.</p>
+<h3 id="p1-sql-dialect-helper-follow-up">P1. SQL dialect helper follow-up</h3>
+<p>Проблема: common placeholder, <code>IN (...)</code>, time cast и boolean argument handling теперь имеют общий helper, но store-файлы всё ещё содержат provider branches для JSON casts и upsert shapes.</p>
 <p>Следующий шаг:</p>
 <ul>
-<li>добавить небольшой helper в <code>internal/storage</code> или <code>internal/storage/sqlutil</code>;</li>
-<li>централизовать placeholders, <code>IN (...)</code>, boolean/time/JSON casts и common upsert fragments;</li>
-<li>переводить store-файлы по одному, начиная с <code>jobs</code> или <code>scanner</code>.</li>
+<li>расширять <code>storage.Dialect</code> JSON cast и common upsert fragments там, где это убирает значимое дублирование;</li>
+<li>переводить store branches по одному при изменении соответствующей области.</li>
 </ul>
 <h3 id="p1-workflow-status-refresh-load">P1. Workflow status refresh load</h3>
 <p>Проблема: <code>RefreshWorkflowStatus</code> вызывается после многих job lifecycle событий и пересчитывает aggregate read model.</p>

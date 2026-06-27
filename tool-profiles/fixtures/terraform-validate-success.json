@@ -10,7 +10,8 @@
         "check_type": "terraform.validate",
         "valid": true,
         "errors_count": 0,
-        "warnings_count": 0
+        "warnings_count": 0,
+        "diagnostics": []
       }
     }
   ]

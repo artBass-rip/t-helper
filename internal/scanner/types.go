@@ -504,6 +504,7 @@ type ProjectScanRef struct {
 }
 
 type FindingUpsert struct {
+	ProjectScanID string
 	ProjectID     string
 	RepositoryID  string
 	WorkspaceID   string

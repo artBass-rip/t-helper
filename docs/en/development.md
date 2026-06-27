@@ -23,6 +23,19 @@ suite with `THELPER_POSTGRES_DSN` set. DSN-backed tests run with `go test -p 1
 ./...` so destructive contract tests in different packages do not reset the
 same test database concurrently.
 
+## Application installation and scanner toolchain
+
+`make install` installs `thelper`, `thelper-worker`, and `thelper-ctl` under
+`${PREFIX}/bin` (`~/.local/bin` by default). During the same operation it
+downloads pinned TFLint 0.63.1 and Trivy 0.71.2 archives from the official
+GitHub releases, verifies pinned checksum-manifest digests and archive SHA-256
+checksums, and installs both tools in the same directory. Runtime also checks
+`THELPER_TOOLCHAIN_DIR` and the application executable directory when a tool is
+not available through `PATH`.
+
+Terraform is not downloaded by t-helper. The supported range is Terraform
+1.15.0 and newer.
+
 ## PostgreSQL test environment
 
 PostgreSQL tests run when `THELPER_POSTGRES_DSN` is set. SQLite tests run by default.

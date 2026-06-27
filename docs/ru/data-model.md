@@ -791,6 +791,18 @@ Aggregate `project_scans.status` и `project_scans.result_payload` обновл�
 - `last_seen_at` обновляется при каждом scan, где finding присутствует;
 - `detected_at` сохраняется как backward-compatible alias/initial detection timestamp и должен совпадать с `first_seen_at` для новых rows.
 
+### `project_scan_findings`
+
+- `project_scan_id`
+- `finding_id`
+- `detected_at`
+
+Инварианты:
+
+- пара `project_scan_id + finding_id` уникальна;
+- таблица хранит принадлежность дедуплицированного finding конкретному запуску и используется scoped findings API;
+- удаление project scan или finding каскадно удаляет только связь.
+
 ## Auth и RBAC сущности
 
 ### `users`

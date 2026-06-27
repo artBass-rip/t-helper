@@ -10,7 +10,14 @@
         "check_type": "terraform.validate",
         "valid": false,
         "errors_count": 1,
-        "warnings_count": 0
+        "warnings_count": 0,
+        "diagnostics": [
+          {
+            "severity": "error",
+            "summary": "Invalid expression",
+            "detail": "Expected the start of an expression."
+          }
+        ]
       }
     },
     {
@@ -21,7 +28,14 @@
         "check_type": "terraform.validate",
         "valid": false,
         "errors_count": 1,
-        "warnings_count": 0
+        "warnings_count": 0,
+        "diagnostics": [
+          {
+            "severity": "error",
+            "summary": "Missing required provider",
+            "detail": "This configuration requires provider registry.terraform.io/hashicorp/aws."
+          }
+        ]
       }
     }
   ]

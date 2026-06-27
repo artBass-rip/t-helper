@@ -208,6 +208,11 @@ Describes global scanning settings. Project-level scan and security/validation s
 - `scanning.toolchain.version_policy` - admission policy for external CLI tool versions: `certified_only`, `compatible_range` or `latest_best_effort`;
 - `scanning.toolchain.profile_paths` - optional local directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.
 
+The bundled Terraform profile accepts Terraform `>=1.15.0`. Application
+installation automatically installs pinned TFLint 0.63.1 and Trivy 0.71.2;
+runtime resolves them from `PATH`, `THELPER_TOOLCHAIN_DIR`, or the directory
+containing the t-helper executable.
+
 `global_scan` is the canonical input configuration field name. Inside storage, these records are mapped to the `root_paths` entity.
 
 Scan and clone use the same materialized list of `root_paths`.

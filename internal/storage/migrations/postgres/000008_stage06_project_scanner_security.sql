@@ -136,9 +136,9 @@ CREATE INDEX IF NOT EXISTS security_findings_updated_at_idx
 
 INSERT INTO tool_profiles (id, tool, profile_id, profile_version, schema_version, source_type, checksum, certified_versions, compatible_versions, active, created_at, updated_at)
 VALUES
-  ('tool_profile_terraform_validate_v1', 'terraform', 'terraform-validate-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:terraform-validate-json-v1', '["1"]'::jsonb, '["1"]'::jsonb, true, now(), now()),
-  ('tool_profile_tflint_v1', 'tflint', 'tflint-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:tflint-json-v1', '["0"]'::jsonb, '["0"]'::jsonb, true, now(), now()),
-  ('tool_profile_trivy_v1', 'trivy', 'trivy-terraform-misconfig-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:trivy-terraform-misconfig-json-v1', '["0"]'::jsonb, '["0"]'::jsonb, true, now(), now())
+  ('tool_profile_terraform_validate_v1', 'terraform', 'terraform-validate-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:terraform-validate-json-v1', '[">=1.15.0"]'::jsonb, '[">=1.15.0"]'::jsonb, true, now(), now()),
+  ('tool_profile_tflint_v1', 'tflint', 'tflint-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:tflint-json-v1', '["0.63.1"]'::jsonb, '["0"]'::jsonb, true, now(), now()),
+  ('tool_profile_trivy_v1', 'trivy', 'trivy-terraform-misconfig-json-v1', '1.0.0', 'tool_profile.v1', 'bundled', 'builtin:trivy-terraform-misconfig-json-v1', '["0.71.2"]'::jsonb, '["0"]'::jsonb, true, now(), now())
 ON CONFLICT (tool, profile_id, profile_version) DO NOTHING;
 
 INSERT INTO security_rule_sets (id, name, version, source_type, checksum, active, created_at, updated_at)

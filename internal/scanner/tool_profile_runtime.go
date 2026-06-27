@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -42,11 +43,17 @@ type toolProfileCommand struct {
 }
 
 type toolProfileParser struct {
-	Type       string                         `json:"type"`
-	Result     string                         `json:"result,omitempty"`
-	Findings   toolProfileFindingParser       `json:"findings,omitempty"`
-	Severities map[string]string              `json:"severity_map,omitempty"`
-	Defaults   map[string]toolProfileSelector `json:"defaults,omitempty"`
+	Type        string                         `json:"type"`
+	Result      string                         `json:"result,omitempty"`
+	Findings    toolProfileFindingParser       `json:"findings,omitempty"`
+	Diagnostics toolProfileDiagnosticParser    `json:"diagnostics,omitempty"`
+	Severities  map[string]string              `json:"severity_map,omitempty"`
+	Defaults    map[string]toolProfileSelector `json:"defaults,omitempty"`
+}
+
+type toolProfileDiagnosticParser struct {
+	ItemsPath string                         `json:"items_path"`
+	Mapping   map[string]toolProfileSelector `json:"mapping"`
 }
 
 type toolProfileFindingParser struct {
@@ -105,8 +112,18 @@ func runToolProfile(ctx context.Context, store *Store, tool, projectDir string) 
 	if err != nil {
 		return toolProfileRunResult{Tool: meta}, err
 	}
-	cmd := exec.CommandContext(ctx, doc.ScanCommand.Command, renderCommandArgs(doc.ScanCommand.Args, projectDir)...)
+	command, err := resolveToolExecutable(doc.ScanCommand.Command)
+	if err != nil {
+		return toolProfileRunResult{Tool: meta}, toolRunError{code: "tool_not_found", message: doc.Tool + " binary is unavailable", retryable: false}
+	}
+	cmd := exec.CommandContext(ctx, command, renderCommandArgs(doc.ScanCommand.Args, projectDir)...)
 	cmd.Dir = projectDir
+	cmd.Env = append(os.Environ(),
+		"CHECKPOINT_DISABLE=1",
+		"TF_IN_AUTOMATION=1",
+		"TRIVY_SKIP_DB_UPDATE=true",
+		"TRIVY_SKIP_POLICY_UPDATE=true",
+	)
 	output, runErr := cmd.Output()
 	if len(output) > doc.redactionLimit() {
 		output = output[:doc.redactionLimit()]
@@ -131,12 +148,16 @@ func evaluateToolProfileOutput(doc toolProfileDocument, output []byte, projectDi
 	result := toolProfileRunResult{}
 	switch doc.Parser.Result {
 	case "terraform_validate":
+		diagnostics := selectorArray(parsed, toolProfileSelector{Path: doc.Parser.Diagnostics.ItemsPath})
 		result.Check = map[string]any{
 			"tool":           doc.Tool,
 			"check_type":     "terraform.validate",
 			"valid":          selectorBool(parsed, doc.Mapping["valid"]),
 			"errors_count":   selectorInt(parsed, doc.Mapping["errors_count"]),
 			"warnings_count": selectorInt(parsed, doc.Mapping["warnings_count"]),
+		}
+		if len(doc.Parser.Diagnostics.Mapping) > 0 {
+			result.Check["diagnostics"] = profileTerraformDiagnostics(diagnostics, doc, projectDir)
 		}
 	case "tflint":
 		issues := selectorArray(parsed, doc.Mapping["issues"])
@@ -388,6 +409,36 @@ func validateToolProfileDocument(doc toolProfileDocument) error {
 	default:
 		return toolRunError{code: "tool_profile_validation_failed", message: "unsupported parser result", retryable: false}
 	}
+	if err := validateNetworkRestrictedScanCommand(doc); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateNetworkRestrictedScanCommand(doc toolProfileDocument) error {
+	args := doc.ScanCommand.Args
+	hasArg := func(want string) bool {
+		for _, arg := range args {
+			if arg == want {
+				return true
+			}
+		}
+		return false
+	}
+	switch doc.Tool {
+	case "terraform":
+		if !hasArg("validate") {
+			return toolRunError{code: "tool_profile_validation_failed", message: "terraform scan profile must use validate", retryable: false}
+		}
+	case "tflint":
+		if hasArg("--init") {
+			return toolRunError{code: "tool_profile_validation_failed", message: "tflint --init is forbidden in network-restricted scans", retryable: false}
+		}
+	case "trivy":
+		if !hasArg("config") || !hasArg("--skip-check-update") || !hasArg("--disable-telemetry") || !hasArg("--skip-version-check") {
+			return toolRunError{code: "tool_profile_validation_failed", message: "trivy scan profile must disable check updates, telemetry and version checks", retryable: false}
+		}
+	}
 	return nil
 }
 
@@ -420,7 +471,11 @@ func allowedTool(tool string) bool {
 }
 
 func discoverProfileToolVersion(ctx context.Context, doc toolProfileDocument) (string, error) {
-	cmd := exec.CommandContext(ctx, doc.VersionDiscovery.Command, doc.VersionDiscovery.Args...)
+	command, err := resolveToolExecutable(doc.VersionDiscovery.Command)
+	if err != nil {
+		return "", toolRunError{code: "tool_not_found", message: doc.Tool + " binary is unavailable", retryable: false}
+	}
+	cmd := exec.CommandContext(ctx, command, doc.VersionDiscovery.Args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", toolRunError{code: "tool_not_found", message: doc.Tool + " binary is unavailable", retryable: false}
@@ -433,6 +488,30 @@ func discoverProfileToolVersion(ctx context.Context, doc toolProfileDocument) (s
 		}
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func resolveToolExecutable(command string) (string, error) {
+	if path, err := exec.LookPath(command); err == nil {
+		return path, nil
+	}
+	var dirs []string
+	if configured := strings.TrimSpace(os.Getenv("THELPER_TOOLCHAIN_DIR")); configured != "" {
+		dirs = append(dirs, configured)
+	}
+	if executable, err := os.Executable(); err == nil {
+		dirs = append(dirs, filepath.Dir(executable))
+	}
+	for _, dir := range dirs {
+		candidate := filepath.Join(dir, command)
+		if runtime.GOOS == "windows" && filepath.Ext(candidate) == "" {
+			candidate += ".exe"
+		}
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0o111 != 0) {
+			return candidate, nil
+		}
+	}
+	return "", exec.ErrNotFound
 }
 
 func profileToolMetadata(tool string, profile ToolProfile, doc toolProfileDocument, version string) (ToolMetadata, error) {
@@ -480,11 +559,80 @@ func (doc toolProfileDocument) redactionLimit() int {
 
 func stringSlicePrefixMatch(prefixes []string, version string) bool {
 	for _, prefix := range prefixes {
-		if prefix != "" && strings.HasPrefix(version, prefix) {
+		prefix = strings.TrimSpace(prefix)
+		if versionMatchesConstraint(version, prefix) {
 			return true
 		}
 	}
 	return false
+}
+
+func versionMatchesConstraint(version, constraint string) bool {
+	constraint = strings.TrimSpace(constraint)
+	if constraint == "" {
+		return false
+	}
+	if strings.HasPrefix(constraint, ">=") {
+		if strings.Contains(version, "-") {
+			return false
+		}
+		minimum := strings.TrimSpace(strings.TrimPrefix(constraint, ">="))
+		comparison, ok := compareNumericVersions(version, minimum)
+		return ok && comparison >= 0
+	}
+	return version == constraint || strings.HasPrefix(version, constraint+".")
+}
+
+func compareNumericVersions(left, right string) (int, bool) {
+	parse := func(value string) ([]int, bool) {
+		value = strings.TrimPrefix(strings.TrimSpace(value), "v")
+		value = strings.SplitN(value, "-", 2)[0]
+		parts := strings.Split(value, ".")
+		if len(parts) == 0 {
+			return nil, false
+		}
+		out := make([]int, len(parts))
+		for idx, part := range parts {
+			if part == "" {
+				return nil, false
+			}
+			for _, char := range part {
+				if char < '0' || char > '9' {
+					return nil, false
+				}
+				out[idx] = out[idx]*10 + int(char-'0')
+			}
+		}
+		return out, true
+	}
+	lhs, ok := parse(left)
+	if !ok {
+		return 0, false
+	}
+	rhs, ok := parse(right)
+	if !ok {
+		return 0, false
+	}
+	length := len(lhs)
+	if len(rhs) > length {
+		length = len(rhs)
+	}
+	for idx := 0; idx < length; idx++ {
+		var lvalue, rvalue int
+		if idx < len(lhs) {
+			lvalue = lhs[idx]
+		}
+		if idx < len(rhs) {
+			rvalue = rhs[idx]
+		}
+		if lvalue < rvalue {
+			return -1, true
+		}
+		if lvalue > rvalue {
+			return 1, true
+		}
+	}
+	return 0, true
 }
 
 func selectorValue(root any, selector toolProfileSelector) any {
@@ -659,6 +807,32 @@ func profileCheckIssues(items []any, doc toolProfileDocument, projectDir string)
 			"file_path": normalizeFindingPath(projectDir, selectorString(item, mapping["file_path"])),
 			"message":   redactSensitiveText(selectorString(item, mapping["message"])),
 		})
+	}
+	return out
+}
+
+func profileTerraformDiagnostics(items []any, doc toolProfileDocument, projectDir string) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	mapping := doc.Parser.Diagnostics.Mapping
+	for _, item := range items {
+		diagnostic := map[string]any{
+			"severity": redactSensitiveText(selectorString(item, mapping["severity"])),
+			"summary":  redactSensitiveText(selectorString(item, mapping["summary"])),
+			"detail":   redactSensitiveText(selectorString(item, mapping["detail"])),
+		}
+		if address := redactSensitiveText(selectorString(item, mapping["address"])); address != "" {
+			diagnostic["address"] = address
+		}
+		if filePath := selectorString(item, mapping["file_path"]); filePath != "" {
+			diagnostic["file_path"] = normalizeFindingPath(projectDir, filePath)
+		}
+		if line := selectorInt(item, mapping["line"]); line > 0 {
+			diagnostic["line"] = line
+		}
+		if column := selectorInt(item, mapping["column"]); column > 0 {
+			diagnostic["column"] = column
+		}
+		out = append(out, diagnostic)
 	}
 	return out
 }

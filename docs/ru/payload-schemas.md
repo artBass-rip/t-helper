@@ -101,7 +101,7 @@ MVP supports only `follow_symlinks = false`. `true` is reserved for a future har
   "tools": [
     {
       "tool": "terraform",
-      "tool_version": "1.8.5",
+      "tool_version": "1.15.3",
       "profile_id": "terraform-validate-json-v1",
       "profile_version": "1.0.0",
       "compatibility_status": "certified",
@@ -141,7 +141,7 @@ MVP supports only `follow_symlinks = false`. `true` is reserved for a future har
   "tools": [
     {
       "tool": "trivy",
-      "tool_version": "0.60.0",
+      "tool_version": "0.71.2",
       "profile_id": "trivy-terraform-misconfig-json-v1",
       "profile_version": "1.0.0",
       "compatibility_status": "certified",

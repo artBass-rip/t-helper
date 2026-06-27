@@ -21,6 +21,12 @@ type securityValidationHandler struct {
 	store *Store
 }
 
+type securityToolAdapter func(context.Context, *Store, string) (ToolMetadata, []FindingUpsert, error)
+
+var securityToolAdapters = map[string]securityToolAdapter{
+	DefaultSecurityModuleTrivy: runTrivy,
+}
+
 func (h projectScanHandler) Handle(ctx context.Context, env jobs.HandlerEnv, job jobs.Job) (json.RawMessage, error) {
 	var payload ProjectScanPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
@@ -163,21 +169,23 @@ func (h securityValidationHandler) Handle(ctx context.Context, env jobs.HandlerE
 		Tools:         []ToolMetadata{},
 	}
 	for _, module := range payload.EnabledModules {
-		if module != DefaultSecurityModuleTrivy {
+		adapter, ok := securityToolAdapters[module]
+		if !ok {
 			result.ModulesFailed++
 			continue
 		}
-		tool, findings, err := runTrivy(ctx, h.store, project.Path)
+		tool, findings, err := adapter(ctx, h.store, project.Path)
 		if err != nil {
 			return nil, classifyToolError(err)
 		}
 		result.Tools = append(result.Tools, tool)
 		for _, finding := range findings {
+			finding.ProjectScanID = payload.ProjectScanID
 			finding.ProjectID = project.ID
 			finding.RepositoryID = project.RepositoryID
 			finding.JobID = job.ID
 			finding.RuleSetID = payload.RuleSetID
-			finding.Tool = DefaultSecurityModuleTrivy
+			finding.Tool = module
 			upserted, err := h.store.UpsertFinding(ctx, finding)
 			if err != nil {
 				return nil, jobs.HandlerError{Code: "storage_error", Message: err.Error(), Retryable: true}

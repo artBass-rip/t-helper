@@ -128,6 +128,8 @@
 <li><code>security_findings.fingerprint</code> is unique and <code>first_seen_at</code>/<code>last_seen_at</code> are maintained;</li>
 <li>payload/result не содержит raw Terraform source или secrets;</li>
 <li>network-restricted scan не делает outbound calls.</li>
+<li>bundled Terraform profile поддерживает Terraform <code>&gt;=1.15.0</code>;</li>
+<li>установка t-helper автоматически загружает и проверяет закреплённые TFLint и Trivy.</li>
 </ul>
 <h2 id="stage-local-blockers">Stage-local blockers</h2>
 <ul>

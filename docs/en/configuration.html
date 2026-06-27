@@ -224,6 +224,7 @@
 <li><code>scanning.toolchain.version_policy</code> - admission policy for external CLI tool versions: <code>certified_only</code>, <code>compatible_range</code> or <code>latest_best_effort</code>;</li>
 <li><code>scanning.toolchain.profile_paths</code> - optional local directories/files with additional tool profile files from ADR 0018. Profiles imported from these paths must pass validation before activation.</li>
 </ul>
+<p>The bundled Terraform profile accepts Terraform <code>&gt;=1.15.0</code>. Application installation automatically installs pinned TFLint 0.63.1 and Trivy 0.71.2; runtime resolves them from <code>PATH</code>, <code>THELPER_TOOLCHAIN_DIR</code>, or the directory containing the t-helper executable.</p>
 <p><code>global_scan</code> is the canonical input configuration field name. Inside storage, these records are mapped to the <code>root_paths</code> entity.</p>
 <p>Scan and clone use the same materialized list of <code>root_paths</code>. During clone, the user selects an existing root path imported from <code>global_scan[].root_path</code> or created through the API, or creates a new root path. If clone targets a new root path, it is saved as a new <code>root_path</code> with <code>source = api</code>; <code>scanning.global_scan</code> as the external config source is not rewritten by repository-manager.</p>
 <h3 id="repositories"><code>repositories</code></h3>

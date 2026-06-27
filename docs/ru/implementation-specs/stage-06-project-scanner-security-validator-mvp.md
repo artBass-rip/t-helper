@@ -67,6 +67,8 @@
 - `security_findings.fingerprint` is unique and `first_seen_at`/`last_seen_at` are maintained;
 - payload/result не содержит raw Terraform source или secrets;
 - network-restricted scan не делает outbound calls.
+- bundled Terraform profile поддерживает Terraform `>=1.15.0`;
+- установка t-helper автоматически загружает и проверяет закреплённые TFLint и Trivy.
 
 ## Stage-local blockers
 

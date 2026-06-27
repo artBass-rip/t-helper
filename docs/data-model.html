@@ -75,6 +75,7 @@
 <a class="toc-level-3" href="#toolprofiles">tool_profiles</a>
 <a class="toc-level-3" href="#toolprofilevalidationresults">tool_profile_validation_results</a>
 <a class="toc-level-3" href="#securityfindings">security_findings</a>
+<a class="toc-level-3" href="#projectscanfindings">project_scan_findings</a>
 <a class="toc-level-2" href="#auth-и-rbac-сущности">Auth и RBAC сущности</a>
 <a class="toc-level-3" href="#users">users</a>
 <a class="toc-level-3" href="#localusercredentials">local_user_credentials</a>
@@ -836,6 +837,18 @@
 <li><code>last_seen_at</code> обновляется при каждом scan, где finding присутствует;</li>
 <li><code>detected_at</code> сохраняется как backward-compatible alias/initial detection timestamp и должен совпадать с <code>first_seen_at</code> для новых rows.</li>
 </ul>
+<h3 id="projectscanfindings"><code>project_scan_findings</code></h3>
+<ul>
+<li><code>project_scan_id</code></li>
+<li><code>finding_id</code></li>
+<li><code>detected_at</code></li>
+</ul>
+<p>Инварианты:</p>
+<ul>
+<li>пара <code>project_scan_id + finding_id</code> уникальна;</li>
+<li>таблица хранит принадлежность дедуплицированного finding конкретному запуску и используется scoped findings API;</li>
+<li>удаление project scan или finding каскадно удаляет только связь.</li>
+</ul>
 <h2 id="auth-и-rbac-сущности">Auth и RBAC сущности</h2>
 <h3 id="users"><code>users</code></h3>
 <ul>
@@ -1031,7 +1044,7 @@
 <li><code>project_scans.job_id</code> и <code>project_scans.project_id</code> обязательны; удаление связанных <code>jobs</code> и <code>projects</code> должно использовать <code>ON DELETE RESTRICT</code>;</li>
 <li><code>job_locks.job_id</code> обязателен; удаление связанных <code>jobs</code> должно использовать <code>ON DELETE RESTRICT</code>;</li>
 <li><code>security_findings.project_id</code>, <code>security_findings.repository_id</code>, <code>security_findings.workspace_id</code>, <code>security_findings.job_id</code>, <code>security_findings.rule_set_id</code> nullable, но finding должен ссылаться хотя бы на один из <code>project_id</code>, <code>repository_id</code>, <code>workspace_id</code> или <code>job_id</code>;</li>
-<li><code>tool_profile_validation_results.tool_profile_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
+<li><code>tool_profile_validation_results.tool_profile_id</code> nullable for pre-import validation results and uses <code>ON DELETE SET NULL</code>;</li>
 <li><code>local_user_credentials.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
 <li><code>password_reset_tokens.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>
 <li><code>user_sessions.user_id</code> обязателен и использует <code>ON DELETE CASCADE</code>;</li>

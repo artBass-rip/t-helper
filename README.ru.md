@@ -86,6 +86,18 @@ go run ./cmd/thelper-ctl -migrate-db
 При использовании собранных бинарников замените `go run ./cmd/<name>` на имя
 бинарника.
 
+Установка приложения и закреплённой scanner toolchain в `~/.local/bin`:
+
+```text
+make install
+```
+
+`make install` загружает TFLint 0.63.1 и Trivy 0.71.2 из официальных GitHub
+releases, проверяет закреплённые checksum manifests и SHA-256 архивов, затем
+устанавливает инструменты рядом с исполняемыми файлами t-helper. Путь можно
+изменить через `PREFIX=/custom/prefix make install`. Terraform предоставляется
+пользователем; минимальная поддерживаемая версия — 1.15.0.
+
 ## HTTP API
 
 Stage 05 предоставляет следующую runtime API surface:

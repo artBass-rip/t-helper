@@ -7,6 +7,15 @@ grouped by completed roadmap stages and merge commits.
 
 ## Unreleased
 
+- Hardened Stage 06B with scan-scoped finding associations through
+  `project_scan_findings`, normalized Terraform diagnostics, and exact certified
+  versions in bundled profiles.
+- Added an opt-in real Terraform/TFLint/Trivy acceptance test for a
+  network-restricted environment and a registry extension point for security
+  adapters.
+- The bundled Terraform profile now accepts Terraform 1.15.0 and newer;
+  `make install` automatically downloads and verifies pinned TFLint 0.63.1 and
+  Trivy 0.71.2 releases.
 - Closed Stage 05 repository manager MVP as the current completed backend
   baseline and moved the active roadmap focus to Stage 06A/06B.
 - Audited the repository documentation against the current code baseline and
